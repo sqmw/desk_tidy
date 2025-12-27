@@ -1,0 +1,167 @@
+﻿<UserControl x:Class="GeekDesk.Control.UserControls.Config.MotionControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:cvt="clr-namespace:GeekDesk.Converts"
+             mc:Ignorable="d" 
+             xmlns:hc="https://handyorg.github.io/handycontrol" 
+             xmlns:viewmodel="clr-namespace:GeekDesk.ViewModel" 
+             d:DataContext="{d:DesignInstance Type=viewmodel:AppConfig}"
+             xmlns:cst="clr-namespace:GeekDesk.Constant"
+             Background="Transparent"
+             d:DesignHeight="450" d:DesignWidth="450">
+
+    <UserControl.Resources>
+        <cvt:HideTypeConvert x:Key="HideTypeConvert"/>
+        <cvt:SearchTypeConvert x:Key="SearchTypeConvert"/>
+    </UserControl.Resources>
+    <Grid Background="Transparent" MouseDown="DragMove" 
+          >
+        <StackPanel Panel.ZIndex="1" hc:Growl.GrowlParent="True" hc:Growl.Token="HotKeyGrowl"></StackPanel>
+
+        <StackPanel Margin="10">
+            <hc:UniformSpacingPanel Spacing="10"  Grid.ColumnSpan="4">
+                <TextBlock Text="面板动作设置" VerticalAlignment="Center"/>
+            </hc:UniformSpacingPanel>
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0"  Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}" 
+                          x:Name="IconIsAdmin" 
+                          Content="启动时显示主面板" IsChecked="{Binding StartedShowPanel}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}"
+                          Content="显示时追随鼠标位置" IsChecked="{Binding FollowMouse}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}"
+                          Content="鼠标中键呼出"
+                          Click="MouseMiddle_Changed" IsChecked="{Binding MouseMiddleShow}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0"  Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}" 
+                          Content="双击启动" IsChecked="{Binding DoubleOpen}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0"  Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}" 
+                          Content="悬停切换菜单" IsChecked="{Binding HoverMenu}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <CheckBox Style="{StaticResource MyCheckBoxStyle}" 
+                          Content="贴边隐藏" IsChecked="{Binding MarginHide}"
+                          Click="MarginHide_Changed"/>
+            </hc:UniformSpacingPanel>
+
+            
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="0,10,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="面板关闭方式" VerticalAlignment="Center"/>
+            </hc:UniformSpacingPanel>
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <RadioButton Margin="10,0,0,0" 
+                             Style="{StaticResource MyRadioBtnStyle}"
+                          Content="失去焦点后"
+                         IsChecked="{Binding AppHideType, Mode=TwoWay, Converter={StaticResource HideTypeConvert}, ConverterParameter=1}"/>
+
+                <RadioButton Margin="10,0,0,0" 
+                         Style="{StaticResource MyRadioBtnStyle}" Content="运行项目后" 
+                         IsChecked="{Binding AppHideType, Mode=TwoWay, Converter={StaticResource HideTypeConvert}, ConverterParameter=2}"/>
+                <RadioButton Margin="10,0,0,0" 
+                         Style="{StaticResource MyRadioBtnStyle}" Content="手动关闭"
+                         IsChecked="{Binding AppHideType, Mode=TwoWay, Converter={StaticResource HideTypeConvert}, ConverterParameter=3}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="0,10,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="搜索方式"
+                           VerticalAlignment="Center"
+                           />
+            </hc:UniformSpacingPanel>
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <RadioButton Margin="10,0,0,0"  
+                             hc:Poptip.Content="主面板显示时按下Ctrl+F开始搜索"
+                             hc:Poptip.Placement="Top"
+                             Style="{StaticResource MyRadioBtnStyle}" Content="快捷键"
+                             IsChecked="{Binding SearchType, Mode=TwoWay, Converter={StaticResource SearchTypeConvert}, ConverterParameter=0}"/>
+                <RadioButton Margin="10,0,0,0" 
+                             hc:Poptip.Content="主面板显示时按下按键直接搜索"
+                             hc:Poptip.Placement="Top"
+                             Style="{StaticResource MyRadioBtnStyle}" Content="按键即搜" 
+                             IsChecked="{Binding SearchType, Mode=TwoWay, Converter={StaticResource SearchTypeConvert}, ConverterParameter=1}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10"  Margin="0,10,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="热键设置" VerticalAlignment="Center"/>
+            </hc:UniformSpacingPanel>
+            <hc:UniformSpacingPanel Spacing="10"  Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="主面板:" VerticalAlignment="Center" Margin="0,5,0,0" Width="55"/>
+                <hc:TextBox HorizontalAlignment="Left" 
+                            Style="{StaticResource MyTextBoxStyle}"
+                            Tag="{x:Static cst:HotKeyType.Main}"
+                            VerticalAlignment="Top" 
+                            IsReadOnly="True" 
+                            IsReadOnlyCaretVisible="True" 
+                            Width="170"
+                            Text="{Binding HotkeyStr}" 
+                            KeyDown="HotKeyDown"
+                            KeyUp="HotKeyUp"
+                            InputMethod.IsInputMethodEnabled="False"
+                            />
+
+                <CheckBox Content="启用" 
+                          Style="{StaticResource MyCheckBoxStyle}"
+                          Click="EnableHotKey_Click" 
+                          Tag="{x:Static cst:HotKeyType.Main}" 
+                          IsChecked="{Binding EnableAppHotKey}"/>
+            </hc:UniformSpacingPanel>
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="待办任务:" Margin="0,5,0,0"  Width="55"/>
+                <hc:TextBox HorizontalAlignment="Left" 
+                            Style="{StaticResource MyTextBoxStyle}"
+                            Tag="{x:Static cst:HotKeyType.ToDo}"
+                            VerticalAlignment="Top" 
+                            IsReadOnly="True" 
+                            IsReadOnlyCaretVisible="True" 
+                            Width="170"
+                            Text="{Binding ToDoHotkeyStr}" 
+                            KeyDown="HotKeyDown"
+                            KeyUp="HotKeyUp"
+                            InputMethod.IsInputMethodEnabled="False"
+                            />
+
+                <CheckBox Content="启用" 
+                          Style="{StaticResource MyCheckBoxStyle}"
+                          Click="EnableHotKey_Click" 
+                          Tag="{x:Static cst:HotKeyType.ToDo}" 
+                          IsChecked="{Binding EnableTodoHotKey}"/>
+            </hc:UniformSpacingPanel>
+
+            <hc:UniformSpacingPanel Spacing="10" Margin="10,5,0,0" Grid.ColumnSpan="4">
+                <TextBlock Text="拾色器:" Margin="0,5,0,0"  Width="55"/>
+                <hc:TextBox HorizontalAlignment="Left" 
+                            Style="{StaticResource MyTextBoxStyle}"
+                            Tag="{x:Static cst:HotKeyType.ColorPicker}"
+                            VerticalAlignment="Top" 
+                            IsReadOnly="True" 
+                            IsReadOnlyCaretVisible="True" 
+                            Width="170"
+                            Text="{Binding ColorPickerHotkeyStr}" 
+                            KeyDown="HotKeyDown"
+                            KeyUp="HotKeyUp"
+                            InputMethod.IsInputMethodEnabled="False"
+                            />
+                <CheckBox Content="启用" 
+                          Style="{StaticResource MyCheckBoxStyle}"
+                          Tag="{x:Static cst:HotKeyType.ColorPicker}"
+                          Click="EnableHotKey_Click"
+                          IsChecked="{Binding EnableColorPickerHotKey}"/>
+            </hc:UniformSpacingPanel>
+        </StackPanel>
+    </Grid>
+
+
+</UserControl>
