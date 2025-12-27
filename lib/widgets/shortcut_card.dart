@@ -21,10 +21,18 @@ class ShortcutCard extends StatefulWidget {
 class _ShortcutCardState extends State<ShortcutCard> {
   OverlayEntry? _labelOverlay;
   bool _selected = false;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode(debugLabel: 'ShortcutCard');
+  }
 
   @override
   void dispose() {
     _removeLabelOverlay();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -35,11 +43,8 @@ class _ShortcutCardState extends State<ShortcutCard> {
 
   void _toggleSelection() {
     setState(() => _selected = !_selected);
-    if (_selected) {
-      _showLabelOverlay();
-    } else {
-      _removeLabelOverlay();
-    }
+    if (_selected) _showLabelOverlay();
+    if (!_selected) _removeLabelOverlay();
   }
 
   void _showLabelOverlay() {
@@ -55,18 +60,36 @@ class _ShortcutCardState extends State<ShortcutCard> {
 
     final name = widget.shortcut.name;
     final theme = Theme.of(context);
-    final bgColor =
-        theme.colorScheme.surface.withAlpha(230); // subtle like Windows label bg
-    final borderColor = theme.colorScheme.outlineVariant.withAlpha(120);
+    final padding = math.max(8.0, widget.iconSize * 0.28);
+    final textMaxWidth = math.max(0.0, size.width - padding * 2);
+
+    final testPainter = TextPainter(
+      text: TextSpan(
+        text: name,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontSize: _textSize,
+          height: 1.15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: textMaxWidth);
+
+    final shouldExpand = testPainter.didExceedMaxLines;
+    if (!shouldExpand) return;
 
     _labelOverlay = OverlayEntry(
       builder: (context) {
         return Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
                 behavior: HitTestBehavior.translucent,
-                onTap: () {
+                onPointerDown: (_) {
+                  if (!mounted) return;
                   setState(() => _selected = false);
                   _removeLabelOverlay();
                 },
@@ -83,35 +106,28 @@ class _ShortcutCardState extends State<ShortcutCard> {
                     constraints: BoxConstraints(
                       maxWidth: math.max(120.0, size.width),
                     ),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: bgColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: borderColor),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(30),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          name,
-                          textAlign: TextAlign.center,
-                          softWrap: true,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontSize: _textSize,
-                            height: 1.15,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      child: Text(
+                        name,
+                        textAlign: TextAlign.center,
+                        softWrap: true,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: _textSize,
+                          height: 1.15,
+                          fontWeight: FontWeight.w600,
+                          shadows: const [
+                            Shadow(
+                              color: Color(0xB3000000),
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -139,66 +155,74 @@ class _ShortcutCardState extends State<ShortcutCard> {
         .colorScheme
         .surfaceContainerHighest
         .withAlpha(140);
-    final selectedBorder = Theme.of(context).colorScheme.primary.withAlpha(130);
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(math.max(8, iconSize * 0.15)),
-        side: _selected
-            ? BorderSide(color: selectedBorder, width: 1.5)
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        onTap: () {
-          // Single click like Windows Desktop: select and show full name.
-          _toggleSelection();
-        },
-        borderRadius: BorderRadius.circular(math.max(8, iconSize * 0.15)),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            vertical: padding * 0.6,
-            horizontal: padding.toDouble(),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: iconContainerSize,
-                height: iconContainerSize,
-                decoration: BoxDecoration(
-                  color: iconBg,
-                  borderRadius: BorderRadius.circular(iconContainerSize * 0.22),
-                  border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outlineVariant
-                        .withAlpha(89),
+    return Focus(
+      focusNode: _focusNode,
+      onFocusChange: (hasFocus) {
+        if (!hasFocus && mounted) {
+          setState(() => _selected = false);
+          _removeLabelOverlay();
+        }
+      },
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(math.max(8, iconSize * 0.15)),
+        ),
+        child: InkWell(
+          onTap: () {
+            _focusNode.requestFocus();
+            _toggleSelection();
+          },
+          borderRadius: BorderRadius.circular(math.max(8, iconSize * 0.15)),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: padding * 0.6,
+              horizontal: padding.toDouble(),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: iconContainerSize,
+                  height: iconContainerSize,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(iconContainerSize * 0.22),
+                    border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outlineVariant
+                          .withAlpha(89),
+                    ),
+                  ),
+                  child: Center(
+                    child: _buildIcon(context, visualIconSize.toDouble()),
                   ),
                 ),
-                child: Center(
-                  child: _buildIcon(context, visualIconSize.toDouble()),
-                ),
-              ),
-              SizedBox(height: padding * 0.6),
-              Flexible(
-                child: Tooltip(
-                  message: shortcut.name,
-                  waitDuration: const Duration(milliseconds: 350),
-                  child: Text(
-                    shortcut.name,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: _textSize,
-                          height: 1.15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: true,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
+                SizedBox(height: padding * 0.6),
+                Flexible(
+                  child: Tooltip(
+                    message: shortcut.name,
+                    waitDuration: const Duration(milliseconds: 350),
+                    child: Opacity(
+                      opacity: _labelOverlay == null ? 1.0 : 0.0,
+                      child: Text(
+                        shortcut.name,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontSize: _textSize,
+                              height: 1.15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
