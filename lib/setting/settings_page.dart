@@ -59,7 +59,7 @@ class SettingsPage extends StatelessWidget {
               title: const Text('图标大小'),
               description: Slider(
                 value: iconSize,
-                min: 32,
+                min: 24,
                 max: 96,
                 divisions: 8,
                 onChanged: onIconSizeChanged,

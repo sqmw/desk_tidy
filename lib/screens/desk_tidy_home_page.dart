@@ -1,18 +1,25 @@
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart'; // 导入 window_manager
+import 'package:window_manager/window_manager.dart';
+
 import '../models/shortcut_item.dart';
 import '../setting/settings_page.dart';
+import '../theme_notifier.dart';
 import '../utils/desktop_helper.dart';
 import '../widgets/shortcut_card.dart';
+import 'all_page.dart';
 import 'file_page.dart';
-import 'folder_page.dart'; // 确保导入该包
+import 'folder_page.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.system;
 bool _showHidden = false;
 bool _autoRefresh = false;
-double _iconSize = 48; // 默认图标大小
-int _crossAxisCount = 6; // 默认每行数量
+double _iconSize = 32;
+int _crossAxisCount = 6;
 double _opacity = 1.0;
 
 class DeskTidyHomePage extends StatefulWidget {
@@ -22,44 +29,40 @@ class DeskTidyHomePage extends StatefulWidget {
   State<DeskTidyHomePage> createState() => _DeskTidyHomePageState();
 }
 
-class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
+class _DeskTidyHomePageState extends State<DeskTidyHomePage>
+    with WindowListener {
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
-  bool _isMaximized = false; // 标记窗口是否最大化
-  double _opacity = 1.0; // 默认不透明
+  bool _isMaximized = false;
+  double _opacity = 1.0;
 
-  int _selectedIndex = 0; // 默认选中 "应用"
+  int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
 
-    // 确保初始化窗口管理器
     windowManager.ensureInitialized();
-
-    // 隐藏系统的标题栏，确保只有自定义标题栏显示
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-
-    // 禁用窗口调整大小（如果需要）
-    // windowManager.setResizable(false);
-
-    // 设置窗口的初始透明度等
     windowManager.setOpacity(_opacity);
-
-    // 进入沉浸模式（防止系统 UI 打断）
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    windowManager.addListener(this);
+    windowManager.isMaximized().then((value) {
+      if (mounted) {
+        setState(() => _isMaximized = value);
+      }
+    });
 
-    // 加载桌面快捷方式
     _loadShortcuts();
   }
 
   Future<void> _loadShortcuts() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
+      final dpr =
+          WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
       final desktopPath = await getDesktopPath();
       _desktopPath = desktopPath;
       final shortcutsPaths = await scanDesktopShortcuts(
@@ -67,10 +70,15 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
         showHidden: _showHidden,
       );
 
+      final iconContainerSize = math.max(28.0, _iconSize * 1.65);
+      final visualIconSize = math.max(12.0, iconContainerSize * 0.92);
+      final requestIconSize =
+          (visualIconSize * dpr).round().clamp(64, 256);
+
       final shortcutItems = <ShortcutItem>[];
       for (final shortcutPath in shortcutsPaths) {
         final name = shortcutPath.split('\\').last.replaceAll('.lnk', '');
-        
+
         String targetPath = shortcutPath;
         if (shortcutPath.toLowerCase().endsWith('.lnk')) {
           final target = getShortcutTarget(shortcutPath);
@@ -79,62 +87,112 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
           }
         }
 
-        final iconData = extractIcon(targetPath);
+        final iconData = extractIcon(shortcutPath, size: requestIconSize) ??
+            extractIcon(targetPath, size: requestIconSize);
 
-        shortcutItems.add(ShortcutItem(
-          name: name,
-          path: shortcutPath,
-          iconPath: '',
-          description: '桌面快捷方式',
-          targetPath: targetPath,
-          iconData: iconData,
-        ));
+        shortcutItems.add(
+          ShortcutItem(
+            name: name,
+            path: shortcutPath,
+            iconPath: '',
+            description: '桌面快捷方式',
+            targetPath: targetPath,
+            iconData: iconData,
+          ),
+        );
       }
 
       setState(() {
         _shortcuts = shortcutItems;
         _isLoading = false;
       });
-
-      print('加载的快捷方式数量: ${_shortcuts.length}');
     } catch (e) {
       print('加载快捷方式失败: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   void _toggleMaximize() {
     if (_isMaximized) {
-      windowManager.restore(); // 恢复窗口
+      windowManager.restore();
     } else {
-      windowManager.maximize(); // 最大化窗口
+      windowManager.maximize();
     }
-    setState(() {
-      _isMaximized = !_isMaximized;
-    });
+    setState(() => _isMaximized = !_isMaximized);
   }
 
   void _minimizeWindow() {
-    windowManager.minimize(); // 最小化窗口
+    windowManager.minimize();
   }
 
   void _closeWindow() {
-    windowManager.close(); // 关闭窗口
+    windowManager.close();
   }
 
   void _onNavigationRailItemSelected(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
+  }
+
+  void _onNavigationRailPointer(PointerDownEvent event) {
+    if (event.kind == PointerDeviceKind.mouse &&
+        event.buttons == kSecondaryMouseButton &&
+        _selectedIndex != 1) {
+      _showHiddenMenu(event.position);
+    }
+  }
+
+  Future<void> _showHiddenMenu(Offset globalPosition) async {
+    const menuItemValue = 0;
+    final label = _showHidden ? '隐藏隐藏文件/文件夹' : '显示隐藏文件/文件夹';
+    final icon =
+        _showHidden ? Icons.visibility_off : Icons.visibility;
+
+    final result = await showMenu<int>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      items: [
+        PopupMenuItem(
+          value: menuItemValue,
+          child: ListTile(
+            leading: Icon(icon),
+            title: Text(label),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+
+    if (result == menuItemValue) {
+      setState(() => _showHidden = !_showHidden);
+      _loadShortcuts();
+    }
   }
 
   void _changeOpacity(double opacity) {
-    setState(() {
-      _opacity = opacity;
-    });
-    windowManager.setOpacity(opacity); // 设置窗口透明度
+    setState(() => _opacity = opacity);
+    windowManager.setOpacity(opacity);
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
+  void onWindowMaximize() {
+    if (mounted) setState(() => _isMaximized = true);
+  }
+
+  @override
+  void onWindowRestore() {
+    if (mounted) setState(() => _isMaximized = false);
   }
 
   @override
@@ -142,81 +200,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
     return Scaffold(
       body: Column(
         children: [
-          // 自定义标题栏
-          MouseRegion(
-            onEnter: (_) => print("Mouse Entered"),
-            child: GestureDetector(
-              onPanUpdate: (details) {
-                // 拖动窗口
-                windowManager.startDragging();
-              },
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  // 使用跟整体背景一致的颜色
-                  color: Theme.of(context).scaffoldBackgroundColor,
-
-                  // 加一点下边框分隔线，不是整块阴影
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).dividerColor,
-                      width: 0.8,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // 左侧标题
-                    Text(
-                      '',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    Row(
-                      children: [
-                        // 最小化
-                        IconButton(
-                          icon: const Icon(Icons.remove),
-                          onPressed: () async {
-                            await windowManager.minimize();
-                          },
-                        ),
-                        // 最大化/还原
-                        IconButton(
-                          icon: const Icon(Icons.crop_square),
-                          onPressed: () async {
-                            bool isMax = await windowManager.isMaximized();
-                            if (isMax) {
-                              await windowManager.unmaximize();
-                            } else {
-                              await windowManager.maximize();
-                            }
-                          },
-                        ),
-                        // 关闭
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            windowManager.close();
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          _buildTitleBar(),
           Expanded(
             child: Row(
               children: [
-                // 左侧导航面板
-                NavigationRail(
+                Listener(
+                  onPointerDown: _onNavigationRailPointer,
+                  child: NavigationRail(
                   selectedIndex: _selectedIndex,
                   onDestinationSelected: _onNavigationRailItemSelected,
                   labelType: NavigationRailLabelType.all,
@@ -224,6 +214,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
                     NavigationRailDestination(
                       icon: Icon(Icons.apps),
                       label: Text('应用'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.all_inbox),
+                      label: Text('全部'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.folder),
@@ -237,10 +231,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
                       icon: Icon(Icons.settings),
                       label: Text('设置'),
                     ),
-                  ],
+              ]),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
-                // 中间主要内容区域
                 Expanded(child: _buildContent()),
               ],
             ),
@@ -250,16 +243,71 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
     );
   }
 
-  // 根据 selectedIndex 显示不同的内容
+  Widget _buildTitleBar() {
+    return MouseRegion(
+      onEnter: (_) => null,
+      child: GestureDetector(
+        onPanUpdate: (_) => windowManager.startDragging(),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.8,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Spacer(),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove),
+                    onPressed: _minimizeWindow,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isMaximized ? Icons.filter_none : Icons.crop_square,
+                    ),
+                    onPressed: _toggleMaximize,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: _closeWindow,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildContent() {
     switch (_selectedIndex) {
       case 0:
         return _buildApplicationContent();
       case 1:
-        return FolderPage(desktopPath: _desktopPath);
+        return AllPage(
+          desktopPath: _desktopPath,
+          showHidden: _showHidden,
+        );
       case 2:
-        return FilePage(desktopPath: _desktopPath);
+        return FolderPage(
+          desktopPath: _desktopPath,
+          showHidden: _showHidden,
+        );
       case 3:
+        return FilePage(
+          desktopPath: _desktopPath,
+          showHidden: _showHidden,
+        );
+      case 4:
         return SettingsPage(
           opacity: _opacity,
           iconSize: _iconSize,
@@ -275,18 +323,33 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
           onCrossAxisCountChanged: (v) => setState(() => _crossAxisCount = v),
           onShowHiddenChanged: (v) => setState(() => _showHidden = v),
           onAutoRefreshChanged: (v) => setState(() => _autoRefresh = v),
-          onThemeModeChanged: (v) => setState(() => _themeModeOption = v!),
+          onThemeModeChanged: _handleThemeChange,
         );
       default:
         return _buildApplicationContent();
     }
   }
 
-  // 应用列表显示
+  void _handleThemeChange(ThemeModeOption? option) {
+    if (option == null) return;
+    setState(() => _themeModeOption = option);
+
+    switch (option) {
+      case ThemeModeOption.light:
+        appThemeNotifier.value = ThemeMode.light;
+        break;
+      case ThemeModeOption.dark:
+        appThemeNotifier.value = ThemeMode.dark;
+        break;
+      case ThemeModeOption.system:
+        appThemeNotifier.value = ThemeMode.system;
+        break;
+    }
+  }
+
   Widget _buildApplicationContent() {
     return Column(
       children: [
-        // 顶部工具栏
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -300,63 +363,83 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
               ),
               const Spacer(),
               ElevatedButton.icon(
-                onPressed: () {
-                  // 刷新列表
-                  _loadShortcuts();
-                },
+                onPressed: _loadShortcuts,
                 icon: const Icon(Icons.refresh),
                 label: const Text('刷新'),
               ),
             ],
           ),
         ),
-        // 应用图标网格视图
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _shortcuts.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.folder_open, size: 64, color: Colors.grey),
-                      const SizedBox(height: 16),
-                      Text(
-                        '未找到桌面快捷方式',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                          const SizedBox(height: 16),
+                          const Text(
+                            '未找到桌面快捷方式',
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '桌面路径: $_desktopPath',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '桌面路径: $_desktopPath',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    int crossAxisCount = (constraints.maxWidth / 120).floor();
-                    crossAxisCount = crossAxisCount < 4
-                        ? 4
-                        : crossAxisCount; // 最少显示 4 列
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        const crossAxisSpacing = 12.0;
+                        const mainAxisSpacing = 16.0;
+                        final usableWidth = constraints.maxWidth -
+                            crossAxisSpacing * (_crossAxisCount - 1);
+                        final cellWidth = usableWidth / _crossAxisCount;
+                        final estimatedTextHeight = _estimateTextHeight();
+                        final padding = math.max(8.0, _iconSize * 0.28);
+                        final iconContainerSize =
+                            math.max(28.0, _iconSize * 1.65);
+                        final cardHeight = padding * 0.6 * 2 +
+                            iconContainerSize +
+                            padding * 0.6 +
+                            estimatedTextHeight;
+                        final aspectRatio =
+                            cardHeight <= 0 ? 1 : cellWidth / cardHeight;
 
-                    return GridView.builder(
-                      padding: const EdgeInsets.all(10),
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 100, // ❗ 每个格子的最大宽度
-                        crossAxisSpacing: 5,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 1, // 如果你想让长宽一样
-                      ),
-                      itemCount: _shortcuts.length,
-                      itemBuilder: (context, index) {
-                        return ShortcutCard(shortcut: _shortcuts[index]);
+                        return GridView.builder(
+                          padding: const EdgeInsets.all(12),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: _crossAxisCount,
+                            crossAxisSpacing: crossAxisSpacing,
+                            mainAxisSpacing: mainAxisSpacing,
+                            childAspectRatio: aspectRatio.toDouble(),
+                          ),
+                          itemCount: _shortcuts.length,
+                          itemBuilder: (context, index) {
+                            return ShortcutCard(
+                              shortcut: _shortcuts[index],
+                              iconSize: _iconSize,
+                            );
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
         ),
       ],
     );
+  }
+
+  double _estimateTextHeight() {
+    final size = (_iconSize * 0.34).clamp(10, 18);
+    // allow up to 2 lines with some spacing
+    return size * 2.9 + 6;
   }
 }

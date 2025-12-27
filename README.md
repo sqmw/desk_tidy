@@ -1,16 +1,17 @@
 # desk_tidy
 
-A new Flutter project.
+A Desktop organizing project.
 
 ## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. 显示模式分为两种
+   1. 所有的的应用、文件、文件夹都显示在一个窗口里面，通过选择tab切换
+   2. 风格化模式（当前没有想到好的名字，该模式点击任何一个屏幕能够弹出右键菜单）
+      1. 默认分为三个屏，鼠标划动到顶部的时候，显示主屏，主屏内容为app
+      2. 鼠标移动到屏幕最左侧一定范围的时候，显示文件
+      3. 鼠标划动刀屏幕最右侧的时候，显示文件夹
+      4. 待定功能。可以拓展分屏数量，可能是顶部左侧是app里面的编程软件，顶部中间是媒体编辑软件，顶部右侧是游戏软件。用户可以调整哪个屏里面的具体内容。
+2. 用户可以将全部里面的拖动到其他分屏里面
+3. 可以在其他分屏里面右键直接添加全部里面的或者其他地方的文件，仅仅逻辑建立索引，并不是快捷方式或者硬索引
+4. 个性化
+   1. 提供主题修改
+   2. 可以设置背景颜色

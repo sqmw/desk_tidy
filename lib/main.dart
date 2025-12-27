@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/desk_tidy_home_page.dart';
+import 'theme_notifier.dart';
 
 void main() {
   runApp(const MyApp());
@@ -7,9 +8,6 @@ void main() {
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
-
-  // 全局主题控制
-  static final themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.system);
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -19,7 +17,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
-      valueListenable: MyApp.themeNotifier,
+      valueListenable: appThemeNotifier,
       builder: (context, themeMode, child) {
         return MaterialApp(
           title: 'Desk Tidy',

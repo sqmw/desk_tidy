@@ -1,31 +1,88 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
+import 'package:image/image.dart' as img;
+
+const int INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
+
+class _IconLocation {
+  final String path;
+  final int index;
+
+  const _IconLocation(this.path, this.index);
+}
+
+String? _getKnownFolderPath(String folderId) {
+  final guidPtr = GUIDFromString(folderId);
+  final outPath = calloc<Pointer<Utf16>>();
+  final hr = SHGetKnownFolderPath(guidPtr, KF_FLAG_DEFAULT, NULL, outPath);
+  calloc.free(guidPtr);
+  if (FAILED(hr)) {
+    calloc.free(outPath);
+    return null;
+  }
+  final resolved = outPath.value.toDartString();
+  CoTaskMemFree(outPath.value.cast());
+  calloc.free(outPath);
+  return resolved;
+}
 
 Future<String> getDesktopPath() async {
+  final knownDesktop = _getKnownFolderPath(FOLDERID_Desktop);
+  if (knownDesktop != null && knownDesktop.isNotEmpty) {
+    return knownDesktop;
+  }
+
   final userProfile = Platform.environment['USERPROFILE'];
-  if (userProfile != null) {
+  if (userProfile != null && userProfile.isNotEmpty) {
     return path.join(userProfile, 'Desktop');
   }
+
   return 'C:\\Users\\Public\\Desktop';
 }
 
-// ===== Win32 Shortcut Constants (自己定义的) =====
+List<String> _desktopLocations(String primaryPath, {bool includePublic = true}) {
+  final destinations = <String>{primaryPath};
+  if (includePublic) {
+    final publicDesktop = _getKnownFolderPath(FOLDERID_PublicDesktop);
+    if (publicDesktop != null && publicDesktop.isNotEmpty) {
+      destinations.add(publicDesktop);
+    }
+  }
+  return destinations.toList();
+}
+
+List<String> desktopLocations(String primaryPath, {bool includePublic = true}) =>
+    _desktopLocations(primaryPath, includePublic: includePublic);
+
+bool isHiddenOrSystem(String fullPath) {
+  try {
+    final ptr = fullPath.toNativeUtf16();
+    final attrs = GetFileAttributes(ptr.cast());
+    calloc.free(ptr);
+
+    if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+    return (attrs & FILE_ATTRIBUTE_HIDDEN) != 0 ||
+        (attrs & FILE_ATTRIBUTE_SYSTEM) != 0;
+  } catch (_) {
+    return false;
+  }
+}
+
 const int SLR_NO_UI = 0x0001;
 const int SLGP_SHORTPATH = 0x0001;
 const int SLGP_UNCPRIORITY = 0x0002;
 const int SLGP_RAWPATH = 0x0004;
 
-/// 解析 Windows 快捷方式 .lnk 文件目标路径
 String? getShortcutTarget(String lnkPath) {
   try {
     final shellLink = ShellLink.createInstance();
     final persistFile = IPersistFile.from(shellLink);
 
-    // 载入快捷方式
     final lnkPtr = lnkPath.toNativeUtf16();
     final loadHr = persistFile.load(lnkPtr.cast(), STGM_READ);
     calloc.free(lnkPtr);
@@ -35,13 +92,9 @@ String? getShortcutTarget(String lnkPath) {
       return null;
     }
 
-    // 解析快捷方式（不弹 UI）
     shellLink.resolve(0, SLR_NO_UI);
 
-    // 分配 Utf16 缓冲区
     final pathBuffer = calloc.allocate<Utf16>(MAX_PATH);
-
-    // 获取目标路径
     final hr = shellLink.getPath(pathBuffer, MAX_PATH, nullptr, SLGP_RAWPATH);
 
     String? target;
@@ -58,145 +111,268 @@ String? getShortcutTarget(String lnkPath) {
   }
 }
 
-/// 扫描桌面目录，返回可执行应用程序列表（包含 .exe 和指向 .exe 的快捷方式）。
 Future<List<String>> scanDesktopShortcuts(
-    String desktopPath, {
-      bool showHidden = false,
-    }) async {
-  final shortcuts = <String>[];
+  String desktopPath, {
+  bool showHidden = false,
+}) async {
+  final directories = _desktopLocations(desktopPath);
+  final shortcuts = <String>{};
+  const allowedExtensions = {
+    '.exe',
+    '.lnk',
+    '.url',
+    '.appref-ms',
+  };
 
-  try {
-    final desktopDir = Directory(desktopPath);
-    if (!await desktopDir.exists()) return shortcuts;
+  for (final dirPath in directories) {
+    try {
+      final desktopDir = Directory(dirPath);
+      if (!desktopDir.existsSync()) continue;
 
-    await for (final entity in desktopDir.list()) {
-      final name = path.basename(entity.path);
+      await for (final entity in desktopDir.list()) {
+        final name = path.basename(entity.path);
+        final lowerName = name.toLowerCase();
 
-      if (!showHidden && name.startsWith('.')) {
-        continue;
-      }
-
-      if (entity is File) {
-        final ext = name.toLowerCase();
-
-        if (ext.endsWith('.exe')) {
-          shortcuts.add(entity.path);
+        if (!showHidden &&
+            (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
           continue;
         }
 
-        if (ext.endsWith('.lnk')) {
-          final target = getShortcutTarget(entity.path);
-          if (target != null && target.toLowerCase().endsWith('.exe')) {
-            shortcuts.add(entity.path);
-          }
+        if (lowerName == 'desktop.ini' || lowerName == 'thumbs.db') {
+          continue;
+        }
+
+        if (entity is File) {
+          final ext = path.extension(lowerName);
+          if (!allowedExtensions.contains(ext)) continue;
+          shortcuts.add(entity.path);
         }
       }
+    } catch (e) {
+      print('扫描桌面失败 ($dirPath): $e');
     }
-  } catch (e) {
-    print('扫描桌面失败: $e');
   }
 
-  return shortcuts;
+  return shortcuts.toList();
 }
 
-/// 从文件路径提取图标并返回 PNG 格式的字节数据
-Uint8List? extractIcon(String filePath) {
-  try {
-    final filePathPtr = filePath.toNativeUtf16();
+Uint8List? extractIcon(String filePath, {int size = 64}) {
+  // Try to locate the icon resource via shell, then extract a high-res icon via
+  // PrivateExtractIconsW (handles PNG-in-ICO as well). Fallback to SHGetFileInfo
+  // HICON if needed.
+  final desiredSize = size.clamp(16, 256);
 
-    final shFileInfo = calloc<SHFILEINFO>();
-    final flags = SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES;
-
-    final hIcon = SHGetFileInfo(
-      filePathPtr.cast(),
-      FILE_ATTRIBUTE_NORMAL,
-      shFileInfo.cast(),
-      sizeOf<SHFILEINFO>(),
-      flags,
-    );
-
-    calloc.free(filePathPtr);
-
-    if (hIcon == 0) {
-      calloc.free(shFileInfo);
-      return null;
+  final location = _getIconLocation(filePath);
+  if (location != null && location.path.isNotEmpty) {
+    final hicon =
+        _extractHiconFromLocation(location.path, location.index, desiredSize);
+    if (hicon != 0) {
+      final png = _hiconToPng(hicon, size: desiredSize);
+      DestroyIcon(hicon);
+      if (png != null && png.isNotEmpty) return png;
     }
+  }
 
-    final iconHandle = shFileInfo.ref.hIcon;
-
-    final iconInfo = calloc<ICONINFO>();
-    if (GetIconInfo(iconHandle, iconInfo) == 0) {
-      DestroyIcon(iconHandle);
-      calloc.free(shFileInfo);
-      calloc.free(iconInfo);
-      return null;
-    }
-
-    final hdc = GetDC(0);
-    final bitmapInfo = calloc<BITMAPINFO>();
-    bitmapInfo.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
-
-    GetDIBits(
-      hdc,
-      iconInfo.ref.hbmColor,
-      0,
-      0,
-      nullptr,
-      bitmapInfo,
-      DIB_RGB_COLORS,
-    );
-
-    final width = bitmapInfo.ref.bmiHeader.biWidth;
-    final height = bitmapInfo.ref.bmiHeader.biHeight.abs();
-    final bitsPerPixel = bitmapInfo.ref.bmiHeader.biBitCount;
-
-    final stride = ((width * bitsPerPixel + 31) ~/ 32) * 4;
-    final bufferSize = stride * height;
-    final bits = calloc.allocate<Uint8>(bufferSize);
-
-    bitmapInfo.ref.bmiHeader.biHeight = -height;
-    GetDIBits(
-      hdc,
-      iconInfo.ref.hbmColor,
-      0,
-      height,
-      bits.cast(),
-      bitmapInfo,
-      DIB_RGB_COLORS,
-    );
-
-    final pngData = _convertToPng(bits, width, height, bitsPerPixel);
-
-    calloc.free(bits);
-    calloc.free(bitmapInfo);
-    ReleaseDC(0, hdc);
-    DeleteObject(iconInfo.ref.hbmColor);
-    DeleteObject(iconInfo.ref.hbmMask);
-    DestroyIcon(iconHandle);
-    calloc.free(iconInfo);
+  // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
+  final pathPtr = filePath.toNativeUtf16();
+  final shFileInfo = calloc<SHFILEINFO>();
+  final hr = SHGetFileInfo(
+    pathPtr.cast(),
+    0,
+    shFileInfo.cast(),
+    sizeOf<SHFILEINFO>(),
+    SHGFI_ICON | SHGFI_LARGEICON,
+  );
+  calloc.free(pathPtr);
+  if (hr == 0) {
     calloc.free(shFileInfo);
-
-    return pngData;
-  } catch (e) {
-    print('提取图标失败: $e');
     return null;
   }
+
+  final iconHandle = shFileInfo.ref.hIcon;
+  calloc.free(shFileInfo);
+  if (iconHandle == 0) return null;
+
+  final png = _hiconToPng(iconHandle, size: desiredSize);
+  DestroyIcon(iconHandle);
+  return png;
 }
 
-Uint8List _convertToPng(Pointer<Uint8> bits, int width, int height, int bitsPerPixel) {
-  final bytes = <int>[];
+_IconLocation? _getIconLocation(String filePath) {
+  final pathPtr = filePath.toNativeUtf16();
+  final shFileInfo = calloc<SHFILEINFO>();
+  final result = SHGetFileInfo(
+    pathPtr.cast(),
+    0,
+    shFileInfo.cast(),
+    sizeOf<SHFILEINFO>(),
+    SHGFI_ICONLOCATION,
+  );
+  calloc.free(pathPtr);
+  if (result == 0) {
+    calloc.free(shFileInfo);
+    return null;
+  }
 
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      final offset = y * ((width * bitsPerPixel + 31) ~/ 32) * 4 + x * 4;
-      final b = bits[offset];
-      final g = bits[offset + 1];
-      final r = bits[offset + 2];
-      final a = 255;
-      bytes.addAll([r, g, b, a]);
+  final iconPath = shFileInfo.ref.szDisplayName;
+  final iconIndex = shFileInfo.ref.iIcon;
+  calloc.free(shFileInfo);
+
+  if (iconPath.isEmpty) return null;
+  return _IconLocation(iconPath, iconIndex);
+}
+
+int _extractHiconFromLocation(String iconPath, int iconIndex, int size) {
+  final iconPathPtr = iconPath.toNativeUtf16();
+  final hiconPtr = calloc<IntPtr>();
+  final iconIdPtr = calloc<Uint32>();
+
+  final extracted = PrivateExtractIcons(
+    iconPathPtr.cast(),
+    iconIndex,
+    size,
+    size,
+    hiconPtr,
+    iconIdPtr,
+    1,
+    0,
+  );
+
+  calloc.free(iconPathPtr);
+  calloc.free(iconIdPtr);
+
+  final hicon = hiconPtr.value;
+  calloc.free(hiconPtr);
+
+  if (extracted <= 0 || hicon == 0) return 0;
+  return hicon;
+}
+
+Uint8List? _hiconToPng(int icon, {required int size}) {
+  final screenDC = GetDC(NULL);
+  if (screenDC == 0) return null;
+  final memDC = CreateCompatibleDC(screenDC);
+
+  final bmi = calloc<BITMAPINFO>();
+  bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+  bmi.ref.bmiHeader.biWidth = size;
+  bmi.ref.bmiHeader.biHeight = -size; // top-down DIB
+  bmi.ref.bmiHeader.biPlanes = 1;
+  bmi.ref.bmiHeader.biBitCount = 32;
+  bmi.ref.bmiHeader.biCompression = BI_RGB;
+
+  final ppBits = calloc<Pointer<Void>>();
+  final dib = CreateDIBSection(screenDC, bmi, DIB_RGB_COLORS, ppBits, NULL, 0);
+  if (dib == 0) {
+    calloc.free(ppBits);
+    calloc.free(bmi);
+    DeleteDC(memDC);
+    ReleaseDC(NULL, screenDC);
+    return null;
+  }
+
+  final oldBmp = SelectObject(memDC, dib);
+  final pixelCount = size * size * 4;
+  final pixels = ppBits.value.cast<Uint8>().asTypedList(pixelCount);
+  pixels.fillRange(0, pixels.length, 0);
+
+  final scaled = CopyImage(icon, IMAGE_ICON, size, size, 0);
+  final iconToDraw = scaled != 0 ? scaled : icon;
+  DrawIcon(memDC, 0, 0, iconToDraw);
+  if (scaled != 0) {
+    DestroyIcon(scaled);
+  }
+
+  final image = img.Image.fromBytes(
+    width: size,
+    height: size,
+    bytes: pixels.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.bgra,
+    rowStride: size * 4,
+  );
+
+  final normalized = _normalizeIcon(image, fill: 0.92);
+
+  final png = Uint8List.fromList(
+    img.encodePng(
+      normalized,
+    ),
+  );
+
+  SelectObject(memDC, oldBmp);
+  DeleteObject(dib);
+  DeleteDC(memDC);
+  ReleaseDC(NULL, screenDC);
+  calloc.free(ppBits);
+  calloc.free(bmi);
+  return png;
+}
+
+img.Image _normalizeIcon(img.Image source, {double fill = 0.92}) {
+  final width = source.width;
+  final height = source.height;
+  if (width == 0 || height == 0) return source;
+
+  const alphaThreshold = 4;
+  var minX = width;
+  var minY = height;
+  var maxX = -1;
+  var maxY = -1;
+
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final p = source.getPixel(x, y);
+      if (p.a > alphaThreshold) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
     }
   }
 
-  return Uint8List.fromList(bytes);
-}
+  if (maxX < 0 || maxY < 0) return source;
 
+  minX = math.max(0, minX - 1);
+  minY = math.max(0, minY - 1);
+  maxX = math.min(width - 1, maxX + 1);
+  maxY = math.min(height - 1, maxY + 1);
+
+  final cropWidth = maxX - minX + 1;
+  final cropHeight = maxY - minY + 1;
+  if (cropWidth <= 0 || cropHeight <= 0) return source;
+
+  final cropped = img.copyCrop(
+    source,
+    x: minX,
+    y: minY,
+    width: cropWidth,
+    height: cropHeight,
+  );
+
+  final targetEdge = (width * fill).round().clamp(1, width);
+  final scale =
+      math.min(targetEdge / cropped.width, targetEdge / cropped.height);
+  final scaledWidth = math.max(1, (cropped.width * scale).round());
+  final scaledHeight = math.max(1, (cropped.height * scale).round());
+
+  final resized = img.copyResize(
+    cropped,
+    width: scaledWidth,
+    height: scaledHeight,
+    interpolation: img.Interpolation.cubic,
+  );
+
+  final canvas = img.Image(width: width, height: height);
+  img.fill(canvas, color: img.ColorRgba8(0, 0, 0, 0));
+
+  img.compositeImage(
+    canvas,
+    resized,
+    dstX: ((width - scaledWidth) / 2).round(),
+    dstY: ((height - scaledHeight) / 2).round(),
+  );
+
+  return canvas;
+}

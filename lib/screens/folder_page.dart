@@ -1,19 +1,30 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+import '../utils/desktop_helper.dart';
 
 class FolderPage extends StatelessWidget {
   final String desktopPath;
+  final bool showHidden;
 
-  const FolderPage({Key? key, required this.desktopPath}) : super(key: key);
+  const FolderPage({
+    Key? key,
+    required this.desktopPath,
+    this.showHidden = false,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final desktopDir = Directory(desktopPath);
-    final folders = desktopDir
-        .listSync()
-        .whereType<Directory>()
-        .toList();
+    final folders = desktopDir.listSync().whereType<Directory>().where((d) {
+      final name = path.basename(d.path);
+      if (!showHidden &&
+          (name.startsWith('.') || isHiddenOrSystem(d.path))) {
+        return false;
+      }
+      return name.toLowerCase() != 'desktop.ini' &&
+          name.toLowerCase() != 'thumbs.db';
+    }).toList();
 
     if (folders.isEmpty) {
       return const Center(child: Text('未找到文件夹'));
