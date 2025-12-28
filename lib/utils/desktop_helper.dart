@@ -73,6 +73,27 @@ bool isHiddenOrSystem(String fullPath) {
   }
 }
 
+/// Move a file or folder to the Recycle Bin (FOF_ALLOWUNDO).
+/// Returns true if the shell reports success.
+bool moveToRecycleBin(String fullPath) {
+  try {
+    final op = calloc<SHFILEOPSTRUCT>();
+    final from = ('${fullPath}\u0000\u0000').toNativeUtf16();
+
+    op.ref
+      ..wFunc = FO_DELETE
+      ..pFrom = from
+      ..fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT;
+
+    final hr = SHFileOperation(op);
+    calloc.free(from);
+    calloc.free(op);
+    return hr == 0;
+  } catch (_) {
+    return false;
+  }
+}
+
 const int SLR_NO_UI = 0x0001;
 const int SLGP_SHORTPATH = 0x0001;
 const int SLGP_UNCPRIORITY = 0x0002;
