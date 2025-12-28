@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:settings_ui/settings_ui.dart';
 
 enum ThemeModeOption { system, light, dark }
@@ -10,6 +11,7 @@ class SettingsPage extends StatelessWidget {
   final bool showHidden;
   final bool autoRefresh;
   final ThemeModeOption themeModeOption;
+  final String? backgroundPath;
 
   final ValueChanged<double> onOpacityChanged;
   final ValueChanged<double> onIconSizeChanged;
@@ -17,6 +19,7 @@ class SettingsPage extends StatelessWidget {
   final ValueChanged<bool> onShowHiddenChanged;
   final ValueChanged<bool> onAutoRefreshChanged;
   final ValueChanged<ThemeModeOption?> onThemeModeChanged;
+  final ValueChanged<String?> onBackgroundPathChanged;
 
   const SettingsPage({
     super.key,
@@ -26,20 +29,34 @@ class SettingsPage extends StatelessWidget {
     required this.showHidden,
     required this.autoRefresh,
     required this.themeModeOption,
+    required this.backgroundPath,
     required this.onOpacityChanged,
     required this.onIconSizeChanged,
     required this.onCrossAxisCountChanged,
     required this.onShowHiddenChanged,
     required this.onAutoRefreshChanged,
     required this.onThemeModeChanged,
+    required this.onBackgroundPathChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    Future<void> _pickBackground() async {
+      final picked = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: FileType.image,
+      );
+      if (picked != null && picked.files.isNotEmpty) {
+        final path = picked.files.single.path;
+        if (path != null && path.isNotEmpty) {
+          onBackgroundPathChanged(path);
+        }
+      }
+    }
+
     return SettingsList(
       sections: [
-
-        /// 外观设置：透明度 + 图标大小 + 每行数量
+        /// 外观设置：透明度 + 图标大小 + 每行数量 + 背景
         SettingsSection(
           title: const Text(''), // 隐藏标题
           tiles: <SettingsTile>[
@@ -54,7 +71,6 @@ class SettingsPage extends StatelessWidget {
               ),
               trailing: Text('${(opacity * 100).toInt()}%'),
             ),
-
             SettingsTile(
               title: const Text('图标大小'),
               description: Slider(
@@ -66,7 +82,6 @@ class SettingsPage extends StatelessWidget {
               ),
               trailing: Text(iconSize.toInt().toString()),
             ),
-
             SettingsTile(
               title: const Text('每行显示数量'),
               trailing: DropdownButton<int>(
@@ -78,6 +93,22 @@ class SettingsPage extends StatelessWidget {
                   if (v != null) onCrossAxisCountChanged(v);
                 },
               ),
+            ),
+            SettingsTile.navigation(
+              leading: const Icon(Icons.image),
+              title: const Text('背景图片'),
+              description: Text(
+                (backgroundPath == null || backgroundPath!.isEmpty)
+                    ? '未设置'
+                    : backgroundPath!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: TextButton(
+                onPressed: () => onBackgroundPathChanged(null),
+                child: const Text('清除'),
+              ),
+              onPressed: (_) => _pickBackground(),
             ),
           ],
         ),

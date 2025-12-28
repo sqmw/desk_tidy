@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui';
+import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _isLoading = true;
   bool _isMaximized = false;
   double _opacity = 1.0;
+  String? _backgroundImagePath;
 
   int _selectedIndex = 0;
 
@@ -197,46 +199,67 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   @override
   Widget build(BuildContext context) {
+    final backgroundPath = _backgroundImagePath;
+    final backgroundExists =
+        backgroundPath != null && backgroundPath.isNotEmpty && File(backgroundPath).existsSync();
+
     return Scaffold(
-      body: Column(
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          _buildTitleBar(),
-          Expanded(
-            child: Row(
-              children: [
-                Listener(
-                  onPointerDown: _onNavigationRailPointer,
-                  child: NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: _onNavigationRailItemSelected,
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.apps),
-                      label: Text('应用'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.all_inbox),
-                      label: Text('全部'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.folder),
-                      label: Text('文件夹'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.insert_drive_file),
-                      label: Text('文件'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.settings),
-                      label: Text('设置'),
-                    ),
-              ]),
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(child: _buildContent()),
-              ],
+          if (backgroundExists)
+            Positioned.fill(
+              child: Image.file(
+                File(backgroundPath!),
+                fit: BoxFit.cover,
+              ),
             ),
+          Column(
+            children: [
+              _buildTitleBar(),
+              Expanded(
+                child: Row(
+                  children: [
+                    Listener(
+                      onPointerDown: _onNavigationRailPointer,
+                      child: NavigationRail(
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: _onNavigationRailItemSelected,
+                      labelType: NavigationRailLabelType.all,
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.apps),
+                          label: Text('应用'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.all_inbox),
+                          label: Text('全部'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.folder),
+                          label: Text('文件夹'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.insert_drive_file),
+                          label: Text('文件'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.settings),
+                          label: Text('设置'),
+                        ),
+                  ]),
+                    ),
+                    const VerticalDivider(thickness: 1, width: 1),
+                    Expanded(
+                      child: Container(
+                        color: backgroundExists ? Colors.black.withOpacity(0) : null,
+                        child: _buildContent(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -315,6 +338,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           showHidden: _showHidden,
           autoRefresh: _autoRefresh,
           themeModeOption: _themeModeOption,
+          backgroundPath: _backgroundImagePath,
           onOpacityChanged: (v) {
             setState(() => _opacity = v);
             windowManager.setOpacity(v);
@@ -324,6 +348,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           onShowHiddenChanged: (v) => setState(() => _showHidden = v),
           onAutoRefreshChanged: (v) => setState(() => _autoRefresh = v),
           onThemeModeChanged: _handleThemeChange,
+          onBackgroundPathChanged: (path) {
+            setState(() {
+              final trimmed = path?.trim() ?? '';
+              _backgroundImagePath = trimmed.isEmpty ? null : trimmed;
+            });
+          },
         );
       default:
         return _buildApplicationContent();

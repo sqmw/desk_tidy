@@ -62,6 +62,7 @@ class _FolderPageState extends State<FolderPage> {
       }
 
       final items = dir.listSync().where((entity) {
+        if (entity is! Directory) return false;
         final name = path.basename(entity.path);
         final lower = name.toLowerCase();
         if (!widget.showHidden &&
@@ -71,17 +72,9 @@ class _FolderPageState extends State<FolderPage> {
         if (lower == 'desktop.ini' || lower == 'thumbs.db') {
           return false;
         }
-        // Skip shortcuts inside folder view.
-        if (lower.endsWith('.lnk')) {
-          return false;
-        }
         return true;
       }).toList()
         ..sort((a, b) {
-          final aIsDir = a is Directory;
-          final bIsDir = b is Directory;
-          if (aIsDir && !bIsDir) return -1;
-          if (!aIsDir && bIsDir) return 1;
           return path.basename(a.path).toLowerCase().compareTo(
                 path.basename(b.path).toLowerCase(),
               );

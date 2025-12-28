@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
+import '../widgets/folder_picker_dialog.dart';
 
 class FilePage extends StatelessWidget {
   final String desktopPath;
@@ -48,7 +49,9 @@ class FilePage extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () {},
-            onSecondaryTapDown: (_) {},
+            onSecondaryTapDown: (details) {
+              _showFileMenu(context, file, details.globalPosition);
+            },
             borderRadius: BorderRadius.circular(8),
             hoverColor: Theme.of(context)
                 .colorScheme
@@ -104,5 +107,85 @@ class _FileIcon extends StatelessWidget {
       }
     }
     return extractIcon(filePath);
+  }
+}
+
+Future<void> _showFileMenu(
+  BuildContext context,
+  File file,
+  Offset position,
+) async {
+  final result = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      position.dx + 1,
+      position.dy + 1,
+    ),
+    items: const [
+      PopupMenuItem(
+        value: 'move',
+        child: ListTile(
+          leading: Icon(Icons.drive_file_move),
+          title: Text('移动到...'),
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: ListTile(
+          leading: Icon(Icons.delete),
+          title: Text('删除(回收站)'),
+        ),
+      ),
+    ],
+  );
+
+  switch (result) {
+    case 'move':
+      await _promptMoveFile(context, file);
+      break;
+    case 'delete':
+      final ok = moveToRecycleBin(file.path);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')),
+        );
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+Future<void> _promptMoveFile(BuildContext context, File file) async {
+  final targetDir = await showFolderPicker(
+    context: context,
+    initialPath: path.dirname(file.path),
+    showHidden: true,
+  );
+  if (targetDir == null || targetDir.isEmpty) return;
+  final dest = path.join(targetDir, path.basename(file.path));
+  try {
+    if (File(dest).existsSync()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('目标已存在同名文件')),
+        );
+      }
+      return;
+    }
+    await file.rename(dest);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已移动到 $dest')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('移动失败: $e')),
+      );
+    }
   }
 }
