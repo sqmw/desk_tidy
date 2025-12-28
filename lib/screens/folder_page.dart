@@ -1,9 +1,12 @@
 import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
+import '../widgets/folder_picker_dialog.dart';
 
 class FolderPage extends StatefulWidget {
   final String desktopPath;
@@ -24,6 +27,7 @@ class _FolderPageState extends State<FolderPage> {
   bool _loading = true;
   String? _error;
   List<FileSystemEntity> _entries = [];
+  bool _entityMenuArmed = false;
 
   @override
   void initState() {
@@ -107,6 +111,7 @@ class _FolderPageState extends State<FolderPage> {
     FileSystemEntity entity,
     Offset position,
   ) async {
+    _markEntityMenu();
     final isDir = entity is Directory;
     final result = await showMenu<String>(
       context: context,
@@ -158,42 +163,53 @@ class _FolderPageState extends State<FolderPage> {
   }
 
   Future<void> _showPageMenu(Offset position) async {
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: const [
-        PopupMenuItem(
-          value: 'new_folder',
-          child: ListTile(
-            leading: Icon(Icons.create_new_folder),
-            title: Text('新建文件夹'),
-          ),
+    Future.microtask(() async {
+      if (_entityMenuArmed) {
+        _entityMenuArmed = false;
+        return;
+      }
+      final result = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
         ),
-        PopupMenuItem(
-          value: 'refresh',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('刷新'),
+        items: const [
+          PopupMenuItem(
+            value: 'new_folder',
+            child: ListTile(
+              leading: Icon(Icons.create_new_folder),
+              title: Text('新建文件夹'),
+            ),
           ),
-        ),
-      ],
-    );
+          PopupMenuItem(
+            value: 'refresh',
+            child: ListTile(
+              leading: Icon(Icons.refresh),
+              title: Text('刷新'),
+            ),
+          ),
+        ],
+      );
 
-    switch (result) {
-      case 'new_folder':
-        _promptNewFolder();
-        break;
-      case 'refresh':
-        _refresh();
-        break;
-      default:
-        break;
-    }
+      switch (result) {
+        case 'new_folder':
+          _promptNewFolder();
+          break;
+        case 'refresh':
+          _refresh();
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  void _markEntityMenu() {
+    _entityMenuArmed = true;
+    scheduleMicrotask(() => _entityMenuArmed = false);
   }
 
   Future<void> _promptNewFolder() async {
@@ -255,37 +271,12 @@ class _FolderPageState extends State<FolderPage> {
   }
 
   Future<void> _promptMove(FileSystemEntity entity) async {
-    final controller = TextEditingController(text: path.dirname(entity.path));
-    final ok = await showDialog<bool>(
+    final targetDir = await showFolderPicker(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('移动到...'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '目标文件夹路径',
-            ),
-            onSubmitted: (_) => Navigator.of(context).pop(true),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('移动'),
-            ),
-          ],
-        );
-      },
+      initialPath: _currentPath,
+      showHidden: widget.showHidden,
     );
-
-    if (ok != true) return;
-    final targetDir = controller.text.trim();
-    if (targetDir.isEmpty) return;
+    if (targetDir == null || targetDir.isEmpty) return;
     final dest = path.join(targetDir, path.basename(entity.path));
 
     try {

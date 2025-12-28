@@ -94,6 +94,11 @@ bool moveToRecycleBin(String fullPath) {
   }
 }
 
+bool isDirectory(String fullPath) {
+  final entity = FileSystemEntity.typeSync(fullPath);
+  return entity == FileSystemEntityType.directory;
+}
+
 const int SLR_NO_UI = 0x0001;
 const int SLGP_SHORTPATH = 0x0001;
 const int SLGP_UNCPRIORITY = 0x0002;
