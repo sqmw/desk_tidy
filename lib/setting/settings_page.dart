@@ -86,28 +86,34 @@ class SettingsPage extends StatelessWidget {
         SettingsSection(
           title: const Text(''), // 隐藏标题
           tiles: <SettingsTile>[
-            SettingsTile.navigation(
+            SettingsTile(
               leading: const Icon(Icons.phone_iphone),
               title: const Text('跟随系统'),
-              trailing: themeModeOption == ThemeModeOption.system
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: Radio<ThemeModeOption>(
+                value: ThemeModeOption.system,
+                groupValue: themeModeOption,
+                onChanged: onThemeModeChanged,
+              ),
               onPressed: (_) => onThemeModeChanged(ThemeModeOption.system),
             ),
-            SettingsTile.navigation(
+            SettingsTile(
               leading: const Icon(Icons.light_mode),
               title: const Text('浅色'),
-              trailing: themeModeOption == ThemeModeOption.light
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: Radio<ThemeModeOption>(
+                value: ThemeModeOption.light,
+                groupValue: themeModeOption,
+                onChanged: onThemeModeChanged,
+              ),
               onPressed: (_) => onThemeModeChanged(ThemeModeOption.light),
             ),
-            SettingsTile.navigation(
+            SettingsTile(
               leading: const Icon(Icons.dark_mode),
               title: const Text('深色'),
-              trailing: themeModeOption == ThemeModeOption.dark
-                  ? const Icon(Icons.check)
-                  : null,
+              trailing: Radio<ThemeModeOption>(
+                value: ThemeModeOption.dark,
+                groupValue: themeModeOption,
+                onChanged: onThemeModeChanged,
+              ),
               onPressed: (_) => onThemeModeChanged(ThemeModeOption.dark),
             ),
           ],

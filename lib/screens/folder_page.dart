@@ -346,19 +346,26 @@ class _FolderPageState extends State<FolderPage> {
                     itemBuilder: (context, index) {
                       final entity = _entries[index];
                       final isDir = entity is Directory;
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onSecondaryTapDown: (details) {
-                          _showEntityMenu(entity, details.globalPosition);
-                        },
-                        onTap: isDir ? () => _openFolder(entity.path) : null,
-                        child: ListTile(
-                          leading: _EntityIcon(entity: entity),
-                          title: Text(path.basename(entity.path)),
-                          subtitle: Text(entity.path),
-                          trailing: isDir
-                              ? const Icon(Icons.chevron_right)
-                              : null,
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: isDir ? () => _openFolder(entity.path) : null,
+                          onSecondaryTapDown: (details) {
+                            _showEntityMenu(entity, details.globalPosition);
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          hoverColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceVariant
+                              .withOpacity(0.4),
+                          child: ListTile(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            leading: _EntityIcon(entity: entity),
+                            title: Text(path.basename(entity.path)),
+                            subtitle: Text(entity.path),
+                            trailing: null,
+                          ),
                         ),
                       );
                     },

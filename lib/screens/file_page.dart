@@ -44,10 +44,23 @@ class FilePage extends StatelessWidget {
       itemCount: files.length,
       itemBuilder: (context, index) {
         final file = files[index];
-        return ListTile(
-          leading: _FileIcon(filePath: file.path),
-          title: Text(path.basename(file.path)),
-          subtitle: Text(file.path),
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {},
+            onSecondaryTapDown: (_) {},
+            borderRadius: BorderRadius.circular(8),
+            hoverColor: Theme.of(context)
+                .colorScheme
+                .surfaceVariant
+                .withOpacity(0.4),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              leading: _FileIcon(filePath: file.path),
+              title: Text(path.basename(file.path)),
+              subtitle: Text(file.path),
+            ),
+          ),
         );
       },
     );
