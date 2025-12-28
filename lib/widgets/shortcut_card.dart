@@ -151,10 +151,6 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final padding = math.max(8.0, iconSize * 0.28);
     final iconContainerSize = math.max(28.0, iconSize * 1.65);
     final visualIconSize = math.max(12.0, iconContainerSize * 0.92);
-    final iconBg = Theme.of(context)
-        .colorScheme
-        .surfaceContainerHighest
-        .withAlpha(140);
     return Focus(
       focusNode: _focusNode,
       onFocusChange: (hasFocus) {
@@ -163,11 +159,8 @@ class _ShortcutCardState extends State<ShortcutCard> {
           _removeLabelOverlay();
         }
       },
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(math.max(8, iconSize * 0.15)),
-        ),
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
           onTap: () {
             _focusNode.requestFocus();
@@ -182,20 +175,12 @@ class _ShortcutCardState extends State<ShortcutCard> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
+                SizedBox(
                   width: iconContainerSize,
                   height: iconContainerSize,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(iconContainerSize * 0.22),
-                    border: Border.all(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .outlineVariant
-                          .withAlpha(89),
-                    ),
-                  ),
-                  child: Center(
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(iconContainerSize * 0.22),
                     child: _buildIcon(context, visualIconSize.toDouble()),
                   ),
                 ),
@@ -237,7 +222,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
         bytes,
         width: visualIconSize,
         height: visualIconSize,
-        fit: BoxFit.contain,
+        fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.high,
         gaplessPlayback: true,
@@ -259,7 +244,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
               buf,
               width: visualIconSize,
               height: visualIconSize,
-              fit: BoxFit.contain,
+              fit: BoxFit.cover,
               alignment: Alignment.center,
               filterQuality: FilterQuality.high,
               gaplessPlayback: true,
