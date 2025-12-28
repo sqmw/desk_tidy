@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
@@ -49,6 +50,9 @@ class FilePage extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () {},
+            onDoubleTap: () async {
+              await openWithDefault(file.path);
+            },
             onSecondaryTapDown: (details) {
               _showFileMenu(context, file, details.globalPosition);
             },
@@ -125,6 +129,20 @@ Future<void> _showFileMenu(
     ),
     items: const [
       PopupMenuItem(
+        value: 'open',
+        child: ListTile(
+          leading: Icon(Icons.open_in_new),
+          title: Text('打开'),
+        ),
+      ),
+      PopupMenuItem(
+        value: 'open_with',
+        child: ListTile(
+          leading: Icon(Icons.app_registration),
+          title: Text('使用其他应用打开'),
+        ),
+      ),
+      PopupMenuItem(
         value: 'move',
         child: ListTile(
           leading: Icon(Icons.drive_file_move),
@@ -142,6 +160,12 @@ Future<void> _showFileMenu(
   );
 
   switch (result) {
+    case 'open':
+      await openWithDefault(file.path);
+      break;
+    case 'open_with':
+      await _promptOpenWith(file.path);
+      break;
     case 'move':
       await _promptMoveFile(context, file);
       break;
@@ -188,4 +212,16 @@ Future<void> _promptMoveFile(BuildContext context, File file) async {
       );
     }
   }
+}
+
+Future<void> _promptOpenWith(String targetPath) async {
+  final picked = await FilePicker.platform.pickFiles(
+    allowMultiple: false,
+    type: FileType.custom,
+    allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
+  );
+  if (picked == null || picked.files.isEmpty) return;
+  final appPath = picked.files.single.path;
+  if (appPath == null || appPath.isEmpty) return;
+  await openWithApp(appPath, targetPath);
 }

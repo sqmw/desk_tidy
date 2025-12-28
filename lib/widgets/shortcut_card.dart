@@ -162,6 +162,13 @@ class _ShortcutCardState extends State<ShortcutCard> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          onDoubleTap: () {
+            if (shortcut.targetPath.isNotEmpty) {
+              openWithDefault(shortcut.targetPath);
+            } else {
+              openWithDefault(shortcut.path);
+            }
+          },
           onTap: () {
             _focusNode.requestFocus();
             _toggleSelection();

@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
+import 'package:process_run/shell.dart' as pr;
 
 const int INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
 
@@ -97,6 +98,30 @@ bool moveToRecycleBin(String fullPath) {
 bool isDirectory(String fullPath) {
   final entity = FileSystemEntity.typeSync(fullPath);
   return entity == FileSystemEntityType.directory;
+}
+
+/// Open a file or folder with the system default handler.
+Future<bool> openWithDefault(String fullPath) async {
+  try {
+    final shell = pr.Shell(runInShell: true, verbose: false);
+    await shell.run('cmd /c start "" "${fullPath.replaceAll('"', '\\"')}"');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Open target file with a specific application executable.
+Future<bool> openWithApp(String appPath, String target) async {
+  try {
+    final shell = pr.Shell(runInShell: true, verbose: false);
+    final quotedApp = '"${appPath.replaceAll('"', '\\"')}"';
+    final quotedTarget = '"${target.replaceAll('"', '\\"')}"';
+    await shell.run('$quotedApp $quotedTarget');
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 const int SLR_NO_UI = 0x0001;

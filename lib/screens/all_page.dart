@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
@@ -169,14 +170,20 @@ class _AllPageState extends State<AllPage> {
         position.dy + 1,
       ),
       items: [
-        if (isDir)
-          const PopupMenuItem(
-            value: 'open',
-            child: ListTile(
-              leading: Icon(Icons.folder_open),
-              title: Text('打开'),
-            ),
+        const PopupMenuItem(
+          value: 'open',
+          child: ListTile(
+            leading: Icon(Icons.open_in_new),
+            title: Text('打开'),
           ),
+        ),
+        const PopupMenuItem(
+          value: 'open_with',
+          child: ListTile(
+            leading: Icon(Icons.app_registration),
+            title: Text('使用其他应用打开'),
+          ),
+        ),
         const PopupMenuItem(
           value: 'move',
           child: ListTile(
@@ -196,7 +203,14 @@ class _AllPageState extends State<AllPage> {
 
     switch (result) {
       case 'open':
-        if (isDir) _openFolder(entity.path);
+        if (isDir) {
+          _openFolder(entity.path);
+        } else {
+          await openWithDefault(entity.path);
+        }
+        break;
+      case 'open_with':
+        await _promptOpenWith(entity.path);
         break;
       case 'delete':
         _deleteEntity(entity);
@@ -336,6 +350,18 @@ class _AllPageState extends State<AllPage> {
     }
   }
 
+  Future<void> _promptOpenWith(String targetPath) async {
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final appPath = picked.files.single.path;
+    if (appPath == null || appPath.isEmpty) return;
+    await openWithApp(appPath, targetPath);
+  }
+
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -393,10 +419,21 @@ class _AllPageState extends State<AllPage> {
                     itemBuilder: (context, index) {
                       final entity = _entries[index];
                       final isDir = entity is Directory;
+                      final rawName = path.basename(entity.path);
+                      final displayName = rawName.toLowerCase().endsWith('.lnk')
+                          ? rawName.substring(0, rawName.length - 4)
+                          : rawName;
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: isDir ? () => _openFolder(entity.path) : null,
+                          onDoubleTap: () async {
+                            if (isDir) {
+                              _openFolder(entity.path);
+                            } else {
+                              await openWithDefault(entity.path);
+                            }
+                          },
                           onSecondaryTapDown: (details) {
                             _showEntityMenu(entity, details.globalPosition);
                           },
@@ -409,7 +446,7 @@ class _AllPageState extends State<AllPage> {
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
                             leading: _EntityIcon(entity: entity),
-                            title: Text(path.basename(entity.path)),
+                            title: Text(displayName),
                             subtitle: Text(entity.path),
                             trailing: null,
                           ),

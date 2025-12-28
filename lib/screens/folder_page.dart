@@ -30,6 +30,12 @@ class _FolderPageState extends State<FolderPage> {
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
 
+  bool get _isRootPath {
+    final current = path.normalize(_currentPath).toLowerCase();
+    final root = path.normalize(widget.desktopPath).toLowerCase();
+    return current == root;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -61,18 +67,18 @@ class _FolderPageState extends State<FolderPage> {
         return;
       }
 
+      final allowFiles = !_isRootPath;
+
       final items = dir.listSync().where((entity) {
-        if (entity is! Directory) return false;
+        if (!allowFiles && entity is! Directory) return false;
         final name = path.basename(entity.path);
         final lower = name.toLowerCase();
         if (!widget.showHidden &&
             (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
           return false;
         }
-        if (lower == 'desktop.ini' || lower == 'thumbs.db') {
-          return false;
-        }
-        return true;
+        if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
+        return allowFiles ? true : entity is Directory;
       }).toList()
         ..sort((a, b) {
           return path.basename(a.path).toLowerCase().compareTo(
