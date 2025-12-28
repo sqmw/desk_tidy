@@ -28,7 +28,7 @@ class _AllPageState extends State<AllPage> {
   bool _loading = true;
   String? _error;
   List<FileSystemEntity> _entries = [];
-  bool _entityMenuArmed = false;
+  bool _entityMenuActive = false;
 
   @override
   void initState() {
@@ -158,7 +158,7 @@ class _AllPageState extends State<AllPage> {
     FileSystemEntity entity,
     Offset position,
   ) async {
-    _markEntityMenu();
+    _entityMenuActive = true;
     final isDir = entity is Directory;
     final result = await showMenu<String>(
       context: context,
@@ -207,51 +207,47 @@ class _AllPageState extends State<AllPage> {
       default:
         break;
     }
+    _entityMenuActive = false;
   }
 
   Future<void> _showPageMenu(Offset position) async {
-    Future.microtask(() async {
-      if (_entityMenuArmed) {
-        _entityMenuArmed = false;
-        return;
-      }
-      final result = await showMenu<String>(
-        context: context,
-        position: RelativeRect.fromLTRB(
-          position.dx,
-          position.dy,
-          position.dx + 1,
-          position.dy + 1,
+    if (_entityMenuActive) return;
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'new_folder',
+          child: ListTile(
+            leading: Icon(Icons.create_new_folder),
+            title: Text('新建文件夹'),
+          ),
         ),
-        items: const [
-          PopupMenuItem(
-            value: 'new_folder',
-            child: ListTile(
-              leading: Icon(Icons.create_new_folder),
-              title: Text('新建文件夹'),
-            ),
+        PopupMenuItem(
+          value: 'refresh',
+          child: ListTile(
+            leading: Icon(Icons.refresh),
+            title: Text('刷新'),
           ),
-          PopupMenuItem(
-            value: 'refresh',
-            child: ListTile(
-              leading: Icon(Icons.refresh),
-              title: Text('刷新'),
-            ),
-          ),
-        ],
-      );
+        ),
+      ],
+    );
 
-      switch (result) {
-        case 'new_folder':
-          _promptNewFolder();
-          break;
-        case 'refresh':
-          _refresh();
-          break;
-        default:
-          break;
-      }
-    });
+    switch (result) {
+      case 'new_folder':
+        _promptNewFolder();
+        break;
+      case 'refresh':
+        _refresh();
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> _promptNewFolder() async {
@@ -340,10 +336,6 @@ class _AllPageState extends State<AllPage> {
     }
   }
 
-  void _markEntityMenu() {
-    _entityMenuArmed = true;
-    scheduleMicrotask(() => _entityMenuArmed = false);
-  }
 
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -391,14 +383,9 @@ class _AllPageState extends State<AllPage> {
           ),
         ),
         Expanded(
-          child: Listener(
-            onPointerDown: (event) {
-              if (event.kind == PointerDeviceKind.mouse &&
-                  event.buttons == kSecondaryMouseButton) {
-                _showPageMenu(event.position);
-              }
-            },
-            behavior: HitTestBehavior.opaque,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
             child: _entries.isEmpty
                 ? const Center(child: Text('未找到文件或快捷方式'))
                 : ListView.builder(

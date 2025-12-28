@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+
 import '../utils/desktop_helper.dart';
 
 class FilePage extends StatelessWidget {
@@ -42,11 +45,51 @@ class FilePage extends StatelessWidget {
       itemBuilder: (context, index) {
         final file = files[index];
         return ListTile(
-          leading: const Icon(Icons.insert_drive_file),
+          leading: _FileIcon(filePath: file.path),
           title: Text(path.basename(file.path)),
           subtitle: Text(file.path),
         );
       },
     );
+  }
+}
+
+class _FileIcon extends StatelessWidget {
+  final String filePath;
+  const _FileIcon({required this.filePath});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _resolveIcon(),
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        if (data != null && data.isNotEmpty) {
+          return Image.memory(
+            data,
+            width: 28,
+            height: 28,
+            fit: BoxFit.contain,
+          );
+        }
+        final ext = path.extension(filePath).toLowerCase();
+        final icon = ['.exe', '.lnk', '.url', '.appref-ms'].contains(ext)
+            ? Icons.apps
+            : Icons.insert_drive_file;
+        return Icon(icon, size: 28);
+      },
+    );
+  }
+
+  Future<Uint8List?> _resolveIcon() async {
+    final ext = path.extension(filePath).toLowerCase();
+    if (ext == '.lnk') {
+      final target = getShortcutTarget(filePath);
+      if (target != null && target.isNotEmpty) {
+        final preferred = extractIcon(target);
+        if (preferred != null) return preferred;
+      }
+    }
+    return extractIcon(filePath);
   }
 }

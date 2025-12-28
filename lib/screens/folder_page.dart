@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +28,7 @@ class _FolderPageState extends State<FolderPage> {
   bool _loading = true;
   String? _error;
   List<FileSystemEntity> _entries = [];
-  bool _entityMenuArmed = false;
+  bool _entityMenuActive = false;
 
   @override
   void initState() {
@@ -68,6 +69,10 @@ class _FolderPageState extends State<FolderPage> {
           return false;
         }
         if (lower == 'desktop.ini' || lower == 'thumbs.db') {
+          return false;
+        }
+        // Skip shortcuts inside folder view.
+        if (lower.endsWith('.lnk')) {
           return false;
         }
         return true;
@@ -111,7 +116,7 @@ class _FolderPageState extends State<FolderPage> {
     FileSystemEntity entity,
     Offset position,
   ) async {
-    _markEntityMenu();
+    _entityMenuActive = true;
     final isDir = entity is Directory;
     final result = await showMenu<String>(
       context: context,
@@ -160,56 +165,47 @@ class _FolderPageState extends State<FolderPage> {
       default:
         break;
     }
+    _entityMenuActive = false;
   }
 
   Future<void> _showPageMenu(Offset position) async {
-    Future.microtask(() async {
-      if (_entityMenuArmed) {
-        _entityMenuArmed = false;
-        return;
-      }
-      final result = await showMenu<String>(
-        context: context,
-        position: RelativeRect.fromLTRB(
-          position.dx,
-          position.dy,
-          position.dx + 1,
-          position.dy + 1,
+    if (_entityMenuActive) return;
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'new_folder',
+          child: ListTile(
+            leading: Icon(Icons.create_new_folder),
+            title: Text('新建文件夹'),
+          ),
         ),
-        items: const [
-          PopupMenuItem(
-            value: 'new_folder',
-            child: ListTile(
-              leading: Icon(Icons.create_new_folder),
-              title: Text('新建文件夹'),
-            ),
+        PopupMenuItem(
+          value: 'refresh',
+          child: ListTile(
+            leading: Icon(Icons.refresh),
+            title: Text('刷新'),
           ),
-          PopupMenuItem(
-            value: 'refresh',
-            child: ListTile(
-              leading: Icon(Icons.refresh),
-              title: Text('刷新'),
-            ),
-          ),
-        ],
-      );
+        ),
+      ],
+    );
 
-      switch (result) {
-        case 'new_folder':
-          _promptNewFolder();
-          break;
-        case 'refresh':
-          _refresh();
-          break;
-        default:
-          break;
-      }
-    });
-  }
-
-  void _markEntityMenu() {
-    _entityMenuArmed = true;
-    scheduleMicrotask(() => _entityMenuArmed = false);
+    switch (result) {
+      case 'new_folder':
+        _promptNewFolder();
+        break;
+      case 'refresh':
+        _refresh();
+        break;
+      default:
+        break;
+    }
   }
 
   Future<void> _promptNewFolder() async {
@@ -340,14 +336,9 @@ class _FolderPageState extends State<FolderPage> {
           ),
         ),
         Expanded(
-          child: Listener(
-            onPointerDown: (event) {
-              if (event.kind == PointerDeviceKind.mouse &&
-                  event.buttons == kSecondaryMouseButton) {
-                _showPageMenu(event.position);
-              }
-            },
-            behavior: HitTestBehavior.opaque,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
             child: _entries.isEmpty
                 ? const Center(child: Text('未找到内容'))
                 : ListView.builder(
@@ -355,9 +346,6 @@ class _FolderPageState extends State<FolderPage> {
                     itemBuilder: (context, index) {
                       final entity = _entries[index];
                       final isDir = entity is Directory;
-                      final icon = isDir
-                          ? Icons.folder
-                          : Icons.insert_drive_file;
                       return GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onSecondaryTapDown: (details) {
@@ -365,7 +353,7 @@ class _FolderPageState extends State<FolderPage> {
                         },
                         onTap: isDir ? () => _openFolder(entity.path) : null,
                         child: ListTile(
-                          leading: Icon(icon),
+                          leading: _EntityIcon(entity: entity),
                           title: Text(path.basename(entity.path)),
                           subtitle: Text(entity.path),
                           trailing: isDir
@@ -379,5 +367,49 @@ class _FolderPageState extends State<FolderPage> {
         ),
       ],
     );
+  }
+}
+
+class _EntityIcon extends StatelessWidget {
+  final FileSystemEntity entity;
+
+  const _EntityIcon({required this.entity});
+
+  @override
+  Widget build(BuildContext context) {
+    if (entity is Directory) {
+      return const Icon(Icons.folder, size: 28);
+    }
+    return FutureBuilder<Uint8List?>(
+      future: _resolveIconBytes(),
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        if (data != null && data.isNotEmpty) {
+          return Image.memory(
+            data,
+            width: 28,
+            height: 28,
+            fit: BoxFit.contain,
+          );
+        }
+        final ext = path.extension(entity.path).toLowerCase();
+        final icon = ['.exe', '.lnk', '.url', '.appref-ms'].contains(ext)
+            ? Icons.apps
+            : Icons.insert_drive_file;
+        return Icon(icon, size: 28);
+      },
+    );
+  }
+
+  Future<Uint8List?> _resolveIconBytes() async {
+    final ext = path.extension(entity.path).toLowerCase();
+    if (ext == '.lnk') {
+      final target = getShortcutTarget(entity.path);
+      if (target != null && target.isNotEmpty) {
+        final preferred = extractIcon(target);
+        if (preferred != null) return preferred;
+      }
+    }
+    return extractIcon(entity.path);
   }
 }
