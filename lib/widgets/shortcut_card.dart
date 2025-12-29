@@ -236,9 +236,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
       );
     }
     if (shortcut.targetPath.isNotEmpty) {
-      final dpr = MediaQuery.devicePixelRatioOf(context);
-      final requestSize =
-          (visualIconSize * dpr).round().clamp(32, 256);
+      const requestSize = 256;
       return FutureBuilder<Uint8List?>(
         future: Future.value(
           extractIcon(shortcut.path, size: requestSize) ??

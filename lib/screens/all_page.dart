@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
+import '../widgets/glass.dart';
 
 class AllPage extends StatefulWidget {
   final String desktopPath;
@@ -379,33 +380,39 @@ class _AllPageState extends State<AllPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.home),
-                onPressed: _currentPath == null ? null : _goHome,
-              ),
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _currentPath == null ? null : _goUp,
-              ),
-              Expanded(
-                child: Text(
-                  pathLabel,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  overflow: TextOverflow.ellipsis,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: GlassContainer(
+            borderRadius: BorderRadius.circular(16),
+            opacity: 0.22,
+            blurSigma: 20,
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withOpacity(0.16),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.home),
+                  onPressed: _currentPath == null ? null : _goHome,
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _refresh,
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _currentPath == null ? null : _goUp,
+                ),
+                Expanded(
+                  child: Text(
+                    pathLabel,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _refresh,
+                ),
+              ],
+            ),
           ),
         ),
         Expanded(

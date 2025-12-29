@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -11,6 +10,7 @@ import '../models/shortcut_item.dart';
 import '../setting/settings_page.dart';
 import '../theme_notifier.dart';
 import '../utils/desktop_helper.dart';
+import '../widgets/glass.dart';
 import '../widgets/shortcut_card.dart';
 import 'all_page.dart';
 import 'file_page.dart';
@@ -21,7 +21,6 @@ bool _showHidden = false;
 bool _autoRefresh = false;
 double _iconSize = 32;
 int _crossAxisCount = 6;
-double _opacity = 1.0;
 
 class DeskTidyHomePage extends StatefulWidget {
   const DeskTidyHomePage({super.key});
@@ -36,10 +35,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
-  double _opacity = 1.0;
+  double _backgroundOpacity = 1.0;
   String? _backgroundImagePath;
 
   int _selectedIndex = 0;
+
+  double get _chromeOpacity =>
+      (0.12 + 0.28 * _backgroundOpacity).clamp(0.12, 0.42);
+
+  double get _indicatorOpacity =>
+      (0.10 + 0.12 * _backgroundOpacity).clamp(0.10, 0.22);
 
   @override
   void initState() {
@@ -47,7 +52,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     windowManager.ensureInitialized();
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    windowManager.setOpacity(_opacity);
+    windowManager.setBackgroundColor(Colors.transparent);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     windowManager.addListener(this);
     windowManager.isMaximized().then((value) {
@@ -63,8 +68,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     setState(() => _isLoading = true);
 
     try {
-      final dpr =
-          WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
       final desktopPath = await getDesktopPath();
       _desktopPath = desktopPath;
       final shortcutsPaths = await scanDesktopShortcuts(
@@ -72,10 +75,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         showHidden: _showHidden,
       );
 
-      final iconContainerSize = math.max(28.0, _iconSize * 1.65);
-      final visualIconSize = math.max(12.0, iconContainerSize * 0.92);
-      final requestIconSize =
-          (visualIconSize * dpr).round().clamp(64, 256);
+      const requestIconSize = 256;
 
       final shortcutItems = <ShortcutItem>[];
       for (final shortcutPath in shortcutsPaths) {
@@ -176,11 +176,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
-  void _changeOpacity(double opacity) {
-    setState(() => _opacity = opacity);
-    windowManager.setOpacity(opacity);
-  }
-
   @override
   void dispose() {
     windowManager.removeListener(this);
@@ -199,21 +194,29 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final backgroundPath = _backgroundImagePath;
     final backgroundExists =
         backgroundPath != null && backgroundPath.isNotEmpty && File(backgroundPath).existsSync();
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (backgroundExists)
-            Positioned.fill(
-              child: Image.file(
-                File(backgroundPath!),
-                fit: BoxFit.cover,
-              ),
+          Positioned.fill(
+            child: Opacity(
+              opacity: _backgroundOpacity,
+              child: backgroundExists
+                  ? Image.file(
+                      File(backgroundPath!),
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                    ),
             ),
+          ),
           Column(
             children: [
               _buildTitleBar(),
@@ -222,7 +225,36 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                   children: [
                     Listener(
                       onPointerDown: _onNavigationRailPointer,
-                      child: NavigationRail(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 12,
+                        ),
+                        child: GlassContainer(
+                          borderRadius: BorderRadius.circular(18),
+                          opacity: _chromeOpacity,
+                          blurSigma: 20,
+                          border: Border.all(
+                            color: theme.dividerColor.withOpacity(0.16),
+                          ),
+                          child: NavigationRail(
+                      backgroundColor: Colors.transparent,
+                      useIndicator: true,
+                      indicatorColor: theme.colorScheme.primary
+                          .withOpacity(_indicatorOpacity),
+                      selectedIconTheme: IconThemeData(
+                        color: theme.colorScheme.primary,
+                      ),
+                      unselectedIconTheme: IconThemeData(
+                        color: theme.colorScheme.onSurface.withOpacity(0.72),
+                      ),
+                      selectedLabelTextStyle: theme.textTheme.labelMedium
+                          ?.copyWith(color: theme.colorScheme.primary),
+                      unselectedLabelTextStyle: theme.textTheme.labelMedium
+                          ?.copyWith(
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.72),
+                          ),
                       selectedIndex: _selectedIndex,
                       onDestinationSelected: _onNavigationRailItemSelected,
                       labelType: NavigationRailLabelType.all,
@@ -247,17 +279,24 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                           icon: Icon(Icons.settings),
                           label: Text('设置'),
                         ),
-                  ]),
-                    ),
-                    const VerticalDivider(thickness: 1, width: 1),
-                    Expanded(
-                      child: Container(
-                        color: backgroundExists ? Colors.black.withOpacity(0) : null,
-                        child: _buildContent(),
+                  ],
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  VerticalDivider(
+                    thickness: 1,
+                    width: 1,
+                    color: theme.dividerColor.withOpacity(0.12),
+                  ),
+                  Expanded(
+                    child: Container(
+                        color: Colors.transparent,
+                        child: _buildContent(),
+                      ),
+                  ),
+                ],
+              ),
               ),
             ],
           ),
@@ -267,44 +306,51 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   Widget _buildTitleBar() {
+    final theme = Theme.of(context);
     return MouseRegion(
       onEnter: (_) => null,
       child: GestureDetector(
         onPanUpdate: (_) => windowManager.startDragging(),
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.8,
-              ),
+        child: GlassContainer(
+          opacity: _chromeOpacity,
+          blurSigma: 20,
+          borderRadius: BorderRadius.zero,
+          border: Border(
+            bottom: BorderSide(
+              color: theme.dividerColor.withOpacity(0.16),
+              width: 0.8,
             ),
           ),
-          child: Row(
-            children: [
-              const Spacer(),
-              Row(
+          child: SizedBox(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove),
-                    onPressed: _minimizeWindow,
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      _isMaximized ? Icons.filter_none : Icons.crop_square,
-                    ),
-                    onPressed: _toggleMaximize,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: _closeWindow,
+                  const Spacer(),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove),
+                        onPressed: _minimizeWindow,
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _isMaximized
+                              ? Icons.filter_none
+                              : Icons.crop_square,
+                        ),
+                        onPressed: _toggleMaximize,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _closeWindow,
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -332,7 +378,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         );
       case 4:
         return SettingsPage(
-          opacity: _opacity,
+          opacity: _backgroundOpacity,
           iconSize: _iconSize,
           crossAxisCount: _crossAxisCount,
           showHidden: _showHidden,
@@ -340,8 +386,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
           onOpacityChanged: (v) {
-            setState(() => _opacity = v);
-            windowManager.setOpacity(v);
+            setState(() => _backgroundOpacity = v);
           },
           onIconSizeChanged: (v) => setState(() => _iconSize = v),
           onCrossAxisCountChanged: (v) => setState(() => _crossAxisCount = v),
@@ -380,13 +425,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Widget _buildApplicationContent() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-          ),
-          child: Row(
-            children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: GlassContainer(
+            borderRadius: BorderRadius.circular(16),
+            opacity: _chromeOpacity,
+            blurSigma: 20,
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withOpacity(0.16),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
               Text(
                 '应用列表 (${_shortcuts.length})',
                 style: Theme.of(context).textTheme.bodyLarge,
@@ -395,9 +445,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
               ElevatedButton.icon(
                 onPressed: _loadShortcuts,
                 icon: const Icon(Icons.refresh),
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  shadowColor: Colors.transparent,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primary.withOpacity(
+                            0.10 + 0.10 * _backgroundOpacity,
+                          ),
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  shape: const StadiumBorder(),
+                ),
                 label: const Text('刷新'),
               ),
-            ],
+              ],
+            ),
           ),
         ),
         Expanded(

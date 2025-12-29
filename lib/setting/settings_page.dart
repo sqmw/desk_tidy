@@ -41,6 +41,25 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final panelOpacity = (0.12 + 0.28 * opacity).clamp(0.12, 0.42);
+    final dividerOpacity = (0.10 + 0.10 * opacity).clamp(0.10, 0.20);
+
+    SettingsThemeData buildTheme(Color base) => SettingsThemeData(
+          settingsListBackground: base.withOpacity(panelOpacity),
+          settingsSectionBackground: base.withOpacity(panelOpacity),
+          tileHighlightColor:
+              base.withOpacity((panelOpacity + 0.10).clamp(0.0, 1.0)),
+          dividerColor: theme.dividerColor.withOpacity(dividerOpacity),
+          titleTextColor: theme.colorScheme.onSurface.withOpacity(0.88),
+          settingsTileTextColor: theme.colorScheme.onSurface.withOpacity(0.88),
+          trailingTextColor: theme.colorScheme.onSurface.withOpacity(0.72),
+          leadingIconsColor: theme.colorScheme.onSurface.withOpacity(0.72),
+          tileDescriptionTextColor: theme.colorScheme.onSurface.withOpacity(0.72),
+          inactiveTitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
+          inactiveSubtitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
+        );
+
     Future<void> _pickBackground() async {
       final picked = await FilePicker.platform.pickFiles(
         allowMultiple: false,
@@ -55,6 +74,8 @@ class SettingsPage extends StatelessWidget {
     }
 
     return SettingsList(
+      lightTheme: buildTheme(Colors.white),
+      darkTheme: buildTheme(Colors.black),
       sections: [
         /// 外观设置：透明度 + 图标大小 + 每行数量 + 背景
         SettingsSection(

@@ -10,6 +10,73 @@ import 'package:process_run/shell.dart' as pr;
 
 const int INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
 
+const int _shilJumbo = 0x4;
+const int _ildTransparent = 0x00000001;
+const int _ildImage = 0x00000020;
+const int _diNormal = 0x0003;
+const String _iidIImageList = '{46EB5926-582E-4017-9FDF-E8998DAA0950}';
+
+final DynamicLibrary _shell32 = DynamicLibrary.open('shell32.dll');
+final DynamicLibrary _user32 = DynamicLibrary.open('user32.dll');
+
+typedef _SHGetImageListNative = Int32 Function(
+  Int32 iImageList,
+  Pointer<GUID> riid,
+  Pointer<Pointer> ppv,
+);
+typedef _SHGetImageListDart = int Function(
+  int iImageList,
+  Pointer<GUID> riid,
+  Pointer<Pointer> ppv,
+);
+
+final _SHGetImageListDart _shGetImageList = _shell32
+    .lookupFunction<_SHGetImageListNative, _SHGetImageListDart>('#727');
+
+typedef _DrawIconExNative = Int32 Function(
+  IntPtr hdc,
+  Int32 xLeft,
+  Int32 yTop,
+  IntPtr hIcon,
+  Int32 cxWidth,
+  Int32 cyWidth,
+  Uint32 istepIfAniCur,
+  IntPtr hbrFlickerFreeDraw,
+  Uint32 diFlags,
+);
+typedef _DrawIconExDart = int Function(
+  int hdc,
+  int xLeft,
+  int yTop,
+  int hIcon,
+  int cxWidth,
+  int cyWidth,
+  int istepIfAniCur,
+  int hbrFlickerFreeDraw,
+  int diFlags,
+);
+
+final _DrawIconExDart _drawIconEx =
+    _user32.lookupFunction<_DrawIconExNative, _DrawIconExDart>('DrawIconEx');
+
+class IImageList extends IUnknown {
+  IImageList(super.ptr);
+
+  int getIcon(int i, int flags, Pointer<IntPtr> icon) => (ptr.ref.vtable + 10)
+      .cast<
+        Pointer<
+          NativeFunction<Int32 Function(Pointer, Int32, Int32, Pointer<IntPtr>)>
+        >
+      >()
+      .value
+      .asFunction<int Function(Pointer, int, int, Pointer<IntPtr>)>()(
+        ptr.ref.lpVtbl,
+        i,
+        flags,
+        icon,
+      );
+}
+
 class _IconLocation {
   final String path;
   final int index;
@@ -224,6 +291,9 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
     }
   }
 
+  final jumbo = _extractJumboIconPng(filePath, desiredSize);
+  if (jumbo != null && jumbo.isNotEmpty) return jumbo;
+
   // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
   final pathPtr = filePath.toNativeUtf16();
   final shFileInfo = calloc<SHFILEINFO>();
@@ -247,6 +317,71 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
   final png = _hiconToPng(iconHandle, size: desiredSize);
   DestroyIcon(iconHandle);
   return png;
+}
+
+Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
+  final iconIndex = _getSystemIconIndex(filePath);
+  if (iconIndex < 0) return null;
+
+  final iid = convertToIID(_iidIImageList);
+  final imageListPtr = calloc<COMObject>();
+  try {
+    final hr = _shGetImageList(_shilJumbo, iid, imageListPtr.cast());
+    if (FAILED(hr) || imageListPtr.ref.isNull) return null;
+
+    final imageList = IImageList(imageListPtr);
+    final hiconPtr = calloc<IntPtr>();
+    try {
+      final hr2 =
+          imageList.getIcon(iconIndex, _ildTransparent | _ildImage, hiconPtr);
+      if (FAILED(hr2) || hiconPtr.value == 0) return null;
+      final png = _hiconToPng(hiconPtr.value, size: desiredSize);
+      DestroyIcon(hiconPtr.value);
+      return png;
+    } finally {
+      calloc.free(hiconPtr);
+      imageList.detach();
+      imageList.release();
+    }
+  } catch (_) {
+    return null;
+  } finally {
+    calloc.free(iid);
+    calloc.free(imageListPtr);
+  }
+}
+
+int _getSystemIconIndex(String filePath) {
+  final attrs = _fileAttributesForSystemIcon(filePath);
+  final pathPtr = filePath.toNativeUtf16();
+  final shFileInfo = calloc<SHFILEINFO>();
+  final hr = SHGetFileInfo(
+    pathPtr.cast(),
+    attrs,
+    shFileInfo.cast(),
+    sizeOf<SHFILEINFO>(),
+    SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES,
+  );
+  calloc.free(pathPtr);
+  if (hr == 0) {
+    calloc.free(shFileInfo);
+    return -1;
+  }
+  final index = shFileInfo.ref.iIcon;
+  calloc.free(shFileInfo);
+  return index;
+}
+
+int _fileAttributesForSystemIcon(String filePath) {
+  try {
+    final type = FileSystemEntity.typeSync(filePath, followLinks: false);
+    if (type == FileSystemEntityType.directory) return FILE_ATTRIBUTE_DIRECTORY;
+    return FILE_ATTRIBUTE_NORMAL;
+  } catch (_) {
+    final ext = path.extension(filePath).toLowerCase();
+    if (ext.isEmpty) return FILE_ATTRIBUTE_NORMAL;
+    return FILE_ATTRIBUTE_NORMAL;
+  }
 }
 
 _IconLocation? _getIconLocation(String filePath) {
@@ -327,12 +462,7 @@ Uint8List? _hiconToPng(int icon, {required int size}) {
   final pixels = ppBits.value.cast<Uint8>().asTypedList(pixelCount);
   pixels.fillRange(0, pixels.length, 0);
 
-  final scaled = CopyImage(icon, IMAGE_ICON, size, size, 0);
-  final iconToDraw = scaled != 0 ? scaled : icon;
-  DrawIcon(memDC, 0, 0, iconToDraw);
-  if (scaled != 0) {
-    DestroyIcon(scaled);
-  }
+  _drawIconEx(memDC, 0, 0, icon, size, size, 0, NULL, _diNormal);
 
   final image = img.Image.fromBytes(
     width: size,
