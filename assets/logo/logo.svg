@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="DT monogram logo">
+  <defs>
+    <style>
+      :root { --fg:#0b1220; --accent:#10b981; }
+      .bg{fill:var(--fg)}
+      .a{fill:var(--accent)}
+      .w{fill:#fff}
+    </style>
+  </defs>
+
+  <!-- Scale up to fill the 256x256 viewBox so the resulting app icon isn't tiny -->
+  <g transform="translate(128 128) scale(1.3913043478) translate(-128 -128)">
+    <rect class="bg" x="36" y="36" width="184" height="184" rx="44"/>
+    <!-- D -->
+    <path class="w" d="M78 88h44c28 0 48 20 48 40s-20 40-48 40H78z"/>
+    <path class="bg" d="M98 104h20c18 0 30 12 30 24s-12 24-30 24H98z"/>
+    <!-- T -->
+    <rect class="a" x="150" y="88" width="60" height="16" rx="8"/>
+    <rect class="a" x="172" y="88" width="16" height="96" rx="8"/>
+  </g>
+</svg>
