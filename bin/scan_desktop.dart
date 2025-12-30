@@ -37,9 +37,7 @@ Future<void> main() async {
   for (final entity in filtered) {
     final name = path.basename(entity.path);
     final metadata = await entity.stat();
-    final type = metadata.type == FileSystemEntityType.directory
-        ? '目录'
-        : '文件';
+    final type = metadata.type == FileSystemEntityType.directory ? '目录' : '文件';
     final size = metadata.size;
     final modified = metadata.modified.toIso8601String();
     stdout.writeln('$name | $type | $size bytes | 修改: $modified');
@@ -55,5 +53,6 @@ String? _resolveDesktopPath() {
       return candidate;
     }
   }
-  return env['DESKTOP'] ?? (Platform.isWindows ? r'C:\Users\Public\Desktop' : null);
+  return env['DESKTOP'] ??
+      (Platform.isWindows ? r'C:\Users\Public\Desktop' : null);
 }

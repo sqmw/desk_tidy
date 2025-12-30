@@ -48,7 +48,8 @@ Future<void> main() async {
 
   print('\n完成！');
   print('总共复制 $count 个文件');
-  print('耗时：${stopwatch.elapsedMilliseconds} ms (${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)} 秒)');
+  print(
+      '耗时：${stopwatch.elapsedMilliseconds} ms (${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)} 秒)');
   print('目标目录：${targetDir.path}');
   print('（同名文件已被直接覆盖）');
 }
