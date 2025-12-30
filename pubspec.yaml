@@ -41,6 +41,7 @@ dependencies:
   image: ^4.0.21
   file_picker: ^8.0.3
   process_run: ^0.13.1
+  system_tray: ^2.0.3
 
 dev_dependencies:
   flutter_test:

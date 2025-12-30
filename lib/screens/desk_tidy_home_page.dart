@@ -11,6 +11,7 @@ import '../models/shortcut_item.dart';
 import '../setting/settings_page.dart';
 import '../theme_notifier.dart';
 import '../utils/desktop_helper.dart';
+import '../utils/tray_helper.dart';
 import '../widgets/glass.dart';
 import '../widgets/shortcut_card.dart';
 import 'all_page.dart';
@@ -29,15 +30,16 @@ class DeskTidyHomePage extends StatefulWidget {
   State<DeskTidyHomePage> createState() => _DeskTidyHomePageState();
 }
 
-class _DeskTidyHomePageState extends State<DeskTidyHomePage>
-    with WindowListener {
+class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
+  final TrayHelper _trayHelper = TrayHelper();
+  bool _trayReady = false;
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
   // Controls how much of the desktop shows through (via the background layer).
   // 1.0 = fully opaque, 0.0 = fully transparent.
-  double _backgroundOpacity = 0.2;
+  double _backgroundOpacity = 0.8;
   double _frostStrength = 0.82;
   String? _backgroundImagePath;
   bool _hideDesktopItems = false;
@@ -65,7 +67,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   double _uiScale(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     // Desktop windows vary a lot; keep controls compact by default.
-    return (height / 900).clamp(0.80, 1.0);
+    return (height / 980).clamp(0.72, 1.0);
   }
 
   @override
@@ -74,11 +76,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     _hideDesktopItems = hasDesktopHiddenStore();
 
-    windowManager.ensureInitialized();
-    windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-    windowManager.setBackgroundColor(Colors.transparent);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    windowManager.addListener(this);
     windowManager.isMaximized().then((value) {
       if (mounted) {
         setState(() => _isMaximized = value);
@@ -86,6 +83,28 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     });
 
     _loadShortcuts();
+    // Tray mode is currently disabled until it's verified stable on target
+    // machines; leaving this here for re-enable later.
+    // _initTray();
+  }
+
+  Future<void> _initTray() async {
+    try {
+      await _trayHelper.init(
+        onExitRequested: () async {
+          await windowManager.setPreventClose(false);
+          await windowManager.close();
+        },
+      );
+      _trayReady = true;
+      await windowManager.setSkipTaskbar(true);
+      await windowManager.setPreventClose(true);
+    } catch (_) {
+      // Tray init failed; keep the app discoverable via taskbar.
+      _trayReady = false;
+      await windowManager.setSkipTaskbar(false);
+      await windowManager.setPreventClose(false);
+    }
   }
 
   Future<void> _loadShortcuts() async {
@@ -159,7 +178,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   void _closeWindow() {
-    windowManager.close();
+    if (_trayReady) {
+      windowManager.hide();
+    } else {
+      windowManager.close();
+    }
   }
 
   void _onNavigationRailItemSelected(int index) {
@@ -208,27 +231,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   @override
   void dispose() {
-    windowManager.removeListener(this);
     super.dispose();
-  }
-
-  @override
-  void onWindowMaximize() {
-    if (mounted) setState(() => _isMaximized = true);
-  }
-
-  @override
-  void onWindowRestore() {
-    if (mounted) setState(() => _isMaximized = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scale = _uiScale(context);
-    final railMinWidth = 52.0 * scale;
-    final railPadH = 3.0 * scale;
-    final railPadV = 5.0 * scale;
+    final railMinWidth = 48.0 * scale;
+    final railPadH = 2.0 * scale;
+    final railPadV = 4.0 * scale;
     final backgroundPath = _backgroundImagePath;
     final backgroundExists = backgroundPath != null &&
         backgroundPath.isNotEmpty &&
@@ -374,8 +386,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Widget _buildTitleBar() {
     final theme = Theme.of(context);
     final scale = _uiScale(context);
-    final titleBarHeight = 36.0 * scale;
-    final titleButtonSize = 34.0 * scale;
+    final titleBarHeight = 34.0 * scale;
+    final titleButtonSize = 32.0 * scale;
     return MouseRegion(
       onEnter: (_) => null,
       child: GestureDetector(
@@ -536,10 +548,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   Widget _buildApplicationContent() {
+    final scale = _uiScale(context);
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+          padding: EdgeInsets.fromLTRB(
+            10 * scale,
+            10 * scale,
+            10 * scale,
+            6 * scale,
+          ),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
             opacity: _toolbarPanelOpacity,
@@ -547,7 +565,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: EdgeInsets.symmetric(
+              horizontal: 10 * scale,
+              vertical: 6 * scale,
+            ),
             child: Row(
               children: [
                 Text(
@@ -567,8 +588,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             ),
                     foregroundColor: Theme.of(context).colorScheme.onSurface,
                     shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12 * scale,
+                      vertical: 8 * scale,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
                   label: const Text('刷新'),
@@ -604,8 +627,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     )
                   : LayoutBuilder(
                       builder: (context, constraints) {
-                        const crossAxisSpacing = 16.0;
-                        const mainAxisSpacing = 16.0;
+                        final crossAxisSpacing = 12.0 * scale;
+                        final mainAxisSpacing = 12.0 * scale;
                         final estimatedTextHeight = _estimateTextHeight();
                         final padding = math.max(8.0, _iconSize * 0.28);
                         final iconContainerSize =
@@ -622,7 +645,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             cardHeight <= 0 ? 1 : tileMaxExtent / cardHeight;
 
                         return GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          padding: EdgeInsets.fromLTRB(
+                            14 * scale,
+                            0,
+                            14 * scale,
+                            14 * scale,
+                          ),
                           gridDelegate:
                               SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: tileMaxExtent,

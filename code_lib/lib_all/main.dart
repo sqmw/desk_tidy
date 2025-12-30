@@ -1,8 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'screens/desk_tidy_home_page.dart';
 import 'theme_notifier.dart';
+import 'utils/single_instance.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
+  final isPrimary = await SingleInstance.ensure(
+    onActivate: () async {
+      await windowManager.show();
+      await windowManager.restore();
+      await windowManager.setAlignment(Alignment.center);
+      await windowManager.focus();
+    },
+  );
+  if (!isPrimary) return;
+
+  await windowManager.waitUntilReadyToShow(
+    const WindowOptions(
+      title: 'desk_tidy',
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      center: true,
+    ),
+    () async {
+      await windowManager.show();
+      await windowManager.focus();
+    },
+  );
+
   runApp(const MyApp());
 }
 
