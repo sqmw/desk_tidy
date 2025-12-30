@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui';
+import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +36,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     with WindowListener {
   final TrayHelper _trayHelper = TrayHelper();
   bool _trayReady = false;
+  Timer? _saveWindowTimer;
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
@@ -261,6 +263,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   @override
   void dispose() {
+    _saveWindowTimer?.cancel();
     windowManager.removeListener(this);
     super.dispose();
   }
@@ -273,6 +276,36 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
     await windowManager.setPreventClose(false);
     await windowManager.close();
+  }
+
+  @override
+  void onWindowMoved() {
+    _scheduleSaveWindowBounds();
+  }
+
+  @override
+  void onWindowResized() {
+    _scheduleSaveWindowBounds();
+  }
+
+  void _scheduleSaveWindowBounds() {
+    _saveWindowTimer?.cancel();
+    _saveWindowTimer = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        final isMax = await windowManager.isMaximized();
+        final isMin = await windowManager.isMinimized();
+        if (isMax || isMin) return;
+
+        final pos = await windowManager.getPosition();
+        final size = await windowManager.getSize();
+        await AppPreferences.saveWindowBounds(
+          x: pos.dx.round(),
+          y: pos.dy.round(),
+          width: size.width.round(),
+          height: size.height.round(),
+        );
+      } catch (_) {}
+    });
   }
 
   @override
@@ -618,6 +651,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           ),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
+            // Use a lighter tint here; the whole content already sits on a
+            // frosted panel, so a dark tint makes this strip look "blackened".
+            color: Colors.white,
             opacity: _toolbarPanelOpacity,
             blurSigma: _toolbarPanelBlur,
             border: Border.all(

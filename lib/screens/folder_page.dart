@@ -314,8 +314,9 @@ class _FolderPageState extends State<FolderPage> {
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
-            opacity: 0.32,
-            blurSigma: 18,
+            color: Colors.white,
+            opacity: 0.14,
+            blurSigma: 10,
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),

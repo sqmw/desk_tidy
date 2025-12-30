@@ -10,6 +10,7 @@ import 'package:path/path.dart' as path;
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
+import '../widgets/overflow_reveal_text.dart';
 
 class AllPage extends StatefulWidget {
   final String desktopPath;
@@ -383,8 +384,9 @@ class _AllPageState extends State<AllPage> {
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
-            opacity: 0.32,
-            blurSigma: 18,
+            color: Colors.white,
+            opacity: 0.14,
+            blurSigma: 10,
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),
@@ -462,7 +464,11 @@ class _AllPageState extends State<AllPage> {
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
                             leading: _EntityIcon(entity: entity),
-                            title: Text(displayName),
+                            title: OverflowRevealText(
+                              text: displayName,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              maxLines: 2,
+                            ),
                             subtitle: Text(entity.path),
                             trailing: null,
                           ),

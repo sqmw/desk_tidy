@@ -14,6 +14,10 @@ class AppPreferences {
   static const _kAutoRefresh = 'behavior.autoRefresh';
   static const _kThemeMode = 'ui.themeMode';
   static const _kBackgroundPath = 'ui.backgroundPath';
+  static const _kWinX = 'window.x';
+  static const _kWinY = 'window.y';
+  static const _kWinW = 'window.w';
+  static const _kWinH = 'window.h';
 
   static Future<DeskTidyConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -90,6 +94,30 @@ class AppPreferences {
     return savedPath;
   }
 
+  static Future<void> saveWindowBounds({
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kWinX, x);
+    await prefs.setInt(_kWinY, y);
+    await prefs.setInt(_kWinW, width);
+    await prefs.setInt(_kWinH, height);
+  }
+
+  static Future<WindowBounds?> loadWindowBounds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final x = prefs.getInt(_kWinX);
+    final y = prefs.getInt(_kWinY);
+    final w = prefs.getInt(_kWinW);
+    final h = prefs.getInt(_kWinH);
+    if (x == null || y == null || w == null || h == null) return null;
+    if (w <= 0 || h <= 0) return null;
+    return WindowBounds(x: x, y: y, width: w, height: h);
+  }
+
   static Future<String?> _backupBackgroundFile(String originalPath) async {
     try {
       final src = File(originalPath);
@@ -136,5 +164,19 @@ class DeskTidyConfig {
     required this.autoRefresh,
     required this.themeModeOption,
     required this.backgroundPath,
+  });
+}
+
+class WindowBounds {
+  final int x;
+  final int y;
+  final int width;
+  final int height;
+
+  const WindowBounds({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
   });
 }

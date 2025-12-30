@@ -51,7 +51,8 @@ class TrayHelper {
           return;
         }
         if (eventName == kSystemTrayEventRightClick) {
-          // Keep default behavior: show menu.
+          // Explicitly pop up the context menu on Windows.
+          await _tray.popUpContextMenu();
           return;
         }
       });

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
+import '../widgets/overflow_reveal_text.dart';
 
 class FilePage extends StatelessWidget {
   final String desktopPath;
@@ -66,7 +67,11 @@ class FilePage extends StatelessWidget {
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               leading: _FileIcon(filePath: file.path),
-              title: Text(path.basename(file.path)),
+              title: OverflowRevealText(
+                text: path.basename(file.path),
+                style: Theme.of(context).textTheme.bodyMedium,
+                maxLines: 2,
+              ),
               subtitle: Text(file.path),
             ),
           ),

@@ -93,10 +93,6 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final name = widget.shortcut.name;
     final theme = Theme.of(context);
 
-    final overlayBg = theme.brightness == Brightness.dark
-        ? const Color(0x7A000000)
-        : const Color(0xB3FFFFFF);
-
     _labelOverlay = OverlayEntry(
       builder: (context) {
         return Stack(
@@ -122,34 +118,28 @@ class _ShortcutCardState extends State<ShortcutCard> {
                     constraints: BoxConstraints(
                       maxWidth: math.max(140.0, size.width),
                     ),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: overlayBg,
-                        borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          name,
-                          textAlign: TextAlign.center,
-                          softWrap: true,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontSize: _textSize,
-                            height: 1.15,
-                            fontWeight: FontWeight.w600,
-                            shadows: const [
-                              Shadow(
-                                color: Color(0xB3000000),
-                                blurRadius: 6,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                      child: Text(
+                        name,
+                        textAlign: TextAlign.center,
+                        softWrap: true,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: _textSize,
+                          height: 1.15,
+                          fontWeight: FontWeight.w600,
+                          shadows: const [
+                            Shadow(
+                              color: Color(0xD6000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -177,14 +167,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
 
     final radius = BorderRadius.circular(math.max(10.0, iconSize * 0.18));
     final baseBg = theme.brightness == Brightness.dark
-        ? const Color(0x12FFFFFF)
-        : const Color(0x0F000000);
-    final hoverBg = theme.colorScheme.surfaceVariant.withOpacity(0.22);
-    final selectedBg = theme.colorScheme.primary.withOpacity(0.10);
-    final borderColor = theme.colorScheme.primary.withOpacity(0.38);
-    final labelBg = theme.brightness == Brightness.dark
-        ? const Color(0x6A000000)
-        : const Color(0xB3FFFFFF);
+        ? const Color(0x10FFFFFF)
+        : const Color(0x0A000000);
+    final hoverBg = theme.colorScheme.surfaceVariant.withOpacity(0.14);
+    final selectedBg = theme.colorScheme.primary.withOpacity(0.08);
+    final borderColor = theme.colorScheme.primary.withOpacity(0.30);
 
     return Focus(
       focusNode: _focusNode,
@@ -194,10 +181,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
           _removeLabelOverlay();
         }
       },
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onHover: (v) => setState(() => _hovered = v),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onDoubleTap: () {
             if (shortcut.targetPath.isNotEmpty) {
               openWithDefault(shortcut.targetPath);
@@ -209,9 +197,9 @@ class _ShortcutCardState extends State<ShortcutCard> {
             _focusNode.requestFocus();
             _toggleSelection();
           },
-          borderRadius: radius,
-          hoverColor: Colors.transparent,
-          child: Ink(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            curve: Curves.easeOut,
             decoration: BoxDecoration(
               borderRadius: radius,
               color: _selected ? selectedBg : (_hovered ? hoverBg : baseBg),
@@ -244,30 +232,25 @@ class _ShortcutCardState extends State<ShortcutCard> {
                       waitDuration: const Duration(milliseconds: 350),
                       child: Opacity(
                         opacity: _labelOverlay == null ? 1.0 : 0.0,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: labelBg,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 2,
-                            ),
-                            child: Text(
-                              key: _labelTextKey,
-                              shortcut.name,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: _textSize,
-                                height: 1.15,
-                                fontWeight: FontWeight.w600,
+                        child: Text(
+                          key: _labelTextKey,
+                          shortcut.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: _textSize,
+                            height: 1.15,
+                            fontWeight: FontWeight.w600,
+                            shadows: const [
+                              Shadow(
+                                color: Color(0xD6000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                              softWrap: true,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                            ),
+                            ],
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
                         ),
                       ),
                     ),
