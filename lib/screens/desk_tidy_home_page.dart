@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import '../models/shortcut_item.dart';
 import '../setting/settings_page.dart';
 import '../theme_notifier.dart';
+import '../utils/app_preferences.dart';
 import '../utils/desktop_helper.dart';
 import '../utils/tray_helper.dart';
 import '../widgets/glass.dart';
@@ -30,7 +31,8 @@ class DeskTidyHomePage extends StatefulWidget {
   State<DeskTidyHomePage> createState() => _DeskTidyHomePageState();
 }
 
-class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
+class _DeskTidyHomePageState extends State<DeskTidyHomePage>
+    with WindowListener {
   final TrayHelper _trayHelper = TrayHelper();
   bool _trayReady = false;
   List<ShortcutItem> _shortcuts = [];
@@ -55,11 +57,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
   double get _contentPanelBlur =>
       lerpDouble(28, 16, _frostStrength)!.clamp(0.0, 40.0);
 
+  // Keep this subtle because the whole content area already sits on a frosted
+  // panel; too much opacity makes it look "blackened".
   double get _toolbarPanelOpacity =>
-      lerpDouble(0.26, 0.70, _frostStrength)!.clamp(0.0, 1.0);
+      lerpDouble(0.10, 0.22, _frostStrength)!.clamp(0.0, 1.0);
 
   double get _toolbarPanelBlur =>
-      lerpDouble(26, 14, _frostStrength)!.clamp(0.0, 40.0);
+      lerpDouble(14, 8, _frostStrength)!.clamp(0.0, 40.0);
 
   double get _indicatorOpacity =>
       (0.10 + 0.12 * _backgroundOpacity).clamp(0.10, 0.22);
@@ -74,7 +78,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
   void initState() {
     super.initState();
 
-    _hideDesktopItems = hasDesktopHiddenStore();
+    _applyDefaults();
+    _loadPreferences();
 
     windowManager.isMaximized().then((value) {
       if (mounted) {
@@ -82,27 +87,52 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
       }
     });
 
-    _loadShortcuts();
-    // Tray mode is currently disabled until it's verified stable on target
-    // machines; leaving this here for re-enable later.
-    // _initTray();
+    windowManager.addListener(this);
+    _initTray();
+  }
+
+  void _applyDefaults() {
+    _hideDesktopItems = hasDesktopHiddenStore();
+  }
+
+  Future<void> _loadPreferences() async {
+    final config = await AppPreferences.load();
+    if (!mounted) return;
+    setState(() {
+      _backgroundOpacity = (1.0 - config.transparency).clamp(0.0, 1.0);
+      _frostStrength = config.frostStrength;
+      _iconSize = config.iconSize;
+      _showHidden = config.showHidden;
+      _autoRefresh = config.autoRefresh;
+      _hideDesktopItems = config.hideDesktopItems || _hideDesktopItems;
+      _themeModeOption = config.themeModeOption;
+      _backgroundImagePath = config.backgroundPath;
+    });
+    _handleThemeChange(_themeModeOption);
+    await _loadShortcuts();
   }
 
   Future<void> _initTray() async {
     try {
       await _trayHelper.init(
-        onExitRequested: () async {
+        onShowRequested: () async {
+          await windowManager.show();
+          await windowManager.restore();
+          await windowManager.focus();
+        },
+        onHideRequested: () async {
+          await windowManager.hide();
+        },
+        onQuitRequested: () async {
           await windowManager.setPreventClose(false);
           await windowManager.close();
         },
       );
       _trayReady = true;
-      await windowManager.setSkipTaskbar(true);
       await windowManager.setPreventClose(true);
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
       _trayReady = false;
-      await windowManager.setSkipTaskbar(false);
       await windowManager.setPreventClose(false);
     }
   }
@@ -231,7 +261,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
     super.dispose();
+  }
+
+  @override
+  void onWindowClose() async {
+    if (_trayReady) {
+      await windowManager.hide();
+      return;
+    }
+    await windowManager.setPreventClose(false);
+    await windowManager.close();
   }
 
   @override
@@ -483,21 +524,37 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
           backgroundPath: _backgroundImagePath,
           onTransparencyChanged: (v) {
             setState(() => _backgroundOpacity = (1.0 - v).clamp(0.0, 1.0));
+            AppPreferences.saveTransparency(v);
           },
-          onFrostStrengthChanged: (v) => setState(() => _frostStrength = v),
-          onIconSizeChanged: (v) => setState(() => _iconSize = v),
+          onFrostStrengthChanged: (v) {
+            setState(() => _frostStrength = v);
+            AppPreferences.saveFrostStrength(v);
+          },
+          onIconSizeChanged: (v) {
+            setState(() => _iconSize = v);
+            AppPreferences.saveIconSize(v);
+          },
           onShowHiddenChanged: (v) {
             setState(() => _showHidden = v);
+            AppPreferences.saveShowHidden(v);
             _loadShortcuts();
           },
-          onAutoRefreshChanged: (v) => setState(() => _autoRefresh = v),
+          onAutoRefreshChanged: (v) {
+            setState(() => _autoRefresh = v);
+            AppPreferences.saveAutoRefresh(v);
+          },
           onHideDesktopItemsChanged: _handleHideDesktopItemsChanged,
-          onThemeModeChanged: _handleThemeChange,
-          onBackgroundPathChanged: (path) {
-            setState(() {
-              final trimmed = path?.trim() ?? '';
-              _backgroundImagePath = trimmed.isEmpty ? null : trimmed;
-            });
+          onThemeModeChanged: (v) {
+            _handleThemeChange(v);
+            if (v != null) {
+              AppPreferences.saveThemeMode(v);
+            }
+          },
+          onBackgroundPathChanged: (path) async {
+            final saved =
+                await AppPreferences.backupAndSaveBackgroundPath(path);
+            if (!mounted) return;
+            setState(() => _backgroundImagePath = saved);
           },
         );
       default:
@@ -515,6 +572,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage> {
     }
 
     setState(() => _hideDesktopItems = hide);
+    AppPreferences.saveHideDesktopItems(hide);
     final result = await setDesktopItemsHidden(_desktopPath, hidden: hide);
     if (!mounted) return;
 

@@ -9,7 +9,9 @@ class TrayHelper {
   bool _initialized = false;
 
   Future<void> init({
-    required VoidCallback onExitRequested,
+    required VoidCallback onShowRequested,
+    required VoidCallback onHideRequested,
+    required VoidCallback onQuitRequested,
   }) async {
     if (_initialized) return;
 
@@ -23,31 +25,34 @@ class TrayHelper {
       final menu = Menu();
       await menu.buildFrom([
         MenuItemLabel(
-          label: '显示/隐藏',
-          onClicked: (_) async {
-            final visible = await windowManager.isVisible();
-            if (visible) {
-              await windowManager.hide();
-            } else {
-              await windowManager.show();
-              await windowManager.focus();
-            }
-          },
+          label: '显示主窗口',
+          onClicked: (_) => onShowRequested(),
+        ),
+        MenuItemLabel(
+          label: '隐藏到托盘',
+          onClicked: (_) => onHideRequested(),
         ),
         MenuSeparator(),
         MenuItemLabel(
-          label: '退出',
-          onClicked: (_) => onExitRequested(),
+          label: '退出(隐藏到托盘)',
+          onClicked: (_) => onHideRequested(),
+        ),
+        MenuItemLabel(
+          label: '彻底退出',
+          onClicked: (_) => onQuitRequested(),
         ),
       ]);
 
       await _tray.setContextMenu(menu);
 
       _tray.registerSystemTrayEventHandler((eventName) async {
-        if (eventName == kSystemTrayEventClick ||
-            eventName == kSystemTrayEventRightClick) {
-          await windowManager.show();
-          await windowManager.focus();
+        if (eventName == kSystemTrayEventClick) {
+          onShowRequested();
+          return;
+        }
+        if (eventName == kSystemTrayEventRightClick) {
+          // Keep default behavior: show menu.
+          return;
         }
       });
 

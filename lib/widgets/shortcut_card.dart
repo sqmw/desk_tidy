@@ -25,6 +25,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
   bool _selected = false;
   bool _hovered = false;
   late final FocusNode _focusNode;
+  final GlobalKey _labelTextKey = GlobalKey();
 
   @override
   void initState() {
@@ -50,28 +51,18 @@ class _ShortcutCardState extends State<ShortcutCard> {
     if (!_selected) _removeLabelOverlay();
   }
 
-  void _showLabelOverlay() {
-    _removeLabelOverlay();
+  bool _isLabelOverflowing() {
+    final ctx = _labelTextKey.currentContext;
+    final renderObject = ctx?.findRenderObject();
+    if (renderObject is! RenderBox) return false;
 
-    final overlay = Overlay.of(context);
-    final renderObject = context.findRenderObject();
-    if (renderObject is! RenderBox) return;
-
-    final topLeft = renderObject.localToGlobal(Offset.zero);
-    final size = renderObject.size;
-
-    final name = widget.shortcut.name;
     final theme = Theme.of(context);
-    final padding = math.max(8.0, widget.iconSize * 0.28);
-    // Keep this in sync with the actual label widget width (padding etc),
-    // otherwise we may incorrectly think text fits and never show the overlay.
-    const labelHorizontalPadding = 6.0 * 2;
-    final textMaxWidth =
-        math.max(0.0, size.width - padding * 2 - labelHorizontalPadding);
+    final box = renderObject;
+    final textMaxWidth = math.max(0.0, box.size.width);
 
-    final testPainter = TextPainter(
+    final painter = TextPainter(
       text: TextSpan(
-        text: name,
+        text: widget.shortcut.name,
         style: theme.textTheme.bodyMedium?.copyWith(
           fontSize: _textSize,
           height: 1.15,
@@ -84,7 +75,23 @@ class _ShortcutCardState extends State<ShortcutCard> {
       ellipsis: '...',
     )..layout(maxWidth: textMaxWidth);
 
-    if (!testPainter.didExceedMaxLines) return;
+    return painter.didExceedMaxLines;
+  }
+
+  void _showLabelOverlay() {
+    _removeLabelOverlay();
+
+    if (!_isLabelOverflowing()) return;
+
+    final overlay = Overlay.of(context);
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox) return;
+
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final size = renderObject.size;
+
+    final name = widget.shortcut.name;
+    final theme = Theme.of(context);
 
     final overlayBg = theme.brightness == Brightness.dark
         ? const Color(0x7A000000)
@@ -244,10 +251,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
+                              horizontal: 4,
+                              vertical: 2,
                             ),
                             child: Text(
+                              key: _labelTextKey,
                               shortcut.name,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 fontSize: _textSize,
