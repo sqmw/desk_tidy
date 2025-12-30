@@ -363,7 +363,6 @@ class _AllPageState extends State<AllPage> {
     await openWithApp(appPath, targetPath);
   }
 
-
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
@@ -381,7 +380,7 @@ class _AllPageState extends State<AllPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
             opacity: 0.22,
@@ -389,14 +388,20 @@ class _AllPageState extends State<AllPage> {
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
                 IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
                   icon: const Icon(Icons.home),
                   onPressed: _currentPath == null ? null : _goHome,
                 ),
                 IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _currentPath == null ? null : _goUp,
                 ),
@@ -408,6 +413,9 @@ class _AllPageState extends State<AllPage> {
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
                   icon: const Icon(Icons.refresh),
                   onPressed: _refresh,
                 ),
@@ -418,7 +426,8 @@ class _AllPageState extends State<AllPage> {
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
+            onSecondaryTapDown: (details) =>
+                _showPageMenu(details.globalPosition),
             child: _entries.isEmpty
                 ? const Center(child: Text('未找到文件或快捷方式'))
                 : ListView.builder(
@@ -482,7 +491,9 @@ class _EntityIcon extends StatelessWidget {
     return FutureBuilder<Uint8List?>(
       future: _resolveIconBytes(),
       builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+        if (snapshot.hasData &&
+            snapshot.data != null &&
+            snapshot.data!.isNotEmpty) {
           return Image.memory(
             snapshot.data!,
             width: 32,

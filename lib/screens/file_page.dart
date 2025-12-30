@@ -21,22 +21,26 @@ class FilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final desktopDir = Directory(desktopPath);
-    final files = desktopDir.listSync().where((entity) {
-      if (entity is! File) return false;
-      final name = path.basename(entity.path);
-      final lower = name.toLowerCase();
+    final files = desktopDir
+        .listSync()
+        .where((entity) {
+          if (entity is! File) return false;
+          final name = path.basename(entity.path);
+          final lower = name.toLowerCase();
 
-      if (!showHidden &&
-          (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
-        return false;
-      }
+          if (!showHidden &&
+              (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
+            return false;
+          }
 
-      if (lower == 'desktop.ini' || lower == 'thumbs.db') {
-        return false;
-      }
+          if (lower == 'desktop.ini' || lower == 'thumbs.db') {
+            return false;
+          }
 
-      return !lower.endsWith('.lnk') && !lower.endsWith('.exe');
-    }).map((e) => e as File).toList();
+          return !lower.endsWith('.lnk') && !lower.endsWith('.exe');
+        })
+        .map((e) => e as File)
+        .toList();
 
     if (files.isEmpty) {
       return const Center(child: Text('未找到文件'));
@@ -57,10 +61,8 @@ class FilePage extends StatelessWidget {
               _showFileMenu(context, file, details.globalPosition);
             },
             borderRadius: BorderRadius.circular(8),
-            hoverColor: Theme.of(context)
-                .colorScheme
-                .surfaceVariant
-                .withOpacity(0.4),
+            hoverColor:
+                Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               leading: _FileIcon(filePath: file.path),

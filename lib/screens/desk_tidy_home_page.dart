@@ -16,11 +16,10 @@ import 'all_page.dart';
 import 'file_page.dart';
 import 'folder_page.dart';
 
-ThemeModeOption _themeModeOption = ThemeModeOption.system;
+ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
 bool _autoRefresh = false;
 double _iconSize = 32;
-int _crossAxisCount = 6;
 
 class DeskTidyHomePage extends StatefulWidget {
   const DeskTidyHomePage({super.key});
@@ -35,8 +34,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
-  double _backgroundOpacity = 1.0;
+  // Controls how much of the desktop shows through (via the background layer).
+  // 1.0 = fully opaque, 0.0 = fully transparent.
+  double _backgroundOpacity = 0.2;
   String? _backgroundImagePath;
+  bool _hideDesktopItems = false;
 
   int _selectedIndex = 0;
 
@@ -49,6 +51,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void initState() {
     super.initState();
+
+    _hideDesktopItems = hasDesktopHiddenStore();
 
     windowManager.ensureInitialized();
     windowManager.setTitleBarStyle(TitleBarStyle.hidden);
@@ -72,7 +76,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _desktopPath = desktopPath;
       final shortcutsPaths = await scanDesktopShortcuts(
         desktopPath,
-        showHidden: _showHidden,
+        showHidden: _showHidden || _hideDesktopItems,
       );
 
       const requestIconSize = 256;
@@ -146,8 +150,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _showHiddenMenu(Offset globalPosition) async {
     const menuItemValue = 0;
     final label = _showHidden ? '隐藏隐藏文件/文件夹' : '显示隐藏文件/文件夹';
-    final icon =
-        _showHidden ? Icons.visibility_off : Icons.visibility;
+    final icon = _showHidden ? Icons.visibility_off : Icons.visibility;
 
     final result = await showMenu<int>(
       context: context,
@@ -196,8 +199,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final backgroundPath = _backgroundImagePath;
-    final backgroundExists =
-        backgroundPath != null && backgroundPath.isNotEmpty && File(backgroundPath).existsSync();
+    final backgroundExists = backgroundPath != null &&
+        backgroundPath.isNotEmpty &&
+        File(backgroundPath).existsSync();
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -227,8 +231,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                       onPointerDown: _onNavigationRailPointer,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 12,
+                          horizontal: 6,
+                          vertical: 8,
                         ),
                         child: GlassContainer(
                           borderRadius: BorderRadius.circular(18),
@@ -238,65 +242,68 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             color: theme.dividerColor.withOpacity(0.16),
                           ),
                           child: NavigationRail(
-                      backgroundColor: Colors.transparent,
-                      useIndicator: true,
-                      indicatorColor: theme.colorScheme.primary
-                          .withOpacity(_indicatorOpacity),
-                      selectedIconTheme: IconThemeData(
-                        color: theme.colorScheme.primary,
-                      ),
-                      unselectedIconTheme: IconThemeData(
-                        color: theme.colorScheme.onSurface.withOpacity(0.72),
-                      ),
-                      selectedLabelTextStyle: theme.textTheme.labelMedium
-                          ?.copyWith(color: theme.colorScheme.primary),
-                      unselectedLabelTextStyle: theme.textTheme.labelMedium
-                          ?.copyWith(
-                            color:
-                                theme.colorScheme.onSurface.withOpacity(0.72),
+                            backgroundColor: Colors.transparent,
+                            minWidth: 72,
+                            useIndicator: true,
+                            indicatorColor: theme.colorScheme.primary
+                                .withOpacity(_indicatorOpacity),
+                            selectedIconTheme: IconThemeData(
+                              color: theme.colorScheme.primary,
+                            ),
+                            unselectedIconTheme: IconThemeData(
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.72),
+                            ),
+                            selectedLabelTextStyle: theme.textTheme.labelMedium
+                                ?.copyWith(color: theme.colorScheme.primary),
+                            unselectedLabelTextStyle:
+                                theme.textTheme.labelMedium?.copyWith(
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.72),
+                            ),
+                            selectedIndex: _selectedIndex,
+                            onDestinationSelected:
+                                _onNavigationRailItemSelected,
+                            labelType: NavigationRailLabelType.selected,
+                            destinations: const [
+                              NavigationRailDestination(
+                                icon: Icon(Icons.apps),
+                                label: Text('应用'),
+                              ),
+                              NavigationRailDestination(
+                                icon: Icon(Icons.all_inbox),
+                                label: Text('全部'),
+                              ),
+                              NavigationRailDestination(
+                                icon: Icon(Icons.folder),
+                                label: Text('文件夹'),
+                              ),
+                              NavigationRailDestination(
+                                icon: Icon(Icons.insert_drive_file),
+                                label: Text('文件'),
+                              ),
+                              NavigationRailDestination(
+                                icon: Icon(Icons.settings),
+                                label: Text('设置'),
+                              ),
+                            ],
                           ),
-                      selectedIndex: _selectedIndex,
-                      onDestinationSelected: _onNavigationRailItemSelected,
-                      labelType: NavigationRailLabelType.all,
-                      destinations: const [
-                        NavigationRailDestination(
-                          icon: Icon(Icons.apps),
-                          label: Text('应用'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.all_inbox),
-                          label: Text('全部'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.folder),
-                          label: Text('文件夹'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.insert_drive_file),
-                          label: Text('文件'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.settings),
-                          label: Text('设置'),
-                        ),
-                  ],
                         ),
                       ),
                     ),
-                  ),
-                  VerticalDivider(
-                    thickness: 1,
-                    width: 1,
-                    color: theme.dividerColor.withOpacity(0.12),
-                  ),
-                  Expanded(
-                    child: Container(
+                    VerticalDivider(
+                      thickness: 1,
+                      width: 1,
+                      color: theme.dividerColor.withOpacity(0.12),
+                    ),
+                    Expanded(
+                      child: Container(
                         color: Colors.transparent,
                         child: _buildContent(),
                       ),
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -322,7 +329,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             ),
           ),
           child: SizedBox(
-            height: 48,
+            height: 42,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -331,18 +338,25 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                   Row(
                     children: [
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                            width: 40, height: 40),
                         icon: const Icon(Icons.remove),
                         onPressed: _minimizeWindow,
                       ),
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                            width: 40, height: 40),
                         icon: Icon(
-                          _isMaximized
-                              ? Icons.filter_none
-                              : Icons.crop_square,
+                          _isMaximized ? Icons.filter_none : Icons.crop_square,
                         ),
                         onPressed: _toggleMaximize,
                       ),
                       IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                            width: 40, height: 40),
                         icon: const Icon(Icons.close),
                         onPressed: _closeWindow,
                       ),
@@ -358,40 +372,44 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   Widget _buildContent() {
+    final effectiveShowHidden = _showHidden || _hideDesktopItems;
     switch (_selectedIndex) {
       case 0:
         return _buildApplicationContent();
       case 1:
         return AllPage(
           desktopPath: _desktopPath,
-          showHidden: _showHidden,
+          showHidden: effectiveShowHidden,
         );
       case 2:
         return FolderPage(
           desktopPath: _desktopPath,
-          showHidden: _showHidden,
+          showHidden: effectiveShowHidden,
         );
       case 3:
         return FilePage(
           desktopPath: _desktopPath,
-          showHidden: _showHidden,
+          showHidden: effectiveShowHidden,
         );
       case 4:
         return SettingsPage(
-          opacity: _backgroundOpacity,
+          transparency: (1.0 - _backgroundOpacity).clamp(0.0, 1.0),
           iconSize: _iconSize,
-          crossAxisCount: _crossAxisCount,
           showHidden: _showHidden,
           autoRefresh: _autoRefresh,
+          hideDesktopItems: _hideDesktopItems,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
-          onOpacityChanged: (v) {
-            setState(() => _backgroundOpacity = v);
+          onTransparencyChanged: (v) {
+            setState(() => _backgroundOpacity = (1.0 - v).clamp(0.0, 1.0));
           },
           onIconSizeChanged: (v) => setState(() => _iconSize = v),
-          onCrossAxisCountChanged: (v) => setState(() => _crossAxisCount = v),
-          onShowHiddenChanged: (v) => setState(() => _showHidden = v),
+          onShowHiddenChanged: (v) {
+            setState(() => _showHidden = v);
+            _loadShortcuts();
+          },
           onAutoRefreshChanged: (v) => setState(() => _autoRefresh = v),
+          onHideDesktopItemsChanged: _handleHideDesktopItemsChanged,
           onThemeModeChanged: _handleThemeChange,
           onBackgroundPathChanged: (path) {
             setState(() {
@@ -403,6 +421,31 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       default:
         return _buildApplicationContent();
     }
+  }
+
+  Future<void> _handleHideDesktopItemsChanged(bool hide) async {
+    if (_desktopPath.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('桌面路径尚未准备好')),
+      );
+      return;
+    }
+
+    setState(() => _hideDesktopItems = hide);
+    final result = await setDesktopItemsHidden(_desktopPath, hidden: hide);
+    if (!mounted) return;
+
+    final msg =
+        hide ? '已隐藏桌面项目: ${result.updated} 个' : '已恢复桌面项目: ${result.updated} 个';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.failed == 0 ? msg : '$msg (失败 ${result.failed} 个)',
+        ),
+      ),
+    );
+    await _loadShortcuts();
   }
 
   void _handleThemeChange(ThemeModeOption? option) {
@@ -426,7 +469,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
             opacity: _chromeOpacity,
@@ -434,29 +477,32 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
-              Text(
-                '应用列表 (${_shortcuts.length})',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _loadShortcuts,
-                icon: const Icon(Icons.refresh),
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primary.withOpacity(
-                            0.10 + 0.10 * _backgroundOpacity,
-                          ),
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
-                  shape: const StadiumBorder(),
+                Text(
+                  '应用列表 (${_shortcuts.length})',
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                label: const Text('刷新'),
-              ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _loadShortcuts,
+                  icon: const Icon(Icons.refresh),
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.primary.withOpacity(
+                              0.10 + 0.10 * _backgroundOpacity,
+                            ),
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  label: const Text('刷新'),
+                ),
               ],
             ),
           ),
@@ -490,25 +536,26 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                       builder: (context, constraints) {
                         const crossAxisSpacing = 12.0;
                         const mainAxisSpacing = 16.0;
-                        final usableWidth = constraints.maxWidth -
-                            crossAxisSpacing * (_crossAxisCount - 1);
-                        final cellWidth = usableWidth / _crossAxisCount;
                         final estimatedTextHeight = _estimateTextHeight();
                         final padding = math.max(8.0, _iconSize * 0.28);
                         final iconContainerSize =
                             math.max(28.0, _iconSize * 1.65);
+                        final tileMaxExtent = math.max(
+                          120.0,
+                          iconContainerSize + padding * 2,
+                        );
                         final cardHeight = padding * 0.6 * 2 +
                             iconContainerSize +
                             padding * 0.6 +
                             estimatedTextHeight;
                         final aspectRatio =
-                            cardHeight <= 0 ? 1 : cellWidth / cardHeight;
+                            cardHeight <= 0 ? 1 : tileMaxExtent / cardHeight;
 
                         return GridView.builder(
                           padding: const EdgeInsets.all(12),
                           gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: _crossAxisCount,
+                              SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: tileMaxExtent,
                             crossAxisSpacing: crossAxisSpacing,
                             mainAxisSpacing: mainAxisSpacing,
                             childAspectRatio: aspectRatio.toDouble(),

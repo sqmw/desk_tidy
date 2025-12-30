@@ -311,7 +311,7 @@ class _FolderPageState extends State<FolderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
           child: GlassContainer(
             borderRadius: BorderRadius.circular(16),
             opacity: 0.22,
@@ -319,10 +319,13 @@ class _FolderPageState extends State<FolderPage> {
             border: Border.all(
               color: Theme.of(context).dividerColor.withOpacity(0.16),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
                 IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _currentPath == widget.desktopPath ? null : _goUp,
                 ),
@@ -334,6 +337,9 @@ class _FolderPageState extends State<FolderPage> {
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints.tightFor(width: 40, height: 40),
                   icon: const Icon(Icons.refresh),
                   onPressed: _refresh,
                 ),
@@ -344,7 +350,8 @@ class _FolderPageState extends State<FolderPage> {
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
+            onSecondaryTapDown: (details) =>
+                _showPageMenu(details.globalPosition),
             child: _entries.isEmpty
                 ? const Center(child: Text('未找到内容'))
                 : ListView.builder(

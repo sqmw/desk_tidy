@@ -12,7 +12,8 @@ void main() {
     final libDir = Directory(path.join(projectRoot.path, 'lib'));
 
     // 目标目录：code_lib/lib_all
-    final targetDir = Directory(path.join(projectRoot.path, 'code_lib', 'lib_all'));
+    final targetDir =
+        Directory(path.join(projectRoot.path, 'code_lib', 'lib_all'));
 
     // 创建目标目录（如果不存在）
     if (!await targetDir.exists()) {
@@ -28,7 +29,8 @@ void main() {
     final seenNames = <String>{}; // 可选：记录已见过的文件名，用于提示重名
 
     await for (final entity in libDir.list(recursive: true)) {
-      if (entity is File && path.extension(entity.path).toLowerCase() == '.dart') {
+      if (entity is File &&
+          path.extension(entity.path).toLowerCase() == '.dart') {
         final fileName = path.basename(entity.path);
         final destinationPath = path.join(targetDir.path, fileName);
         final destinationFile = File(destinationPath);

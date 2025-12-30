@@ -110,8 +110,7 @@ List<Directory> _listDirs(String root, {required bool showHidden}) {
   if (!dir.existsSync()) return [];
   final entries = dir.listSync().whereType<Directory>().where((d) {
     final name = path.basename(d.path);
-    if (!showHidden &&
-        (name.startsWith('.') || isHiddenOrSystem(d.path))) {
+    if (!showHidden && (name.startsWith('.') || isHiddenOrSystem(d.path))) {
       return false;
     }
     final lower = name.toLowerCase();

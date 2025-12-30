@@ -5,36 +5,37 @@ import 'package:settings_ui/settings_ui.dart';
 enum ThemeModeOption { system, light, dark }
 
 class SettingsPage extends StatelessWidget {
-  final double opacity;
+  /// 0.0 = fully opaque, 1.0 = fully transparent.
+  final double transparency;
   final double iconSize;
-  final int crossAxisCount;
   final bool showHidden;
   final bool autoRefresh;
+  final bool hideDesktopItems;
   final ThemeModeOption themeModeOption;
   final String? backgroundPath;
 
-  final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onIconSizeChanged;
-  final ValueChanged<int> onCrossAxisCountChanged;
   final ValueChanged<bool> onShowHiddenChanged;
   final ValueChanged<bool> onAutoRefreshChanged;
+  final ValueChanged<bool> onHideDesktopItemsChanged;
   final ValueChanged<ThemeModeOption?> onThemeModeChanged;
   final ValueChanged<String?> onBackgroundPathChanged;
 
   const SettingsPage({
     super.key,
-    required this.opacity,
+    required this.transparency,
     required this.iconSize,
-    required this.crossAxisCount,
     required this.showHidden,
     required this.autoRefresh,
+    required this.hideDesktopItems,
     required this.themeModeOption,
     required this.backgroundPath,
-    required this.onOpacityChanged,
+    required this.onTransparencyChanged,
     required this.onIconSizeChanged,
-    required this.onCrossAxisCountChanged,
     required this.onShowHiddenChanged,
     required this.onAutoRefreshChanged,
+    required this.onHideDesktopItemsChanged,
     required this.onThemeModeChanged,
     required this.onBackgroundPathChanged,
   });
@@ -42,8 +43,9 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final panelOpacity = (0.12 + 0.28 * opacity).clamp(0.12, 0.42);
-    final dividerOpacity = (0.10 + 0.10 * opacity).clamp(0.10, 0.20);
+    final panelOpacity = (0.12 + 0.28 * (1.0 - transparency)).clamp(0.12, 0.42);
+    final dividerOpacity =
+        (0.10 + 0.10 * (1.0 - transparency)).clamp(0.10, 0.20);
 
     SettingsThemeData buildTheme(Color base) => SettingsThemeData(
           settingsListBackground: base.withOpacity(panelOpacity),
@@ -55,7 +57,8 @@ class SettingsPage extends StatelessWidget {
           settingsTileTextColor: theme.colorScheme.onSurface.withOpacity(0.88),
           trailingTextColor: theme.colorScheme.onSurface.withOpacity(0.72),
           leadingIconsColor: theme.colorScheme.onSurface.withOpacity(0.72),
-          tileDescriptionTextColor: theme.colorScheme.onSurface.withOpacity(0.72),
+          tileDescriptionTextColor:
+              theme.colorScheme.onSurface.withOpacity(0.72),
           inactiveTitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
           inactiveSubtitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
         );
@@ -84,13 +87,13 @@ class SettingsPage extends StatelessWidget {
             SettingsTile(
               title: const Text('窗口透明度'),
               description: Slider(
-                value: opacity,
-                min: 0.2,
+                value: transparency,
+                min: 0.0,
                 max: 1.0,
-                divisions: 8,
-                onChanged: onOpacityChanged,
+                divisions: 10,
+                onChanged: onTransparencyChanged,
               ),
-              trailing: Text('${(opacity * 100).toInt()}%'),
+              trailing: Text('${(transparency * 100).toInt()}%'),
             ),
             SettingsTile(
               title: const Text('图标大小'),
@@ -102,18 +105,6 @@ class SettingsPage extends StatelessWidget {
                 onChanged: onIconSizeChanged,
               ),
               trailing: Text(iconSize.toInt().toString()),
-            ),
-            SettingsTile(
-              title: const Text('每行显示数量'),
-              trailing: DropdownButton<int>(
-                value: crossAxisCount,
-                items: [4, 5, 6, 7, 8]
-                    .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) onCrossAxisCountChanged(v);
-                },
-              ),
             ),
             SettingsTile.navigation(
               leading: const Icon(Icons.image),
@@ -175,6 +166,13 @@ class SettingsPage extends StatelessWidget {
         SettingsSection(
           title: const Text(''),
           tiles: [
+            SettingsTile.switchTile(
+              onToggle: onHideDesktopItemsChanged,
+              initialValue: hideDesktopItems,
+              leading: const Icon(Icons.visibility_off),
+              title: const Text('隐藏桌面项目(Windows)'),
+              description: const Text('会把桌面文件/文件夹/快捷方式标记为隐藏，关闭后可恢复。'),
+            ),
             SettingsTile.switchTile(
               onToggle: onShowHiddenChanged,
               initialValue: showHidden,

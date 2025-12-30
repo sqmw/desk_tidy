@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -30,8 +31,8 @@ typedef _SHGetImageListDart = int Function(
   Pointer<Pointer> ppv,
 );
 
-final _SHGetImageListDart _shGetImageList = _shell32
-    .lookupFunction<_SHGetImageListNative, _SHGetImageListDart>('#727');
+final _SHGetImageListDart _shGetImageList =
+    _shell32.lookupFunction<_SHGetImageListNative, _SHGetImageListDart>('#727');
 
 typedef _DrawIconExNative = Int32 Function(
   IntPtr hdc,
@@ -63,13 +64,13 @@ class IImageList extends IUnknown {
   IImageList(super.ptr);
 
   int getIcon(int i, int flags, Pointer<IntPtr> icon) => (ptr.ref.vtable + 10)
-      .cast<
-        Pointer<
-          NativeFunction<Int32 Function(Pointer, Int32, Int32, Pointer<IntPtr>)>
-        >
-      >()
-      .value
-      .asFunction<int Function(Pointer, int, int, Pointer<IntPtr>)>()(
+          .cast<
+              Pointer<
+                  NativeFunction<
+                      Int32 Function(
+                          Pointer, Int32, Int32, Pointer<IntPtr>)>>>()
+          .value
+          .asFunction<int Function(Pointer, int, int, Pointer<IntPtr>)>()(
         ptr.ref.lpVtbl,
         i,
         flags,
@@ -113,7 +114,8 @@ Future<String> getDesktopPath() async {
   return 'C:\\Users\\Public\\Desktop';
 }
 
-List<String> _desktopLocations(String primaryPath, {bool includePublic = true}) {
+List<String> _desktopLocations(String primaryPath,
+    {bool includePublic = true}) {
   final destinations = <String>{primaryPath};
   if (includePublic) {
     final publicDesktop = _getKnownFolderPath(FOLDERID_PublicDesktop);
@@ -124,7 +126,8 @@ List<String> _desktopLocations(String primaryPath, {bool includePublic = true}) 
   return destinations.toList();
 }
 
-List<String> desktopLocations(String primaryPath, {bool includePublic = true}) =>
+List<String> desktopLocations(String primaryPath,
+        {bool includePublic = true}) =>
     _desktopLocations(primaryPath, includePublic: includePublic);
 
 bool isHiddenOrSystem(String fullPath) {
@@ -138,6 +141,187 @@ bool isHiddenOrSystem(String fullPath) {
         (attrs & FILE_ATTRIBUTE_SYSTEM) != 0;
   } catch (_) {
     return false;
+  }
+}
+
+class DesktopItemsHiddenResult {
+  final int updated;
+  final int skipped;
+  final int failed;
+
+  const DesktopItemsHiddenResult({
+    required this.updated,
+    required this.skipped,
+    required this.failed,
+  });
+}
+
+String _desktopHiddenStorePath() {
+  final appData =
+      Platform.environment['APPDATA'] ?? Platform.environment['LOCALAPPDATA'];
+  final base = (appData != null && appData.isNotEmpty)
+      ? appData
+      : Directory.current.path;
+  return path.join(base, 'desk_tidy', 'desktop_hidden.json');
+}
+
+void _writeDesktopHiddenStore(List<String> paths) {
+  final storePath = _desktopHiddenStorePath();
+  final dir = Directory(path.dirname(storePath));
+  dir.createSync(recursive: true);
+  final file = File(storePath);
+  final payload = <String, Object?>{
+    'version': 1,
+    'paths': paths,
+    'updatedAt': DateTime.now().toIso8601String(),
+  };
+  file.writeAsStringSync(jsonEncode(payload));
+}
+
+List<String> _readDesktopHiddenStorePaths() {
+  final storePath = _desktopHiddenStorePath();
+  final file = File(storePath);
+  if (!file.existsSync()) return const [];
+  try {
+    final decoded = jsonDecode(file.readAsStringSync());
+    if (decoded is! Map) return const [];
+    final paths = decoded['paths'];
+    if (paths is! List) return const [];
+    return paths.whereType<String>().toList();
+  } catch (_) {
+    return const [];
+  }
+}
+
+void _deleteDesktopHiddenStore() {
+  final storePath = _desktopHiddenStorePath();
+  final file = File(storePath);
+  if (file.existsSync()) {
+    try {
+      file.deleteSync();
+    } catch (_) {}
+  }
+}
+
+bool hasDesktopHiddenStore() {
+  final storePath = _desktopHiddenStorePath();
+  return File(storePath).existsSync();
+}
+
+int _getFileAttributesSafe(String fullPath) {
+  try {
+    final ptr = fullPath.toNativeUtf16();
+    final attrs = GetFileAttributes(ptr.cast());
+    calloc.free(ptr);
+    return attrs;
+  } catch (_) {
+    return INVALID_FILE_ATTRIBUTES;
+  }
+}
+
+bool _setFileAttributesSafe(String fullPath, int attrs) {
+  try {
+    final ptr = fullPath.toNativeUtf16();
+    final ok = SetFileAttributes(ptr.cast(), attrs) != 0;
+    calloc.free(ptr);
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<DesktopItemsHiddenResult> setDesktopItemsHidden(
+  String desktopPath, {
+  required bool hidden,
+  bool includePublic = true,
+}) async {
+  if (hidden) {
+    int updated = 0;
+    int skipped = 0;
+    int failed = 0;
+    final updatedPaths = <String>[];
+
+    final directories = desktopLocations(
+      desktopPath,
+      includePublic: includePublic,
+    );
+    for (final dirPath in directories) {
+      final dir = Directory(dirPath);
+      if (!dir.existsSync()) continue;
+
+      for (final entity in dir.listSync()) {
+        final name = path.basename(entity.path);
+        final lower = name.toLowerCase();
+        if (lower == 'desktop.ini' || lower == 'thumbs.db') {
+          skipped++;
+          continue;
+        }
+
+        final attrs = _getFileAttributesSafe(entity.path);
+        if (attrs == INVALID_FILE_ATTRIBUTES) {
+          failed++;
+          continue;
+        }
+
+        if ((attrs & FILE_ATTRIBUTE_SYSTEM) != 0 ||
+            (attrs & FILE_ATTRIBUTE_HIDDEN) != 0) {
+          skipped++;
+          continue;
+        }
+
+        final ok =
+            _setFileAttributesSafe(entity.path, attrs | FILE_ATTRIBUTE_HIDDEN);
+        if (ok) {
+          updated++;
+          updatedPaths.add(entity.path);
+        } else {
+          failed++;
+        }
+      }
+    }
+
+    _writeDesktopHiddenStore(updatedPaths);
+    return DesktopItemsHiddenResult(
+      updated: updated,
+      skipped: skipped,
+      failed: failed,
+    );
+  } else {
+    int updated = 0;
+    int skipped = 0;
+    int failed = 0;
+
+    final paths = _readDesktopHiddenStorePaths();
+    for (final fullPath in paths) {
+      if (FileSystemEntity.typeSync(fullPath) ==
+          FileSystemEntityType.notFound) {
+        skipped++;
+        continue;
+      }
+      final attrs = _getFileAttributesSafe(fullPath);
+      if (attrs == INVALID_FILE_ATTRIBUTES) {
+        failed++;
+        continue;
+      }
+      if ((attrs & FILE_ATTRIBUTE_HIDDEN) == 0) {
+        skipped++;
+        continue;
+      }
+      final ok =
+          _setFileAttributesSafe(fullPath, attrs & ~FILE_ATTRIBUTE_HIDDEN);
+      if (ok) {
+        updated++;
+      } else {
+        failed++;
+      }
+    }
+
+    _deleteDesktopHiddenStore();
+    return DesktopItemsHiddenResult(
+      updated: updated,
+      skipped: skipped,
+      failed: failed,
+    );
   }
 }
 
