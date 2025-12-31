@@ -1,5 +1,5 @@
-import 'dart:math' as math;
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:async';
 
@@ -20,6 +20,7 @@ import 'all_page.dart';
 import 'file_page.dart';
 import 'folder_page.dart';
 import 'window_dock_logic.dart';
+import 'window_dock_manager.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -36,40 +37,31 @@ class DeskTidyHomePage extends StatefulWidget {
 class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     with WindowListener {
   final TrayHelper _trayHelper = TrayHelper();
+  late final WindowDockManager _dockManager;
+  
   bool _trayReady = false;
   Timer? _saveWindowTimer;
-  Timer? _dragEndDebounceTimer;
-  Timer? _autoHidePollTimer;
+  Timer? _dragEndTimer;
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
   final ValueNotifier<bool> _windowFocusNotifier = ValueNotifier(true);
+  
   // Controls how much of the desktop shows through (via the background layer).
   // 1.0 = fully opaque, 0.0 = fully transparent.
   double _backgroundOpacity = 0.8;
   double _frostStrength = 0.82;
   String? _backgroundImagePath;
   bool _hideDesktopItems = false;
-  bool _hotCornerActive = false;
-  Timer? _hotCornerTimer;
-  bool _trayMode = false;
-  bool _autoHideWindow = false;
-  bool _cornerDocked = false;
   bool _panelVisible = true;
-  bool _dismissing = false;
-  bool _presenting = false;
-  int _dismissToken = 0;
-  bool _lastDismissedToHotCorner = false;
-  bool _dragging = false;
-  Duration _hideDelay = const Duration(milliseconds: 260);
-  final Duration _minHotShow = const Duration(milliseconds: 420);
-  DateTime _lastHotShow = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _trayMode = false;
+  
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
+  Timer? _hotCornerTimer;
   bool? _lastDesktopIconsVisible;
   int _windowHandle = 0;
-  DateTime _suppressMoveTrackingUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   int _selectedIndex = 0;
 
@@ -103,15 +95,22 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   void initState() {
     super.initState();
 
+    _windowHandle = findMainFlutterWindowHandle() ?? 0;
+    _dockManager = WindowDockManager(
+      windowManager: windowManager,
+      getWindowHandle: () => _windowHandle,
+      isCursorInsideWindow: _isCursorInsideWindow,
+      dismissToTray: _dismissToTray,
+    );
+
     _applyDefaults();
     _loadPreferences();
-    _startHotCornerWatcher();
-    _startAutoHideWatcher();
+    _dockManager.start();
     _startDesktopIconSync();
+    _startHotCornerWatcher();
 
     // Default: show in taskbar on startup.
     windowManager.setSkipTaskbar(false);
-    _windowHandle = findMainFlutterWindowHandle() ?? 0;
 
     windowManager.isMaximized().then((value) {
       if (mounted) {
@@ -153,7 +152,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             await _presentFromTrayPopup();
           } else {
             _trayMode = false;
-            _autoHideWindow = false;
+            _dockManager.onPresentFromTray();
             await windowManager.setSkipTaskbar(false);
             await windowManager.show();
             await windowManager.restore();
@@ -172,6 +171,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       );
       _trayReady = true;
       await windowManager.setPreventClose(true);
+      _trayMode = true;
+      if (mounted) setState(() => _panelVisible = false);
+      await windowManager.setSkipTaskbar(true);
+      await windowManager.hide();
+      _dockManager.onDismissToTray();
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
       _trayReady = false;
@@ -304,10 +308,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void dispose() {
     _hotCornerTimer?.cancel();
-    _autoHidePollTimer?.cancel();
     _desktopIconSyncTimer?.cancel();
     _saveWindowTimer?.cancel();
-    _dragEndDebounceTimer?.cancel();
+    _dragEndTimer?.cancel();
+    _dockManager.dispose();
     windowManager.removeListener(this);
     _windowFocusNotifier.dispose();
     super.dispose();
@@ -326,27 +330,24 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void onWindowMoved() {
     _scheduleSaveWindowBounds();
-    if (DateTime.now().isBefore(_suppressMoveTrackingUntil)) return;
-    _markWindowMoving();
+    if (_dockManager.shouldSuppressMoveTracking()) return;
+    _dockManager.markWindowMoving();
+    
+    // 检测拖动结束：如果窗口停止移动一段时间，认为鼠标已松开
+    _dragEndTimer?.cancel();
+    _dragEndTimer = Timer(const Duration(milliseconds: 150), () {
+      unawaited(_dockManager.onMouseUp());
+    });
   }
 
-    @override
+  @override
   void onWindowBlur() {
     _windowFocusNotifier.value = false;
-    if (_autoHideWindow) {
-      final token = ++_dismissToken;
-      Future.delayed(_hideDelay, () async {
-        if (!mounted) return;
-        if (await _isCursorInsideWindow()) return;
-        if (token != _dismissToken) return;
-        if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
-        if (!_cornerDocked) return;
-        await _dismissToTray(fromHotCorner: false);
-      });
-    }
+    // 窗口失去焦点时，可能是点击了外部，检查是否需要隐藏
+    unawaited(_dockManager.onMouseClickOutside());
   }
 
-    @override
+  @override
   void onWindowFocus() {
     _windowFocusNotifier.value = true;
   }
@@ -356,21 +357,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _scheduleSaveWindowBounds();
   }
 
-  void _markWindowMoving() {
-    _dragging = true;
-    _dragEndDebounceTimer?.cancel();
-    _dragEndDebounceTimer = Timer(const Duration(milliseconds: 200), () {
-      _dragging = false;
-      unawaited(_maybeSnapToCorner());
-    });
-  }
-
+  // 热区监视器（用于从托盘唤起窗口）
   void _startHotCornerWatcher() {
     _hotCornerTimer?.cancel();
     _hotCornerTimer =
-        Timer.periodic(const Duration(milliseconds: 120), (_) async {
+        Timer.periodic(const Duration(milliseconds: 520), (_) async {
       if (!mounted) return;
-      if (!_trayMode && !_hotCornerActive && !_cornerDocked) return;
+      if (!_trayMode && !_dockManager.isDocked) return;
+      
       final cursorPos = getCursorScreenPosition();
       if (cursorPos == null) return;
       final screen = getPrimaryScreenSize();
@@ -381,151 +375,61 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         Offset(cursorPos.x.toDouble(), cursorPos.y.toDouble()),
       );
       final ctrlDown = isCtrlPressed();
-      if (_trayMode &&
-          inHotCorner &&
-          ctrlDown &&
-          !_hotCornerActive &&
-          !_dismissing) {
-        await _presentFromHotCorner();
-        return;
-      }
       
-      if (!_hotCornerActive && !_cornerDocked) return;
-
-      // Live snap check: 左上角在磁吸区域或越界，则吸附到(0,0)并允许自动隐藏。
-      try {
-        if (_dragging) return;
-        final winPos = await windowManager.getPosition();
-        final snapZone = WindowDockLogic.snapZone(
-          Size(screen.x.toDouble(), screen.y.toDouble()),
-        );
-        final shouldSnap = WindowDockLogic.shouldSnapToTopLeft(
-          winPos,
-          snapZone,
-        );
-        if (shouldSnap) {
-          if (winPos.dx != 0 || winPos.dy != 0) {
-            _suppressMoveTrackingUntil =
-                DateTime.now().add(const Duration(milliseconds: 360));
-            await windowManager.setPosition(Offset.zero, animate: true);
-          }
-          _cornerDocked = true;
-          _autoHideWindow = true;
-        } else if (_cornerDocked) {
-          _cornerDocked = false;
-          _autoHideWindow = false;
-        }
-      } catch (_) {}
-    });
-  }
-
-  void _startAutoHideWatcher() {
-    _autoHidePollTimer?.cancel();
-    _autoHidePollTimer =
-        Timer.periodic(const Duration(milliseconds: 90), (_) async {
-      if (!mounted) return;
-      if (!_cornerDocked) return;
-      if (_trayMode || _presenting || _dismissing) return;
-      if (_dragging) return;
-
-      final inside = await _isCursorInsideWindow();
-      if (inside) {
-        _dismissToken++;
-        return;
+      if (_trayMode && inHotCorner && ctrlDown) {
+        await _presentFromHotCorner();
       }
-
-      final token = ++_dismissToken;
-      Future.delayed(_hideDelay, () async {
-        if (!mounted) return;
-        if (token != _dismissToken) return;
-        if (!_cornerDocked) return;
-        if (_trayMode || _presenting || _dismissing) return;
-        if (_dragging) return;
-        if (await _isCursorInsideWindow()) return;
-        await _dismissToTray(fromHotCorner: true);
-      });
     });
   }
 
+  // 从热区唤起窗口（Ctrl + 鼠标到达触发区域）
   Future<void> _presentFromHotCorner() async {
-    if (_presenting) return;
-    _presenting = true;
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
-    _hotCornerActive = true;
-    _lastDismissedToHotCorner = false;
-    _dismissToken++;
-    _autoHideWindow = true;
-    _cornerDocked = true;
-    _lastHotShow = DateTime.now();
+    _trayMode = false;
     if (mounted) setState(() => _panelVisible = false);
+    
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
     await windowManager.restore();
     await windowManager.setPosition(Offset.zero, animate: false);
+    _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    
     if (!mounted) return;
-    // Trigger the in-app animation on next frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _panelVisible = true);
     });
-    _presenting = false;
   }
 
+  // 从托盘唤起窗口
   Future<void> _presentFromTrayPopup() async {
-    if (_presenting) return;
-    _presenting = true;
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
-    _hotCornerActive = true;
-    _autoHideWindow = _lastDismissedToHotCorner;
-    _cornerDocked = _lastDismissedToHotCorner;
-    _dismissToken++;
-    _lastHotShow = DateTime.now();
     if (mounted) setState(() => _panelVisible = false);
+    
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
     await windowManager.restore();
-    if (_lastDismissedToHotCorner) {
-      await windowManager.setPosition(Offset.zero, animate: false);
-    }
+    _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _panelVisible = true);
-    });
-    _presenting = false;
-  }
-
-  void _scheduleHideIfCornerDocked() {
-    if (!_cornerDocked && !_autoHideWindow) return;
-    final token = ++_dismissToken;
-    Future.delayed(_hideDelay, () async {
-      if (!mounted) return;
-      if (await _isCursorInsideWindow()) return;
-      if (token != _dismissToken) return;
-      if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
-      await _dismissToTray(fromHotCorner: true);
     });
   }
 
   Future<void> _dismissToTray({required bool fromHotCorner}) async {
-    if (_dismissing) return;
-    _dismissing = true;
-    _hotCornerActive = false;
+    _dockManager.onDismissToTray();
     _trayMode = true;
-    _autoHideWindow = false;
-    _cornerDocked = false;
-    _lastDismissedToHotCorner = fromHotCorner;
-    _dismissToken++;
     if (mounted) setState(() => _panelVisible = false);
     await windowManager.setSkipTaskbar(true);
     await Future<void>.delayed(_hotAnimDuration);
     await windowManager.hide();
-    _dismissing = false;
   }
 
   Future<bool> _isCursorInsideWindow() async { // 这里的判定通过获取当前鼠标位置，以及窗口位置即可判定
@@ -555,27 +459,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
-  Future<void> _maybeSnapToCorner() async {
-    try {
-      if (_dragging) return;
-      final pos = await windowManager.getPosition();
-      final screen = getPrimaryScreenSize();
-      final snapZone = WindowDockLogic.snapZone(
-        Size(screen.x.toDouble(), screen.y.toDouble()),
-      );
-      final shouldSnap = WindowDockLogic.shouldSnapToTopLeft(pos, snapZone);
-      if (shouldSnap) {
-        _cornerDocked = true;
-        _autoHideWindow = true;
-        _suppressMoveTrackingUntil =
-            DateTime.now().add(const Duration(milliseconds: 360));
-        await windowManager.setPosition(Offset.zero, animate: true);
-      } else if (_cornerDocked) {
-        _cornerDocked = false;
-        _autoHideWindow = false;
-      }
-    } catch (_) {}
-  }
 
   Future<void> _syncDesktopIconVisibility() async {
     final visible = await isDesktopIconsVisible();
@@ -650,7 +533,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
               opacity: _backgroundOpacity,
               child: backgroundExists
                   ? Image.file(
-                      File(backgroundPath!),
+                      File(backgroundPath),
                       fit: BoxFit.cover,
                     )
                   : Container(
@@ -778,9 +661,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       ),
     );
 
-    return MouseRegion(
-      onExit: (_) => _scheduleHideIfCornerDocked(),
-      child: content,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTapDown: (_) {
+        // 点击窗口内部：如果是从托盘触发，设置为false；否则取消待执行的隐藏
+        unawaited(_dockManager.onMouseClickInside());
+      },
+      child: MouseRegion(
+        onEnter: (_) => _dockManager.onMouseEnter(),
+        onExit: (_) {
+          // 鼠标离开窗口区域：如果是从tray触发进入过app后离开，立即开始260ms倒计时隐藏
+          unawaited(_dockManager.onMouseExit());
+        },
+        child: content,
+      ),
     );
   }
 
