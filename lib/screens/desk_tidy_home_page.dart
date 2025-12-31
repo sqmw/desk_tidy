@@ -380,7 +380,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       final inHotCorner = hotZone.contains(
         Offset(cursorPos.x.toDouble(), cursorPos.y.toDouble()),
       );
-      if (_trayMode && inHotCorner && !_hotCornerActive && !_dismissing) {
+      final ctrlDown = isCtrlPressed();
+      if (_trayMode &&
+          inHotCorner &&
+          ctrlDown &&
+          !_hotCornerActive &&
+          !_dismissing) {
         await _presentFromHotCorner();
         return;
       }

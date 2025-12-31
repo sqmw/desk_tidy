@@ -81,6 +81,14 @@ bool isCursorOverWindowHandle(int hwnd) {
   }
 }
 
+bool isCtrlPressed() {
+  // High-order bit means key is currently down.
+  const downMask = 0x8000;
+  return (GetAsyncKeyState(VK_CONTROL) & downMask) != 0 ||
+      (GetAsyncKeyState(VK_LCONTROL) & downMask) != 0 ||
+      (GetAsyncKeyState(VK_RCONTROL) & downMask) != 0;
+}
+
 int _enumTargetPid = 0;
 int _enumFoundHwnd = 0;
 
