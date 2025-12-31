@@ -187,8 +187,8 @@ class SettingsPage extends StatelessWidget {
               onToggle: onHideDesktopItemsChanged,
               initialValue: hideDesktopItems,
               leading: const Icon(Icons.visibility_off),
-              title: const Text('隐藏桌面项目(Windows)'),
-              description: const Text('会把桌面文件/文件夹/快捷方式标记为隐藏，关闭后可恢复。'),
+              title: const Text('隐藏桌面图标(Windows)'),
+              description: const Text('调用系统“显示桌面图标”，不会修改文件属性。'),
             ),
             SettingsTile.switchTile(
               onToggle: onShowHiddenChanged,
