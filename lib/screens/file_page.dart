@@ -110,14 +110,18 @@ class _FileIcon extends StatelessWidget {
 
   Future<Uint8List?> _resolveIcon() async {
     final ext = path.extension(filePath).toLowerCase();
+    final primary = extractIcon(filePath);
+    if (primary != null) {
+      return primary;
+    }
     if (ext == '.lnk') {
       final target = getShortcutTarget(filePath);
       if (target != null && target.isNotEmpty) {
-        final preferred = extractIcon(target);
-        if (preferred != null) return preferred;
+        final targetIcon = extractIcon(target);
+        if (targetIcon != null) return targetIcon;
       }
     }
-    return extractIcon(filePath);
+    return null;
   }
 }
 

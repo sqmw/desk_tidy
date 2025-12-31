@@ -518,16 +518,19 @@ class _EntityIcon extends StatelessWidget {
 
   Future<Uint8List?> _resolveIconBytes() async {
     final ext = path.extension(entity.path).toLowerCase();
+    final primary = extractIcon(entity.path);
+    if (primary != null) {
+      return primary;
+    }
     if (ext == '.lnk') {
       final target = getShortcutTarget(entity.path);
       if (target != null && target.isNotEmpty) {
-        final preferred = extractIcon(target);
-        if (preferred != null) {
-          return preferred;
+        final targetIcon = extractIcon(target);
+        if (targetIcon != null) {
+          return targetIcon;
         }
       }
     }
-
-    return extractIcon(entity.path);
+    return null;
   }
 }

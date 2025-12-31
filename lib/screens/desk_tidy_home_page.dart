@@ -41,6 +41,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
+  final ValueNotifier<bool> _windowFocusNotifier = ValueNotifier(true);
   // Controls how much of the desktop shows through (via the background layer).
   // 1.0 = fully opaque, 0.0 = fully transparent.
   double _backgroundOpacity = 0.8;
@@ -261,12 +262,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
-  @override
-  void dispose() {
-    _saveWindowTimer?.cancel();
-    windowManager.removeListener(this);
-    super.dispose();
-  }
+    @override
+    void dispose() {
+      _saveWindowTimer?.cancel();
+      windowManager.removeListener(this);
+      _windowFocusNotifier.dispose();
+      super.dispose();
+    }
 
   @override
   void onWindowClose() async {
@@ -278,14 +280,24 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.close();
   }
 
-  @override
-  void onWindowMoved() {
-    _scheduleSaveWindowBounds();
-  }
+    @override
+    void onWindowMoved() {
+      _scheduleSaveWindowBounds();
+    }
 
-  @override
-  void onWindowResized() {
-    _scheduleSaveWindowBounds();
+    @override
+    void onWindowBlur() {
+      _windowFocusNotifier.value = false;
+    }
+
+    @override
+    void onWindowFocus() {
+      _windowFocusNotifier.value = true;
+    }
+
+    @override
+    void onWindowResized() {
+      _scheduleSaveWindowBounds();
   }
 
   void _scheduleSaveWindowBounds() {
@@ -753,11 +765,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             childAspectRatio: aspectRatio.toDouble(),
                           ),
                           itemCount: _shortcuts.length,
-                          itemBuilder: (context, index) {
-                            return ShortcutCard(
-                              shortcut: _shortcuts[index],
-                              iconSize: _iconSize,
-                            );
+                            itemBuilder: (context, index) {
+                              return ShortcutCard(
+                                shortcut: _shortcuts[index],
+                                iconSize: _iconSize,
+                                windowFocusNotifier: _windowFocusNotifier,
+                              );
                           },
                         );
                       },

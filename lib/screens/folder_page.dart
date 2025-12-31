@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
+import '../widgets/overflow_reveal_text.dart';
 
 class FolderPage extends StatefulWidget {
   final String desktopPath;
@@ -376,7 +377,11 @@ class _FolderPageState extends State<FolderPage> {
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
                             leading: _EntityIcon(entity: entity),
-                            title: Text(path.basename(entity.path)),
+                            title: OverflowRevealText(
+                              text: path.basename(entity.path),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              maxLines: 2,
+                            ),
                             subtitle: Text(entity.path),
                             trailing: null,
                           ),
@@ -424,13 +429,17 @@ class _EntityIcon extends StatelessWidget {
 
   Future<Uint8List?> _resolveIconBytes() async {
     final ext = path.extension(entity.path).toLowerCase();
+    final primary = extractIcon(entity.path);
+    if (primary != null) {
+      return primary;
+    }
     if (ext == '.lnk') {
       final target = getShortcutTarget(entity.path);
       if (target != null && target.isNotEmpty) {
-        final preferred = extractIcon(target);
-        if (preferred != null) return preferred;
+        final targetIcon = extractIcon(target);
+        if (targetIcon != null) return targetIcon;
       }
     }
-    return extractIcon(entity.path);
+    return null;
   }
 }

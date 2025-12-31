@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/shortcut_item.dart';
@@ -9,11 +10,13 @@ import '../utils/desktop_helper.dart';
 class ShortcutCard extends StatefulWidget {
   final ShortcutItem shortcut;
   final double iconSize;
+  final ValueListenable<bool>? windowFocusNotifier;
 
   const ShortcutCard({
     super.key,
     required this.shortcut,
     this.iconSize = 32,
+    this.windowFocusNotifier,
   });
 
   @override
@@ -26,16 +29,27 @@ class _ShortcutCardState extends State<ShortcutCard> {
   bool _hovered = false;
   late final FocusNode _focusNode;
   final GlobalKey _labelTextKey = GlobalKey();
+  ValueListenable<bool>? _windowFocusNotifier;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode(debugLabel: 'ShortcutCard');
+    _updateWindowFocusNotifier(widget.windowFocusNotifier);
+  }
+
+  @override
+  void didUpdateWidget(covariant ShortcutCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.windowFocusNotifier != widget.windowFocusNotifier) {
+      _updateWindowFocusNotifier(widget.windowFocusNotifier);
+    }
   }
 
   @override
   void dispose() {
     _removeLabelOverlay();
+    _windowFocusNotifier?.removeListener(_onWindowFocusChanged);
     _focusNode.dispose();
     super.dispose();
   }
@@ -43,6 +57,24 @@ class _ShortcutCardState extends State<ShortcutCard> {
   void _removeLabelOverlay() {
     _labelOverlay?.remove();
     _labelOverlay = null;
+  }
+
+  void _clearSelection() {
+    if (!_selected || !mounted) return;
+    setState(() => _selected = false);
+    _removeLabelOverlay();
+  }
+
+  void _updateWindowFocusNotifier(ValueListenable<bool>? notifier) {
+    if (_windowFocusNotifier == notifier) return;
+    _windowFocusNotifier?.removeListener(_onWindowFocusChanged);
+    _windowFocusNotifier = notifier;
+    _windowFocusNotifier?.addListener(_onWindowFocusChanged);
+  }
+
+  void _onWindowFocusChanged() {
+    if (_windowFocusNotifier?.value ?? true) return;
+    _clearSelection();
   }
 
   void _toggleSelection() {
@@ -98,14 +130,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
         return Stack(
           children: [
             Positioned.fill(
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: (_) {
-                  if (!mounted) return;
-                  setState(() => _selected = false);
-                  _removeLabelOverlay();
-                },
-              ),
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (_) => _clearSelection(),
+                  onPointerSignal: (_) => _clearSelection(),
+                ),
             ),
             Positioned(
               left: topLeft.dx,
