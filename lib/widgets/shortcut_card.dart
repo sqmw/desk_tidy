@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 
 import '../models/shortcut_item.dart';
 import '../utils/desktop_helper.dart';
@@ -81,6 +83,89 @@ class _ShortcutCardState extends State<ShortcutCard> {
     setState(() => _selected = !_selected);
     if (_selected) _showLabelOverlay();
     if (!_selected) _removeLabelOverlay();
+  }
+
+  Future<void> _copyToClipboard(
+    String raw, {
+    required String label,
+    required bool quoted,
+  }) async {
+    final value = quoted ? _quote(raw) : raw;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied $label')),
+    );
+  }
+
+  String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
+
+  Future<void> _showShortcutMenu(Offset globalPosition) async {
+    final shortcut = widget.shortcut;
+    final resolvedPath =
+        shortcut.targetPath.isNotEmpty ? shortcut.targetPath : shortcut.path;
+
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      items: const [
+        PopupMenuItem(
+          value: 'open',
+          child: ListTile(
+            leading: Icon(Icons.open_in_new),
+            title: Text('Open'),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'copy_name',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('Copy name'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'copy_path',
+          child: ListTile(
+            leading: Icon(Icons.link),
+            title: Text('Copy path'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'copy_folder',
+          child: ListTile(
+            leading: Icon(Icons.folder),
+            title: Text('Copy folder'),
+          ),
+        ),
+      ],
+    );
+
+    switch (result) {
+      case 'open':
+        openWithDefault(resolvedPath);
+        break;
+      case 'copy_name':
+        await _copyToClipboard(shortcut.name, label: 'name', quoted: false);
+        break;
+      case 'copy_path':
+        await _copyToClipboard(resolvedPath, label: 'path', quoted: true);
+        break;
+      case 'copy_folder':
+        await _copyToClipboard(
+          path.dirname(resolvedPath),
+          label: 'folder',
+          quoted: true,
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   bool _isLabelOverflowing() {
@@ -215,6 +300,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onSecondaryTapDown: (details) {
+            _focusNode.requestFocus();
+            if (!_selected) _toggleSelection();
+            _showShortcutMenu(details.globalPosition);
+          },
           onDoubleTap: () {
             if (shortcut.targetPath.isNotEmpty) {
               openWithDefault(shortcut.targetPath);

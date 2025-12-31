@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
+import '../widgets/entity_detail_bar.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
-import '../widgets/overflow_reveal_text.dart';
+import '../widgets/middle_ellipsis_text.dart';
 
 class AllPage extends StatefulWidget {
   final String desktopPath;
@@ -26,12 +26,25 @@ class AllPage extends StatefulWidget {
   State<AllPage> createState() => _AllPageState();
 }
 
+class _EntitySelectionInfo {
+  final String name;
+  final String fullPath;
+  final String folderPath;
+
+  const _EntitySelectionInfo({
+    required this.name,
+    required this.fullPath,
+    required this.folderPath,
+  });
+}
+
 class _AllPageState extends State<AllPage> {
   String? _currentPath; // null means aggregate desktop roots
   bool _loading = true;
   String? _error;
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
+  _EntitySelectionInfo? _selected;
 
   @override
   void initState() {
@@ -159,6 +172,7 @@ class _AllPageState extends State<AllPage> {
 
   Future<void> _showEntityMenu(
     FileSystemEntity entity,
+    String displayName,
     Offset position,
   ) async {
     _entityMenuActive = true;
@@ -200,6 +214,28 @@ class _AllPageState extends State<AllPage> {
             title: Text('删除(回收站)'),
           ),
         ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'copy_name',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('Copy name'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy_path',
+          child: ListTile(
+            leading: Icon(Icons.link),
+            title: Text('Copy path'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy_folder',
+          child: ListTile(
+            leading: Icon(Icons.folder),
+            title: Text('Copy folder'),
+          ),
+        ),
       ],
     );
 
@@ -220,10 +256,76 @@ class _AllPageState extends State<AllPage> {
       case 'move':
         _promptMove(entity);
         break;
+      case 'copy_name':
+        await _copyToClipboard(displayName, label: 'name', quoted: false);
+        break;
+      case 'copy_path':
+        await _copyToClipboard(entity.path, label: 'path', quoted: true);
+        break;
+      case 'copy_folder':
+        await _copyToClipboard(
+          path.dirname(entity.path),
+          label: 'folder',
+          quoted: true,
+        );
+        break;
       default:
         break;
     }
     _entityMenuActive = false;
+  }
+
+  void _selectEntity(FileSystemEntity entity, String displayName) {
+    setState(() {
+      _selected = _EntitySelectionInfo(
+        name: displayName,
+        fullPath: entity.path,
+        folderPath: path.dirname(entity.path),
+      );
+    });
+  }
+
+  Future<void> _copyToClipboard(
+    String raw, {
+    required String label,
+    required bool quoted,
+  }) async {
+    final value = quoted ? _quote(raw) : raw;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied $label')),
+    );
+  }
+
+  String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
+
+  Widget _buildSelectionDetail() {
+    final selected = _selected;
+    if (selected == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+      child: EntityDetailBar(
+        name: selected.name,
+        path: selected.fullPath,
+        folderPath: selected.folderPath,
+        onCopyName: () => _copyToClipboard(
+          selected.name,
+          label: 'name',
+          quoted: false,
+        ),
+        onCopyPath: () => _copyToClipboard(
+          selected.fullPath,
+          label: 'path',
+          quoted: true,
+        ),
+        onCopyFolder: () => _copyToClipboard(
+          selected.folderPath,
+          label: 'folder',
+          quoted: true,
+        ),
+      ),
+    );
   }
 
   Future<void> _showPageMenu(Offset position) async {
@@ -425,6 +527,7 @@ class _AllPageState extends State<AllPage> {
             ),
           ),
         ),
+        _buildSelectionDetail(),
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -443,41 +546,58 @@ class _AllPageState extends State<AllPage> {
                           : rawName;
                       return Material(
                         color: Colors.transparent,
-                child: InkWell(
-                  onTap: isDir ? () => _openFolder(entity.path) : null,
-                  onDoubleTap: () async {
-                    if (isDir) {
-                      _openFolder(entity.path);
-                    } else {
-                      await openWithDefault(entity.path);
-                    }
-                  },
-                  onSecondaryTapDown: (details) {
-                    _showEntityMenu(entity, details.globalPosition);
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  hoverColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceVariant
-                      .withOpacity(0.4),
-                  child: ListTile(
-                    dense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16),
-                    leading: _EntityIcon(entity: entity),
-                    title: OverflowRevealText(
-                      text: displayName,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      maxLines: 1,
-                    ),
-                    subtitle: OverflowRevealText(
-                      text: entity.path,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 1,
-                    ),
-                    trailing: null,
-                  ),
-                ),
+                        child: InkWell(
+                          onTap: () {
+                            _selectEntity(entity, displayName);
+                            if (isDir) {
+                              _openFolder(entity.path);
+                            }
+                          },
+                          onDoubleTap: () async {
+                            _selectEntity(entity, displayName);
+                            if (isDir) {
+                              _openFolder(entity.path);
+                            } else {
+                              await openWithDefault(entity.path);
+                            }
+                          },
+                          onSecondaryTapDown: (details) {
+                            _selectEntity(entity, displayName);
+                            _showEntityMenu(
+                              entity,
+                              displayName,
+                              details.globalPosition,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          hoverColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceVariant
+                              .withOpacity(0.4),
+                          child: ListTile(
+                            dense: true,
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            leading: _EntityIcon(entity: entity),
+                            title: Tooltip(
+                              message: displayName,
+                              child: Text(
+                                displayName,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            subtitle: Tooltip(
+                              message: entity.path,
+                              child: MiddleEllipsisText(
+                                text: entity.path,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            trailing: null,
+                          ),
+                        ),
                       );
                     },
                   ),

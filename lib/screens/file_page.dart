@@ -3,11 +3,12 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
-import '../widgets/overflow_reveal_text.dart';
+import '../widgets/middle_ellipsis_text.dart';
 
 class FilePage extends StatelessWidget {
   final String desktopPath;
@@ -68,15 +69,21 @@ class FilePage extends StatelessWidget {
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               leading: _FileIcon(filePath: file.path),
-              title: OverflowRevealText(
-                text: path.basename(file.path),
-                style: Theme.of(context).textTheme.bodyMedium,
-                maxLines: 1,
+              title: Tooltip(
+                message: path.basename(file.path),
+                child: Text(
+                  path.basename(file.path),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              subtitle: OverflowRevealText(
-                text: file.path,
-                style: Theme.of(context).textTheme.bodySmall,
-                maxLines: 1,
+              subtitle: Tooltip(
+                message: file.path,
+                child: MiddleEllipsisText(
+                  text: file.path,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             ),
           ),
@@ -135,6 +142,20 @@ Future<void> _showFileMenu(
   File file,
   Offset position,
 ) async {
+  Future<void> copyToClipboard(
+    String raw, {
+    required String label,
+    required bool quoted,
+  }) async {
+    final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Copied $label')),
+    );
+  }
+
+  final displayName = path.basename(file.path);
   final result = await showMenu<String>(
     context: context,
     position: RelativeRect.fromLTRB(
@@ -143,33 +164,55 @@ Future<void> _showFileMenu(
       position.dx + 1,
       position.dy + 1,
     ),
-    items: const [
-      PopupMenuItem(
+    items: [
+      const PopupMenuItem(
         value: 'open',
         child: ListTile(
           leading: Icon(Icons.open_in_new),
           title: Text('打开'),
         ),
       ),
-      PopupMenuItem(
+      const PopupMenuItem(
         value: 'open_with',
         child: ListTile(
           leading: Icon(Icons.app_registration),
           title: Text('使用其他应用打开'),
         ),
       ),
-      PopupMenuItem(
+      const PopupMenuItem(
         value: 'move',
         child: ListTile(
           leading: Icon(Icons.drive_file_move),
           title: Text('移动到...'),
         ),
       ),
-      PopupMenuItem(
+      const PopupMenuItem(
         value: 'delete',
         child: ListTile(
           leading: Icon(Icons.delete),
           title: Text('删除(回收站)'),
+        ),
+      ),
+      const PopupMenuDivider(),
+      const PopupMenuItem(
+        value: 'copy_name',
+        child: ListTile(
+          leading: Icon(Icons.copy),
+          title: Text('复制名称'),
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'copy_path',
+        child: ListTile(
+          leading: Icon(Icons.link),
+          title: Text('复制路径'),
+        ),
+      ),
+      const PopupMenuItem(
+        value: 'copy_folder',
+        child: ListTile(
+          leading: Icon(Icons.folder),
+          title: Text('复制所在文件夹'),
         ),
       ),
     ],
@@ -192,6 +235,19 @@ Future<void> _showFileMenu(
           SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')),
         );
       }
+      break;
+    case 'copy_name':
+      await copyToClipboard(displayName, label: 'name', quoted: false);
+      break;
+    case 'copy_path':
+      await copyToClipboard(file.path, label: 'path', quoted: true);
+      break;
+    case 'copy_folder':
+      await copyToClipboard(
+        path.dirname(file.path),
+        label: 'folder',
+        quoted: true,
+      );
       break;
     default:
       break;

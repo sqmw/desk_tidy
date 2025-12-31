@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
-import '../widgets/overflow_reveal_text.dart';
+import '../widgets/middle_ellipsis_text.dart';
 
 class FolderPage extends StatefulWidget {
   final String desktopPath;
@@ -113,12 +113,26 @@ class _FolderPageState extends State<FolderPage> {
     _refresh();
   }
 
+  Future<void> _copyToClipboard(
+    String raw, {
+    required String label,
+    required bool quoted,
+  }) async {
+    final value = quoted ? _quote(raw) : raw;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    _showSnackBar('已复制$label');
+  }
+
+  String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
+
   Future<void> _showEntityMenu(
     FileSystemEntity entity,
     Offset position,
   ) async {
     _entityMenuActive = true;
     final isDir = entity is Directory;
+    final displayName = path.basename(entity.path);
     final result = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -150,6 +164,28 @@ class _FolderPageState extends State<FolderPage> {
             title: Text('删除(回收站)'),
           ),
         ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'copy_name',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('复制名称'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy_path',
+          child: ListTile(
+            leading: Icon(Icons.link),
+            title: Text('复制路径'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy_folder',
+          child: ListTile(
+            leading: Icon(Icons.folder),
+            title: Text('复制所在文件夹'),
+          ),
+        ),
       ],
     );
 
@@ -162,6 +198,19 @@ class _FolderPageState extends State<FolderPage> {
         break;
       case 'move':
         _promptMove(entity);
+        break;
+      case 'copy_name':
+        await _copyToClipboard(displayName, label: '名称', quoted: false);
+        break;
+      case 'copy_path':
+        await _copyToClipboard(entity.path, label: '路径', quoted: true);
+        break;
+      case 'copy_folder':
+        await _copyToClipboard(
+          path.dirname(entity.path),
+          label: '所在文件夹',
+          quoted: true,
+        );
         break;
       default:
         break;
@@ -378,15 +427,21 @@ class _FolderPageState extends State<FolderPage> {
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
                             leading: _EntityIcon(entity: entity),
-                            title: OverflowRevealText(
-                              text: path.basename(entity.path),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              maxLines: 1,
+                            title: Tooltip(
+                              message: path.basename(entity.path),
+                              child: Text(
+                                path.basename(entity.path),
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            subtitle: OverflowRevealText(
-                              text: entity.path,
-                              style: Theme.of(context).textTheme.bodySmall,
-                              maxLines: 1,
+                            subtitle: Tooltip(
+                              message: entity.path,
+                              child: MiddleEllipsisText(
+                                text: entity.path,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ),
                             trailing: null,
                           ),
