@@ -443,36 +443,41 @@ class _AllPageState extends State<AllPage> {
                           : rawName;
                       return Material(
                         color: Colors.transparent,
-                        child: InkWell(
-                          onTap: isDir ? () => _openFolder(entity.path) : null,
-                          onDoubleTap: () async {
-                            if (isDir) {
-                              _openFolder(entity.path);
-                            } else {
-                              await openWithDefault(entity.path);
-                            }
-                          },
-                          onSecondaryTapDown: (details) {
-                            _showEntityMenu(entity, details.globalPosition);
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          hoverColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceVariant
-                              .withOpacity(0.4),
-                          child: ListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            leading: _EntityIcon(entity: entity),
-                            title: OverflowRevealText(
-                              text: displayName,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              maxLines: 2,
-                            ),
-                            subtitle: Text(entity.path),
-                            trailing: null,
-                          ),
-                        ),
+                child: InkWell(
+                  onTap: isDir ? () => _openFolder(entity.path) : null,
+                  onDoubleTap: () async {
+                    if (isDir) {
+                      _openFolder(entity.path);
+                    } else {
+                      await openWithDefault(entity.path);
+                    }
+                  },
+                  onSecondaryTapDown: (details) {
+                    _showEntityMenu(entity, details.globalPosition);
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  hoverColor: Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant
+                      .withOpacity(0.4),
+                  child: ListTile(
+                    dense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16),
+                    leading: _EntityIcon(entity: entity),
+                    title: OverflowRevealText(
+                      text: displayName,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 1,
+                    ),
+                    subtitle: OverflowRevealText(
+                      text: entity.path,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      maxLines: 1,
+                    ),
+                    trailing: null,
+                  ),
+                ),
                       );
                     },
                   ),

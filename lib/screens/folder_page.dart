@@ -374,15 +374,20 @@ class _FolderPageState extends State<FolderPage> {
                               .surfaceVariant
                               .withOpacity(0.4),
                           child: ListTile(
+                            dense: true,
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
                             leading: _EntityIcon(entity: entity),
                             title: OverflowRevealText(
                               text: path.basename(entity.path),
                               style: Theme.of(context).textTheme.bodyMedium,
-                              maxLines: 2,
+                              maxLines: 1,
                             ),
-                            subtitle: Text(entity.path),
+                            subtitle: OverflowRevealText(
+                              text: entity.path,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 1,
+                            ),
                             trailing: null,
                           ),
                         ),

@@ -65,14 +65,19 @@ class FilePage extends StatelessWidget {
             hoverColor:
                 Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
             child: ListTile(
+              dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
               leading: _FileIcon(filePath: file.path),
               title: OverflowRevealText(
                 text: path.basename(file.path),
                 style: Theme.of(context).textTheme.bodyMedium,
-                maxLines: 2,
+                maxLines: 1,
               ),
-              subtitle: Text(file.path),
+              subtitle: OverflowRevealText(
+                text: file.path,
+                style: Theme.of(context).textTheme.bodySmall,
+                maxLines: 1,
+              ),
             ),
           ),
         );
