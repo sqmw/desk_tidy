@@ -37,6 +37,50 @@ math.Point<int> getPrimaryScreenSize() {
   return math.Point<int>(w, h);
 }
 
+math.Rectangle<int>? getWindowRectForHandle(int hwnd) {
+  if (hwnd == 0) return null;
+  final rect = calloc<RECT>();
+  try {
+    final ok = GetWindowRect(hwnd, rect) != 0;
+    if (!ok) return null;
+    final left = rect.ref.left;
+    final top = rect.ref.top;
+    final right = rect.ref.right;
+    final bottom = rect.ref.bottom;
+    return math.Rectangle<int>(left, top, right - left, bottom - top);
+  } finally {
+    calloc.free(rect);
+  }
+}
+
+bool isCursorOverWindowHandle(int hwnd) {
+  if (hwnd == 0) return false;
+  final cursor = getCursorScreenPosition();
+  if (cursor == null) return false;
+
+  final point = calloc<POINT>();
+  try {
+    point.ref
+      ..x = cursor.x
+      ..y = cursor.y;
+    final hit = WindowFromPoint(point.ref);
+    if (hit == 0) return false;
+    if (hit == hwnd) return true;
+
+    const gaRoot = 2;
+    const gaRootOwner = 3;
+    final root = GetAncestor(hit, gaRoot);
+    if (root == hwnd) return true;
+    final rootOwner = GetAncestor(hit, gaRootOwner);
+    if (rootOwner == hwnd) return true;
+    return IsChild(hwnd, hit) != 0;
+  } catch (_) {
+    return false;
+  } finally {
+    calloc.free(point);
+  }
+}
+
 int _findDesktopListView() {
   Pointer<Utf16> cn(String s) => s.toNativeUtf16();
 

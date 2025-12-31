@@ -19,6 +19,7 @@ import '../widgets/shortcut_card.dart';
 import 'all_page.dart';
 import 'file_page.dart';
 import 'folder_page.dart';
+import 'window_dock_logic.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -37,6 +38,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   final TrayHelper _trayHelper = TrayHelper();
   bool _trayReady = false;
   Timer? _saveWindowTimer;
+  Timer? _dragEndDebounceTimer;
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
@@ -48,17 +50,25 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   double _frostStrength = 0.82;
   String? _backgroundImagePath;
   bool _hideDesktopItems = false;
-  bool _pointerInsideWindow = true;
   bool _hotCornerActive = false;
   Timer? _hotCornerTimer;
   bool _trayMode = false;
+  bool _autoHideWindow = false;
+  bool _cornerDocked = false;
   bool _panelVisible = true;
   bool _dismissing = false;
+  bool _presenting = false;
   int _dismissToken = 0;
   bool _lastDismissedToHotCorner = false;
   bool _dragging = false;
   Duration _hideDelay = const Duration(milliseconds: 260);
+  final Duration _minHotShow = const Duration(milliseconds: 420);
+  DateTime _lastHotShow = DateTime.fromMillisecondsSinceEpoch(0);
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
+  Timer? _desktopIconSyncTimer;
+  bool? _lastDesktopIconsVisible;
+  int _windowHandle = 0;
+  DateTime _suppressMoveTrackingUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   int _selectedIndex = 0;
 
@@ -95,9 +105,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _applyDefaults();
     _loadPreferences();
     _startHotCornerWatcher();
+    _startDesktopIconSync();
 
     // Default: show in taskbar on startup.
     windowManager.setSkipTaskbar(false);
+    windowManager.getId().then((id) => _windowHandle = id);
 
     windowManager.isMaximized().then((value) {
       if (mounted) {
@@ -135,16 +147,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     try {
       await _trayHelper.init(
         onShowRequested: () async {
-          _trayMode = false;
-          await windowManager.setSkipTaskbar(false);
-          await windowManager.show();
-          await windowManager.restore();
-          if (_lastDismissedToHotCorner) {
-            await windowManager.setPosition(Offset.zero, animate: true);
+          if (_trayMode) {
+            await _presentFromTrayPopup();
+          } else {
+            _trayMode = false;
+            _autoHideWindow = false;
+            await windowManager.setSkipTaskbar(false);
+            await windowManager.show();
+            await windowManager.restore();
+            await windowManager.focus();
+            await _syncDesktopIconVisibility();
+            if (mounted) setState(() => _panelVisible = true);
           }
-          _lastDismissedToHotCorner = false;
-          await windowManager.focus();
-          if (mounted) setState(() => _panelVisible = true);
         },
         onHideRequested: () async {
           await _dismissToTray(fromHotCorner: false);
@@ -230,7 +244,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   void _minimizeWindow() {
-    windowManager.minimize();
+    _dismissToTray(fromHotCorner: false);
   }
 
   void _closeWindow() {
@@ -288,7 +302,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void dispose() {
     _hotCornerTimer?.cancel();
+    _desktopIconSyncTimer?.cancel();
     _saveWindowTimer?.cancel();
+    _dragEndDebounceTimer?.cancel();
     windowManager.removeListener(this);
     _windowFocusNotifier.dispose();
     super.dispose();
@@ -304,15 +320,27 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.close();
   }
 
-    @override
+  @override
   void onWindowMoved() {
     _scheduleSaveWindowBounds();
-    _maybeSnapToCorner();
+    if (DateTime.now().isBefore(_suppressMoveTrackingUntil)) return;
+    _markWindowMoving();
   }
 
     @override
   void onWindowBlur() {
     _windowFocusNotifier.value = false;
+    if (_autoHideWindow) {
+      final token = ++_dismissToken;
+      Future.delayed(_hideDelay, () async {
+        if (!mounted) return;
+        if (await _isCursorInsideWindow()) return;
+        if (token != _dismissToken) return;
+        if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
+        if (!_cornerDocked) return;
+        await _dismissToTray(fromHotCorner: false);
+      });
+    }
   }
 
     @override
@@ -320,9 +348,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _windowFocusNotifier.value = true;
   }
 
-    @override
+  @override
   void onWindowResized() {
     _scheduleSaveWindowBounds();
+  }
+
+  void _markWindowMoving() {
+    _dragging = true;
+    _dragEndDebounceTimer?.cancel();
+    _dragEndDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+      _dragging = false;
+      unawaited(_maybeSnapToCorner());
+    });
   }
 
   void _startHotCornerWatcher() {
@@ -330,41 +367,139 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _hotCornerTimer =
         Timer.periodic(const Duration(milliseconds: 120), (_) async {
       if (!mounted) return;
-      if (!_trayMode) return;
-      final pos = getCursorScreenPosition();
-      if (pos == null) return;
-      const hotSize = 64;
-      const leftSize = 120;
-      final inHotCorner = pos.x <= leftSize && pos.y <= hotSize;
-      if (inHotCorner && !_hotCornerActive) {
+      if (!_trayMode && !_hotCornerActive && !_cornerDocked) return;
+      final cursorPos = getCursorScreenPosition();
+      if (cursorPos == null) return;
+      final screen = getPrimaryScreenSize();
+      final hotZone = WindowDockLogic.hotCornerZone(
+        Size(screen.x.toDouble(), screen.y.toDouble()),
+      );
+      final inHotCorner = hotZone.contains(
+        Offset(cursorPos.x.toDouble(), cursorPos.y.toDouble()),
+      );
+      if (_trayMode && inHotCorner && !_hotCornerActive && !_dismissing) {
         await _presentFromHotCorner();
-      } else if (!inHotCorner && _hotCornerActive && !_pointerInsideWindow) {
-        final token = ++_dismissToken;
-        Future.delayed(_hideDelay, () async {
-          if (!mounted) return;
-          if (_pointerInsideWindow) return;
-          if (token != _dismissToken) return;
-          await _dismissToTray(fromHotCorner: true);
-        });
+        return;
       }
+      
+      if (!_hotCornerActive && !_cornerDocked) return;
+
+      // Live snap check: 左上角在磁吸区域或越界，则吸附到(0,0)并允许自动隐藏。
+      try {
+        if (_dragging) return;
+        final winPos = await windowManager.getPosition();
+        final snapZone = WindowDockLogic.snapZone(
+          Size(screen.x.toDouble(), screen.y.toDouble()),
+        );
+        final shouldSnap = WindowDockLogic.shouldSnapToTopLeft(
+          winPos,
+          snapZone,
+        );
+        if (shouldSnap) {
+          if (winPos.dx != 0 || winPos.dy != 0) {
+            _suppressMoveTrackingUntil =
+                DateTime.now().add(const Duration(milliseconds: 360));
+            await windowManager.setPosition(Offset.zero, animate: true);
+          }
+          _cornerDocked = true;
+          _autoHideWindow = true;
+        } else if (_cornerDocked) {
+          _cornerDocked = false;
+          _autoHideWindow = false;
+        }
+      } catch (_) {}
+
+      final inside = await _isCursorInsideWindow();
+      if (inside) {
+        _dismissToken++;
+        return;
+      }
+
+      if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
+      if (!_autoHideWindow && !_cornerDocked) return;
+      if (_dragging) return;
+
+      final token = ++_dismissToken;
+      Future.delayed(_hideDelay, () async {
+        if (!mounted) return;
+        if (await _isCursorInsideWindow()) return;
+        if (token != _dismissToken) return;
+        if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
+        await _dismissToTray(fromHotCorner: true);
+      });
     });
   }
 
   Future<void> _presentFromHotCorner() async {
+    if (_presenting) return;
+    _presenting = true;
+    if (_windowHandle == 0) {
+      try {
+        _windowHandle = await windowManager.getId();
+      } catch (_) {}
+    }
     _hotCornerActive = true;
     _lastDismissedToHotCorner = false;
     _dismissToken++;
+    _autoHideWindow = true;
+    _cornerDocked = true;
+    _lastHotShow = DateTime.now();
     if (mounted) setState(() => _panelVisible = false);
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
     await windowManager.restore();
     await windowManager.setPosition(Offset.zero, animate: false);
     await windowManager.focus();
+    await _syncDesktopIconVisibility();
     if (!mounted) return;
     // Trigger the in-app animation on next frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _panelVisible = true);
+    });
+    _presenting = false;
+  }
+
+  Future<void> _presentFromTrayPopup() async {
+    if (_presenting) return;
+    _presenting = true;
+    if (_windowHandle == 0) {
+      try {
+        _windowHandle = await windowManager.getId();
+      } catch (_) {}
+    }
+    _trayMode = false;
+    _hotCornerActive = true;
+    _autoHideWindow = _lastDismissedToHotCorner;
+    _cornerDocked = _lastDismissedToHotCorner;
+    _dismissToken++;
+    _lastHotShow = DateTime.now();
+    if (mounted) setState(() => _panelVisible = false);
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.show();
+    await windowManager.restore();
+    if (_lastDismissedToHotCorner) {
+      await windowManager.setPosition(Offset.zero, animate: false);
+    }
+    await windowManager.focus();
+    await _syncDesktopIconVisibility();
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _panelVisible = true);
+    });
+    _presenting = false;
+  }
+
+  void _scheduleHideIfCornerDocked() {
+    if (!_cornerDocked && !_autoHideWindow) return;
+    final token = ++_dismissToken;
+    Future.delayed(_hideDelay, () async {
+      if (!mounted) return;
+      if (await _isCursorInsideWindow()) return;
+      if (token != _dismissToken) return;
+      if (DateTime.now().difference(_lastHotShow) < _minHotShow) return;
+      await _dismissToTray(fromHotCorner: true);
     });
   }
 
@@ -373,6 +508,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dismissing = true;
     _hotCornerActive = false;
     _trayMode = true;
+    _autoHideWindow = false;
+    _cornerDocked = false;
     _lastDismissedToHotCorner = fromHotCorner;
     _dismissToken++;
     if (mounted) setState(() => _panelVisible = false);
@@ -382,24 +519,48 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dismissing = false;
   }
 
+  Future<bool> _isCursorInsideWindow() async { // 这里的判定通过获取当前鼠标位置，以及窗口位置即可判定
+    try {
+      if (_windowHandle != 0 && isCursorOverWindowHandle(_windowHandle)) {
+        return true;
+      }
+      final cursor = getCursorScreenPosition();
+      if (cursor == null) return false;
+      final rect = getWindowRectForHandle(_windowHandle);
+      if (rect != null) {
+        return rect.containsPoint(math.Point(cursor.x, cursor.y));
+      }
+      final pos = await windowManager.getPosition();
+      final size = await windowManager.getSize();
+      final x = cursor.x.toDouble();
+      final y = cursor.y.toDouble();
+      return x >= pos.dx &&
+          y >= pos.dy &&
+          x <= (pos.dx + size.width) &&
+          y <= (pos.dy + size.height);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _maybeSnapToCorner() async {
     try {
-      if (_dragging) {
-        final cursor = getCursorScreenPosition();
-        if (cursor == null) return;
-        final screen = getPrimaryScreenSize();
-        final topThreshold = (screen.y / 3).floor();
-        const leftThreshold = 120;
-        if (cursor.y <= topThreshold && cursor.x <= leftThreshold) {
-          await _dismissToTray(fromHotCorner: true);
-          return;
-        }
-      }
-
+      if (_dragging) return;
       final pos = await windowManager.getPosition();
-      const snap = 12.0;
-      if (pos.dx <= snap && pos.dy <= snap) {
-        await _dismissToTray(fromHotCorner: true);
+      final screen = getPrimaryScreenSize();
+      final snapZone = WindowDockLogic.snapZone(
+        Size(screen.x.toDouble(), screen.y.toDouble()),
+      );
+      final shouldSnap = WindowDockLogic.shouldSnapToTopLeft(pos, snapZone);
+      if (shouldSnap) {
+        _cornerDocked = true;
+        _autoHideWindow = true;
+        _suppressMoveTrackingUntil =
+            DateTime.now().add(const Duration(milliseconds: 360));
+        await windowManager.setPosition(Offset.zero, animate: true);
+      } else if (_cornerDocked) {
+        _cornerDocked = false;
+        _autoHideWindow = false;
       }
     } catch (_) {}
   }
@@ -407,8 +568,23 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _syncDesktopIconVisibility() async {
     final visible = await isDesktopIconsVisible();
     if (!mounted) return;
+    _lastDesktopIconsVisible = visible;
     setState(() {
       _hideDesktopItems = !visible;
+    });
+  }
+
+  void _startDesktopIconSync() {
+    _desktopIconSyncTimer?.cancel();
+    _desktopIconSyncTimer =
+        Timer.periodic(const Duration(milliseconds: 900), (_) async {
+      if (!mounted) return;
+      final visible = await isDesktopIconsVisible();
+      if (!mounted) return;
+      if (_lastDesktopIconsVisible == visible) return;
+      _lastDesktopIconsVisible = visible;
+      setState(() => _hideDesktopItems = !visible);
+      AppPreferences.saveHideDesktopItems(!visible);
     });
   }
 
@@ -591,8 +767,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     );
 
     return MouseRegion(
-      onEnter: (_) => _pointerInsideWindow = true,
-      onExit: (_) => _pointerInsideWindow = false,
+      onExit: (_) => _scheduleHideIfCornerDocked(),
       child: content,
     );
   }
@@ -605,10 +780,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     return MouseRegion(
       onEnter: (_) => null,
       child: GestureDetector(
-        onPanStart: (_) => _dragging = true,
-        onPanEnd: (_) => _dragging = false,
-        onPanCancel: () => _dragging = false,
-        onPanUpdate: (_) => windowManager.startDragging(),
+        onPanStart: (_) => windowManager.startDragging(),
         child: GlassContainer(
           opacity: _chromeOpacity,
           blurSigma: 20,
@@ -777,10 +949,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   Widget _buildApplicationContent() {
     final scale = _uiScale(context);
-    return MouseRegion(
-      onEnter: (_) => _pointerInsideWindow = true,
-      onExit: (_) => _pointerInsideWindow = false,
-      child: Column(
+    return Column(
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
@@ -905,7 +1074,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     ),
         ),
       ],
-      ),
     );
   }
 
