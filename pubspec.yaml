@@ -56,6 +56,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
+  msix: ^3.16.12
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -104,3 +105,21 @@ flutter_launcher_icons:
   windows:
     generate: true
     image_path: "assets/logo/logo_launcher.png"
+
+  
+msix_config:
+  display_name: MyApp
+  publisher_display_name: MyCompany
+  identity_name: com.mycompany.myapp
+  msix_version: 1.0.0.0
+  logo_path: windows\runner\resources\app_icon.ico   # 或 400x400+ 的 png
+  capabilities: internetClient
+  # 可选：输出控制
+  # output_name: MyApp
+  # output_path: build\msix
+  # architecture: x64
+  # 可选：签名（外部分发更建议用你自己的证书）
+  # certificate_path: C:\certs\mycert.pfx
+  # certificate_password: "1234"
+  # install_certificate: false
+

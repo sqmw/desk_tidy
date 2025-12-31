@@ -81,6 +81,42 @@ bool isCursorOverWindowHandle(int hwnd) {
   }
 }
 
+int _enumTargetPid = 0;
+int _enumFoundHwnd = 0;
+
+int _enumFindFlutterWindowProc(int hwnd, int lParam) {
+  final pid = calloc<Uint32>();
+  try {
+    GetWindowThreadProcessId(hwnd, pid);
+    if (pid.value != _enumTargetPid) return 1;
+
+    final classNamePtr = wsalloc(256);
+    try {
+      final len = GetClassName(hwnd, classNamePtr, 256);
+      if (len == 0) return 1;
+      final className = classNamePtr.toDartString(length: len);
+      if (className != 'FLUTTER_RUNNER_WIN32_WINDOW') return 1;
+    } finally {
+      free(classNamePtr);
+    }
+
+    if (IsWindowVisible(hwnd) == 0) return 1;
+    _enumFoundHwnd = hwnd;
+    return 0;
+  } finally {
+    calloc.free(pid);
+  }
+}
+
+/// Best-effort: find this app's main Flutter HWND (physical pixels).
+int? findMainFlutterWindowHandle() {
+  _enumTargetPid = GetCurrentProcessId();
+  _enumFoundHwnd = 0;
+  final cb = Pointer.fromFunction<WNDENUMPROC>(_enumFindFlutterWindowProc, 0);
+  EnumWindows(cb, 0);
+  return _enumFoundHwnd == 0 ? null : _enumFoundHwnd;
+}
+
 int _findDesktopListView() {
   Pointer<Utf16> cn(String s) => s.toNativeUtf16();
 
