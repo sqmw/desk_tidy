@@ -1,6 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -283,9 +281,12 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final baseBg = theme.brightness == Brightness.dark
         ? const Color(0x10FFFFFF)
         : const Color(0x0A000000);
-    final hoverBg = theme.colorScheme.surfaceVariant.withOpacity(0.14);
-    final selectedBg = theme.colorScheme.primary.withOpacity(0.08);
-    final borderColor = theme.colorScheme.primary.withOpacity(0.30);
+    final hoverBg = theme.colorScheme.surfaceContainerHighest
+        .withValues(alpha: 0.14);
+    final selectedBg =
+        theme.colorScheme.primary.withValues(alpha: 0.08);
+    final borderColor =
+        theme.colorScheme.primary.withValues(alpha: 0.30);
 
     return Focus(
       focusNode: _focusNode,

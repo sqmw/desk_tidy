@@ -53,24 +53,32 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final panelOpacity = (0.12 + 0.28 * (1.0 - transparency)).clamp(0.12, 0.42);
+    final panelOpacity =
+        (0.12 + 0.28 * (1.0 - transparency)).clamp(0.12, 0.42).toDouble();
     final dividerOpacity =
-        (0.10 + 0.10 * (1.0 - transparency)).clamp(0.10, 0.20);
+        (0.10 + 0.10 * (1.0 - transparency)).clamp(0.10, 0.20).toDouble();
 
     SettingsThemeData buildTheme(Color base) => SettingsThemeData(
-          settingsListBackground: base.withOpacity(panelOpacity),
-          settingsSectionBackground: base.withOpacity(panelOpacity),
-          tileHighlightColor:
-              base.withOpacity((panelOpacity + 0.10).clamp(0.0, 1.0)),
-          dividerColor: theme.dividerColor.withOpacity(dividerOpacity),
-          titleTextColor: theme.colorScheme.onSurface.withOpacity(0.88),
-          settingsTileTextColor: theme.colorScheme.onSurface.withOpacity(0.88),
-          trailingTextColor: theme.colorScheme.onSurface.withOpacity(0.72),
-          leadingIconsColor: theme.colorScheme.onSurface.withOpacity(0.72),
+          settingsListBackground: base.withValues(alpha: panelOpacity),
+          settingsSectionBackground: base.withValues(alpha: panelOpacity),
+          tileHighlightColor: base.withValues(
+            alpha: (panelOpacity + 0.10).clamp(0.0, 1.0),
+          ),
+          dividerColor: theme.dividerColor.withValues(alpha: dividerOpacity),
+          titleTextColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.88),
+          settingsTileTextColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.88),
+          trailingTextColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.72),
+          leadingIconsColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.72),
           tileDescriptionTextColor:
-              theme.colorScheme.onSurface.withOpacity(0.72),
-          inactiveTitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
-          inactiveSubtitleColor: theme.colorScheme.onSurface.withOpacity(0.38),
+              theme.colorScheme.onSurface.withValues(alpha: 0.72),
+          inactiveTitleColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.38),
+          inactiveSubtitleColor:
+              theme.colorScheme.onSurface.withValues(alpha: 0.38),
         );
 
     Future<void> _pickBackground() async {

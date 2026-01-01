@@ -26,7 +26,6 @@ void main() {
     }
 
     int copiedCount = 0;
-    final seenNames = <String>{}; // 可选：记录已见过的文件名，用于提示重名
 
     await for (final entity in libDir.list(recursive: true)) {
       if (entity is File &&

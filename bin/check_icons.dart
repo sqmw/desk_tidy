@@ -34,7 +34,7 @@ Future<void> main(List<String> args) async {
       final base = p.basenameWithoutExtension(shortcut);
       final safe = base.replaceAll(RegExp(r'[<>:"/\\\\|?*]'), '_');
       final outFile = File(p.join(outDir.path, '$safe.png'));
-      outFile.writeAsBytesSync(iconBytes!);
+      outFile.writeAsBytesSync(iconBytes);
       written++;
     }
   }

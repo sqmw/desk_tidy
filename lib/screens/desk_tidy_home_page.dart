@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/shortcut_item.dart';
@@ -578,27 +577,30 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                           opacity: _chromeOpacity,
                           blurSigma: 20,
                           border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.16),
+                            color:
+                                theme.dividerColor.withValues(alpha: 0.16),
                           ),
                           child: NavigationRail(
                             backgroundColor: Colors.transparent,
                             minWidth: railMinWidth,
                             useIndicator: true,
                             indicatorColor: theme.colorScheme.primary
-                                .withOpacity(_indicatorOpacity),
+                                .withValues(alpha: _indicatorOpacity),
                             selectedIconTheme: IconThemeData(
                               color: theme.colorScheme.primary,
                             ),
                             unselectedIconTheme: IconThemeData(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(0.72),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.72),
                             ),
                             selectedLabelTextStyle: theme.textTheme.labelMedium
-                                ?.copyWith(color: theme.colorScheme.primary),
+                                ?.copyWith(
+                                    color: theme.colorScheme.primary),
                             unselectedLabelTextStyle:
                                 theme.textTheme.labelMedium?.copyWith(
                               color:
-                                  theme.colorScheme.onSurface.withOpacity(0.72),
+                                  theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.72),
                             ),
                             selectedIndex: _selectedIndex,
                             onDestinationSelected:
@@ -648,7 +650,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     VerticalDivider(
                       thickness: 1,
                       width: 1,
-                      color: theme.dividerColor.withOpacity(0.12),
+                            color: theme.dividerColor.withValues(alpha: 0.12),
                     ),
                     Expanded(
                       child: Padding(
@@ -663,7 +665,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                           opacity: _contentPanelOpacity,
                           blurSigma: _contentPanelBlur,
                           border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.16),
+                            color: theme.dividerColor.withValues(alpha: 0.16),
                           ),
                           child: _buildContent(),
                         ),
@@ -703,7 +705,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     final titleBarHeight = 34.0 * scale;
     final titleButtonSize = 32.0 * scale;
     return MouseRegion(
-      onEnter: (_) => null,
+      onEnter: (_) {},
       child: GestureDetector(
         onPanStart: (_) => windowManager.startDragging(),
         child: GlassContainer(
@@ -712,7 +714,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           borderRadius: BorderRadius.zero,
           border: Border(
             bottom: BorderSide(
-              color: theme.dividerColor.withOpacity(0.16),
+              color: theme.dividerColor.withValues(alpha: 0.16),
               width: 0.8,
             ),
           ),
@@ -904,7 +906,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             opacity: _toolbarPanelOpacity,
             blurSigma: _toolbarPanelBlur,
             border: Border.all(
-              color: Theme.of(context).dividerColor.withOpacity(0.16),
+              color:
+                  Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
             padding: EdgeInsets.symmetric(
               horizontal: 10 * scale,
@@ -924,8 +927,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     elevation: 0,
                     shadowColor: Colors.transparent,
                     backgroundColor:
-                        Theme.of(context).colorScheme.primary.withOpacity(
-                              0.10 + 0.10 * _backgroundOpacity,
+                        Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(
+                              alpha: 0.10 + 0.10 * _backgroundOpacity,
                             ),
                     foregroundColor: Theme.of(context).colorScheme.onSurface,
                     shape: const StadiumBorder(),

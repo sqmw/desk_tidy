@@ -1,7 +1,5 @@
 ﻿import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -407,7 +405,8 @@ class _FolderPageState extends State<FolderPage> {
             opacity: 0.14,
             blurSigma: 10,
             border: Border.all(
-              color: Theme.of(context).dividerColor.withOpacity(0.16),
+              color:
+                  Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
@@ -459,8 +458,8 @@ class _FolderPageState extends State<FolderPage> {
                           borderRadius: BorderRadius.circular(8),
                           hoverColor: Theme.of(context)
                               .colorScheme
-                              .surfaceVariant
-                              .withOpacity(0.4),
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.4),
                           child: ListTile(
                             dense: true,
                             contentPadding:

@@ -1,5 +1,4 @@
 import 'dart:ffi';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -9,8 +8,7 @@ import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
 import 'package:process_run/shell.dart' as pr;
 
-const int INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
-
+const int _invalidFileAttributes = 0xFFFFFFFF;
 const int _shilJumbo = 0x4;
 const int _ildTransparent = 0x00000001;
 const int _ildImage = 0x00000020;
@@ -508,192 +506,11 @@ bool isHiddenOrSystem(String fullPath) {
     final attrs = GetFileAttributes(ptr.cast());
     calloc.free(ptr);
 
-    if (attrs == INVALID_FILE_ATTRIBUTES) return false;
+    if (attrs == _invalidFileAttributes) return false;
     return (attrs & FILE_ATTRIBUTE_HIDDEN) != 0 ||
         (attrs & FILE_ATTRIBUTE_SYSTEM) != 0;
   } catch (_) {
     return false;
-  }
-}
-
-class DesktopItemsHiddenResult {
-  final int updated;
-  final int skipped;
-  final int failed;
-
-  const DesktopItemsHiddenResult({
-    required this.updated,
-    required this.skipped,
-    required this.failed,
-  });
-}
-
-String _desktopHiddenStorePath() {
-  final appData =
-      Platform.environment['APPDATA'] ?? Platform.environment['LOCALAPPDATA'];
-  final base = (appData != null && appData.isNotEmpty)
-      ? appData
-      : Directory.current.path;
-  return path.join(base, 'desk_tidy', 'desktop_hidden.json');
-}
-
-void _writeDesktopHiddenStore(List<String> paths) {
-  final storePath = _desktopHiddenStorePath();
-  final dir = Directory(path.dirname(storePath));
-  dir.createSync(recursive: true);
-  final file = File(storePath);
-  final payload = <String, Object?>{
-    'version': 1,
-    'paths': paths,
-    'updatedAt': DateTime.now().toIso8601String(),
-  };
-  file.writeAsStringSync(jsonEncode(payload));
-}
-
-List<String> _readDesktopHiddenStorePaths() {
-  final storePath = _desktopHiddenStorePath();
-  final file = File(storePath);
-  if (!file.existsSync()) return const [];
-  try {
-    final decoded = jsonDecode(file.readAsStringSync());
-    if (decoded is! Map) return const [];
-    final paths = decoded['paths'];
-    if (paths is! List) return const [];
-    return paths.whereType<String>().toList();
-  } catch (_) {
-    return const [];
-  }
-}
-
-void _deleteDesktopHiddenStore() {
-  final storePath = _desktopHiddenStorePath();
-  final file = File(storePath);
-  if (file.existsSync()) {
-    try {
-      file.deleteSync();
-    } catch (_) {}
-  }
-}
-
-bool hasDesktopHiddenStore() {
-  final storePath = _desktopHiddenStorePath();
-  return File(storePath).existsSync();
-}
-
-int _getFileAttributesSafe(String fullPath) {
-  try {
-    final ptr = fullPath.toNativeUtf16();
-    final attrs = GetFileAttributes(ptr.cast());
-    calloc.free(ptr);
-    return attrs;
-  } catch (_) {
-    return INVALID_FILE_ATTRIBUTES;
-  }
-}
-
-bool _setFileAttributesSafe(String fullPath, int attrs) {
-  try {
-    final ptr = fullPath.toNativeUtf16();
-    final ok = SetFileAttributes(ptr.cast(), attrs) != 0;
-    calloc.free(ptr);
-    return ok;
-  } catch (_) {
-    return false;
-  }
-}
-
-Future<DesktopItemsHiddenResult> setDesktopItemsHidden(
-  String desktopPath, {
-  required bool hidden,
-  bool includePublic = true,
-}) async {
-  if (hidden) {
-    int updated = 0;
-    int skipped = 0;
-    int failed = 0;
-    final updatedPaths = <String>[];
-
-    final directories = desktopLocations(
-      desktopPath,
-      includePublic: includePublic,
-    );
-    for (final dirPath in directories) {
-      final dir = Directory(dirPath);
-      if (!dir.existsSync()) continue;
-
-      for (final entity in dir.listSync()) {
-        final name = path.basename(entity.path);
-        final lower = name.toLowerCase();
-        if (lower == 'desktop.ini' || lower == 'thumbs.db') {
-          skipped++;
-          continue;
-        }
-
-        final attrs = _getFileAttributesSafe(entity.path);
-        if (attrs == INVALID_FILE_ATTRIBUTES) {
-          failed++;
-          continue;
-        }
-
-        if ((attrs & FILE_ATTRIBUTE_SYSTEM) != 0 ||
-            (attrs & FILE_ATTRIBUTE_HIDDEN) != 0) {
-          skipped++;
-          continue;
-        }
-
-        final ok =
-            _setFileAttributesSafe(entity.path, attrs | FILE_ATTRIBUTE_HIDDEN);
-        if (ok) {
-          updated++;
-          updatedPaths.add(entity.path);
-        } else {
-          failed++;
-        }
-      }
-    }
-
-    _writeDesktopHiddenStore(updatedPaths);
-    return DesktopItemsHiddenResult(
-      updated: updated,
-      skipped: skipped,
-      failed: failed,
-    );
-  } else {
-    int updated = 0;
-    int skipped = 0;
-    int failed = 0;
-
-    final paths = _readDesktopHiddenStorePaths();
-    for (final fullPath in paths) {
-      if (FileSystemEntity.typeSync(fullPath) ==
-          FileSystemEntityType.notFound) {
-        skipped++;
-        continue;
-      }
-      final attrs = _getFileAttributesSafe(fullPath);
-      if (attrs == INVALID_FILE_ATTRIBUTES) {
-        failed++;
-        continue;
-      }
-      if ((attrs & FILE_ATTRIBUTE_HIDDEN) == 0) {
-        skipped++;
-        continue;
-      }
-      final ok =
-          _setFileAttributesSafe(fullPath, attrs & ~FILE_ATTRIBUTE_HIDDEN);
-      if (ok) {
-        updated++;
-      } else {
-        failed++;
-      }
-    }
-
-    _deleteDesktopHiddenStore();
-    return DesktopItemsHiddenResult(
-      updated: updated,
-      skipped: skipped,
-      failed: failed,
-    );
   }
 }
 
@@ -810,10 +627,8 @@ bool copyEntityPathsToClipboard(
       ..x = 0
       ..y = 0;
 
-    final dataPtr = locked
-        .cast<Uint8>()
-        .elementAt(sizeOf<DROPFILES>())
-        .cast<Uint16>();
+    final dataPtr =
+        (locked.cast<Uint8>() + sizeOf<DROPFILES>()).cast<Uint16>();
     dataPtr.asTypedList(units.length).setAll(0, units);
   } finally {
     GlobalUnlock(hGlobal);

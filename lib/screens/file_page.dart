@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -64,7 +62,10 @@ class FilePage extends StatelessWidget {
             },
             borderRadius: BorderRadius.circular(8),
             hoverColor:
-                Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
+                Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.4),
             child: ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),

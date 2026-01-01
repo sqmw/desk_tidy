@@ -27,7 +27,8 @@ class GlassContainer extends StatelessWidget {
     final theme = Theme.of(context);
     final base = color ??
         (theme.brightness == Brightness.dark ? Colors.black : Colors.white);
-    final tint = base.withOpacity(opacity.clamp(0.0, 1.0));
+    final alpha = opacity.clamp(0.0, 1.0).toDouble();
+    final tint = base.withValues(alpha: alpha);
 
     return ClipRRect(
       borderRadius: borderRadius,
