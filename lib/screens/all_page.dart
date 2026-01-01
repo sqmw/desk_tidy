@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +46,7 @@ class _AllPageState extends State<AllPage> {
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
   _EntitySelectionInfo? _selected;
+  final Map<String, Future<Uint8List?>> _iconFutures = {};
 
   @override
   void initState() {
@@ -65,6 +67,7 @@ class _AllPageState extends State<AllPage> {
       _loading = true;
       _error = null;
     });
+    _iconFutures.clear();
     try {
       if (_currentPath == null) {
         final entries = _loadAggregateRoots();
@@ -113,6 +116,14 @@ class _AllPageState extends State<AllPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<Uint8List?> _getIconFuture(String path) {
+    final key = path.toLowerCase();
+    return _iconFutures.putIfAbsent(
+      key,
+      () => extractIconAsync(path, size: 96),
+    );
   }
 
   List<FileSystemEntity> _loadAggregateRoots() {
@@ -622,7 +633,10 @@ class _AllPageState extends State<AllPage> {
                             dense: true,
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 16),
-                            leading: _EntityIcon(entity: entity),
+                            leading: _EntityIcon(
+                              entity: entity,
+                              getIconFuture: _getIconFuture,
+                            ),
                             title: Tooltip(
                               message: displayName,
                               child: Text(
@@ -654,8 +668,12 @@ class _AllPageState extends State<AllPage> {
 
 class _EntityIcon extends StatelessWidget {
   final FileSystemEntity entity;
+  final Future<Uint8List?> Function(String path) getIconFuture;
 
-  const _EntityIcon({required this.entity});
+  const _EntityIcon({
+    required this.entity,
+    required this.getIconFuture,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -687,17 +705,13 @@ class _EntityIcon extends StatelessWidget {
 
   Future<Uint8List?> _resolveIconBytes() async {
     final ext = path.extension(entity.path).toLowerCase();
-    final primary = extractIcon(entity.path);
-    if (primary != null) {
-      return primary;
-    }
+    final primary = await getIconFuture(entity.path);
+    if (primary != null && primary.isNotEmpty) return primary;
     if (ext == '.lnk') {
       final target = getShortcutTarget(entity.path);
       if (target != null && target.isNotEmpty) {
-        final targetIcon = extractIcon(target);
-        if (targetIcon != null) {
-          return targetIcon;
-        }
+        final targetIcon = await getIconFuture(target);
+        if (targetIcon != null && targetIcon.isNotEmpty) return targetIcon;
       }
     }
     return null;

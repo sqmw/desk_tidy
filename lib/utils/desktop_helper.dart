@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
@@ -31,6 +34,25 @@ const int _cmdToggleDesktopIcons = 0x7402;
 const int _dropEffectCopy = 1;
 const int _dropEffectMove = 2;
 const String _clipboardDropEffectFormat = 'Preferred DropEffect';
+
+// Cache extracted icons by a stable key to avoid repeated FFI work.
+const int _iconCacheCapacity = 64;
+final LinkedHashMap<String, Uint8List?> _iconCache =
+    LinkedHashMap<String, Uint8List?>();
+
+class _IconTask {
+  final String path;
+  final int size;
+  final String cacheKey;
+  final Completer<Uint8List?> completer;
+
+  _IconTask(this.path, this.size, this.cacheKey, this.completer);
+}
+
+final Queue<_IconTask> _iconTaskQueue = Queue<_IconTask>();
+int _activeIconIsolates = 0;
+// Limit concurrent isolates to avoid creating too many DCs at once.
+const int _maxIconIsolates = 3;
 
 math.Point<int> getPrimaryScreenSize() {
   final w = GetSystemMetrics(SM_CXSCREEN);
@@ -454,6 +476,13 @@ class _IconLocation {
   const _IconLocation(this.path, this.index);
 }
 
+class _IconCacheResult {
+  final bool found;
+  final Uint8List? value;
+
+  const _IconCacheResult({required this.found, this.value});
+}
+
 String? _getKnownFolderPath(String folderId) {
   final guidPtr = GUIDFromString(folderId);
   final outPath = calloc<Pointer<Utf16>>();
@@ -848,48 +877,86 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
   // HICON if needed.
   final desiredSize = size.clamp(16, 256);
 
+  final primaryKey = _cacheKeyForFile(filePath, desiredSize);
+  final primaryCached = _readIconCache(primaryKey);
+  if (primaryCached.found) return primaryCached.value;
+
+  Uint8List? cachedValue;
+  _IconLocation? cachedLocation;
+
   final location = _getIconLocation(filePath);
   if (location != null && location.path.isNotEmpty) {
+    final cacheKey = _cacheKeyForLocation(location, desiredSize);
+    final existing = _readIconCache(cacheKey);
+    if (existing.found) return existing.value;
+
     final hicon =
         _extractHiconFromLocation(location.path, location.index, desiredSize);
     if (hicon != 0) {
       final png = _hiconToPng(hicon, size: desiredSize);
       DestroyIcon(hicon);
-      if (png != null && png.isNotEmpty) return png;
+      if (png != null && png.isNotEmpty) {
+        _writeIconCache(cacheKey, png);
+        cachedLocation = location;
+        cachedValue = png;
+      }
     }
   }
 
-  final jumbo = _extractJumboIconPng(filePath, desiredSize);
-  if (jumbo != null && jumbo.isNotEmpty) return jumbo;
-
-  // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
-  final pathPtr = filePath.toNativeUtf16();
-  final shFileInfo = calloc<SHFILEINFO>();
-  final hr = SHGetFileInfo(
-    pathPtr.cast(),
-    0,
-    shFileInfo.cast(),
-    sizeOf<SHFILEINFO>(),
-    SHGFI_ICON | SHGFI_LARGEICON,
-  );
-  calloc.free(pathPtr);
-  if (hr == 0) {
-    calloc.free(shFileInfo);
-    return null;
+  if (cachedValue == null) {
+    final jumbo = _extractJumboIconPng(filePath, desiredSize);
+    if (jumbo != null && jumbo.isNotEmpty) {
+      final idx = _getSystemIconIndex(filePath);
+      if (idx >= 0) {
+        _writeIconCache(_cacheKeyForSystemIndex(idx, desiredSize), jumbo);
+      }
+      cachedValue = jumbo;
+    }
   }
 
-  final iconHandle = shFileInfo.ref.hIcon;
-  calloc.free(shFileInfo);
-  if (iconHandle == 0) return null;
+  // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
+  if (cachedValue == null) {
+    final pathPtr = filePath.toNativeUtf16();
+    final shFileInfo = calloc<SHFILEINFO>();
+    final hr = SHGetFileInfo(
+      pathPtr.cast(),
+      0,
+      shFileInfo.cast(),
+      sizeOf<SHFILEINFO>(),
+      SHGFI_ICON | SHGFI_LARGEICON,
+    );
+    calloc.free(pathPtr);
+    if (hr == 0) {
+      calloc.free(shFileInfo);
+      _writeIconCache(primaryKey, null);
+      return null;
+    }
 
-  final png = _hiconToPng(iconHandle, size: desiredSize);
-  DestroyIcon(iconHandle);
-  return png;
+    final iconHandle = shFileInfo.ref.hIcon;
+    calloc.free(shFileInfo);
+    if (iconHandle == 0) {
+      _writeIconCache(primaryKey, null);
+      return null;
+    }
+
+    cachedValue = _hiconToPng(iconHandle, size: desiredSize);
+    DestroyIcon(iconHandle);
+  }
+
+  final finalKey = cachedLocation != null
+      ? _cacheKeyForLocation(cachedLocation, desiredSize)
+      : primaryKey;
+  _writeIconCache(finalKey, cachedValue);
+  return cachedValue;
 }
 
 Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
   final iconIndex = _getSystemIconIndex(filePath);
   if (iconIndex < 0) return null;
+
+  final cacheKey = _cacheKeyForSystemIndex(iconIndex, desiredSize);
+  final cached = _readIconCache(cacheKey);
+  if (cached.found) return cached.value;
 
   final iid = convertToIID(_iidIImageList);
   final imageListPtr = calloc<COMObject>();
@@ -905,6 +972,9 @@ Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
       if (FAILED(hr2) || hiconPtr.value == 0) return null;
       final png = _hiconToPng(hiconPtr.value, size: desiredSize);
       DestroyIcon(hiconPtr.value);
+      if (png != null && png.isNotEmpty) {
+        _writeIconCache(cacheKey, png);
+      }
       return png;
     } finally {
       calloc.free(hiconPtr);
@@ -1125,3 +1195,65 @@ img.Image _normalizeIcon(img.Image source, {double fill = 0.92}) {
 
   return canvas;
 }
+
+Future<Uint8List?> extractIconAsync(String filePath, {int size = 64}) {
+  final desiredSize = size.clamp(16, 256);
+  final cacheKey = _cacheKeyForFile(filePath, desiredSize);
+  final cached = _readIconCache(cacheKey);
+  if (cached.found) return Future.value(cached.value);
+
+  final completer = Completer<Uint8List?>();
+  _iconTaskQueue.add(_IconTask(filePath, desiredSize, cacheKey, completer));
+  _drainIconTasks();
+  return completer.future;
+}
+
+void _drainIconTasks() {
+  while (_activeIconIsolates < _maxIconIsolates &&
+      _iconTaskQueue.isNotEmpty) {
+    final task = _iconTaskQueue.removeFirst();
+    _activeIconIsolates++;
+
+    Isolate.run<Uint8List?>(() => extractIcon(task.path, size: task.size))
+        .then((data) {
+      // Fallback: if isolate extraction fails/returns empty, retry in main
+      // isolate to avoid missing icons (may block briefly but recovers).
+      Uint8List? result = data;
+      if (result == null || result.isEmpty) {
+        result = extractIcon(task.path, size: task.size);
+      }
+      _writeIconCache(task.cacheKey, result);
+      task.completer.complete(result);
+    }).catchError((_, __) {
+      final result = extractIcon(task.path, size: task.size);
+      _writeIconCache(task.cacheKey, result);
+      task.completer.complete(result);
+    }).whenComplete(() {
+      _activeIconIsolates--;
+      _drainIconTasks();
+    });
+  }
+}
+
+_IconCacheResult _readIconCache(String key) {
+  if (!_iconCache.containsKey(key)) return const _IconCacheResult(found: false);
+  return _IconCacheResult(found: true, value: _iconCache[key]);
+}
+
+void _writeIconCache(String key, Uint8List? value) {
+  if (value == null) return;
+  // Refresh insertion order for LRU.
+  _iconCache.remove(key);
+  _iconCache[key] = value;
+  while (_iconCache.length > _iconCacheCapacity) {
+    _iconCache.remove(_iconCache.keys.first);
+  }
+}
+
+String _cacheKeyForLocation(_IconLocation loc, int size) =>
+    'loc:${path.normalize(loc.path)}|${loc.index}|$size';
+
+String _cacheKeyForSystemIndex(int index, int size) => 'sys:$index|$size';
+
+String _cacheKeyForFile(String filePath, int size) =>
+    'file:${path.normalize(filePath)}|$size';

@@ -401,10 +401,12 @@ class _ShortcutCardState extends State<ShortcutCard> {
     if (shortcut.targetPath.isNotEmpty) {
       const requestSize = 256;
       return FutureBuilder<Uint8List?>(
-        future: Future.value(
-          extractIcon(shortcut.path, size: requestSize) ??
-              extractIcon(shortcut.targetPath, size: requestSize),
-        ),
+        future: () async {
+          final primary =
+              await extractIconAsync(shortcut.path, size: requestSize);
+          if (primary != null && primary.isNotEmpty) return primary;
+          return extractIconAsync(shortcut.targetPath, size: requestSize);
+        }(),
         builder: (context, snapshot) {
           final buf = snapshot.data;
           if (buf != null && buf.isNotEmpty) {

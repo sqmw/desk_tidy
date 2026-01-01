@@ -215,8 +215,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
       const requestIconSize = 256;
 
-      final shortcutItems = <ShortcutItem>[];
-      for (final shortcutPath in shortcutsPaths) {
+      final shortcutFutures = shortcutsPaths.map((shortcutPath) async {
         final name = shortcutPath.split('\\').last.replaceAll('.lnk', '');
 
         String targetPath = shortcutPath;
@@ -231,23 +230,27 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
         // Don't treat folder shortcuts as "apps".
         if (isFolderShortcut) {
-          continue;
+          return null;
         }
 
-        final iconData = extractIcon(shortcutPath, size: requestIconSize) ??
-            extractIcon(targetPath, size: requestIconSize);
+        final primaryIcon =
+            await extractIconAsync(shortcutPath, size: requestIconSize);
+        final iconData = primaryIcon ??
+            await extractIconAsync(targetPath, size: requestIconSize);
 
-        shortcutItems.add(
-          ShortcutItem(
-            name: name,
-            path: shortcutPath,
-            iconPath: '',
-            description: '桌面快捷方式',
-            targetPath: targetPath,
-            iconData: iconData,
-          ),
+        return ShortcutItem(
+          name: name,
+          path: shortcutPath,
+          iconPath: '',
+          description: '桌面快捷方式',
+          targetPath: targetPath,
+          iconData: iconData,
         );
-      }
+      }).toList();
+
+      final shortcutItems = (await Future.wait(shortcutFutures))
+          .whereType<ShortcutItem>()
+          .toList();
 
       setState(() {
         _shortcuts = shortcutItems;

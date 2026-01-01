@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -98,6 +99,8 @@ class _FileIcon extends StatelessWidget {
   final String filePath;
   const _FileIcon({required this.filePath});
 
+  static final Map<String, Future<Uint8List?>> _iconFutures = {};
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
@@ -123,18 +126,25 @@ class _FileIcon extends StatelessWidget {
 
   Future<Uint8List?> _resolveIcon() async {
     final ext = path.extension(filePath).toLowerCase();
-    final primary = extractIcon(filePath);
-    if (primary != null) {
-      return primary;
-    }
+    final primary = await _getIconFuture(filePath);
+    if (primary != null && primary.isNotEmpty) return primary;
+
     if (ext == '.lnk') {
       final target = getShortcutTarget(filePath);
       if (target != null && target.isNotEmpty) {
-        final targetIcon = extractIcon(target);
-        if (targetIcon != null) return targetIcon;
+        final targetIcon = await _getIconFuture(target);
+        if (targetIcon != null && targetIcon.isNotEmpty) return targetIcon;
       }
     }
     return null;
+  }
+
+  Future<Uint8List?> _getIconFuture(String path) {
+    final key = path.toLowerCase();
+    return _iconFutures.putIfAbsent(
+      key,
+      () => extractIconAsync(path, size: 96),
+    );
   }
 }
 
