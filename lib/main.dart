@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'screens/desk_tidy_home_page.dart';
-import 'theme_notifier.dart';
+import 'providers/theme_notifier.dart';
 import 'utils/single_instance.dart';
 import 'utils/app_preferences.dart';
 

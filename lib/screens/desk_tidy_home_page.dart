@@ -9,7 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../models/shortcut_item.dart';
 import '../setting/settings_page.dart';
-import '../theme_notifier.dart';
+import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
 import '../utils/desktop_helper.dart';
 import '../utils/tray_helper.dart';
@@ -18,8 +18,8 @@ import '../widgets/shortcut_card.dart';
 import 'all_page.dart';
 import 'file_page.dart';
 import 'folder_page.dart';
-import 'window_dock_logic.dart';
-import 'window_dock_manager.dart';
+import '../services/window_dock_logic.dart';
+import '../services/window_dock_manager.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -42,6 +42,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _trayReady = false;
   Timer? _saveWindowTimer;
   Timer? _dragEndTimer;
+  Timer? _autoRefreshTimer;
+  bool _isRefreshing = false;
   List<ShortcutItem> _shortcuts = [];
   String _desktopPath = '';
   bool _isLoading = true;
@@ -142,6 +144,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _handleThemeChange(_themeModeOption);
     await _loadShortcuts();
     await _syncDesktopIconVisibility();
+    _setupAutoRefresh();
   }
 
   Future<void> _initTray() async {
@@ -202,16 +205,32 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
-  Future<void> _loadShortcuts() async {
-    setState(() => _isLoading = true);
-
+  Future<void> _loadShortcuts({bool showLoading = true}) async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    final shouldShowLoading = showLoading || _shortcuts.isEmpty;
     try {
+      if (shouldShowLoading) {
+        setState(() => _isLoading = true);
+      }
+
       final desktopPath = await getDesktopPath();
       _desktopPath = desktopPath;
       final shortcutsPaths = await scanDesktopShortcuts(
         desktopPath,
         showHidden: _showHidden,
       );
+
+      // 快速路径 diff：路径相同则无需解析图标和刷新 UI
+      final incomingPaths = [...shortcutsPaths]..sort();
+      final currentPaths = _shortcuts.map((e) => e.path).toList()..sort();
+      final pathsUnchanged = _pathsEqual(currentPaths, incomingPaths);
+      if (pathsUnchanged) {
+        if (shouldShowLoading) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
 
       const requestIconSize = 256;
 
@@ -252,14 +271,47 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           .whereType<ShortcutItem>()
           .toList();
 
-      setState(() {
-        _shortcuts = shortcutItems;
-        _isLoading = false;
-      });
+      // 只在数据变化时更新UI，实现无感更新
+      if (!_shortcutsEqual(_shortcuts, shortcutItems)) {
+        setState(() {
+          _shortcuts = shortcutItems;
+        });
+      }
+
+      if (shouldShowLoading) {
+        setState(() => _isLoading = false);
+      }
     } catch (e) {
       print('加载快捷方式失败: $e');
-      setState(() => _isLoading = false);
+      if (shouldShowLoading) {
+        setState(() => _isLoading = false);
+      }
+    } finally {
+      _isRefreshing = false;
     }
+  }
+  
+  bool _pathsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  // 比较两个快捷方式列表是否相等
+  bool _shortcutsEqual(List<ShortcutItem> oldList, List<ShortcutItem> newList) {
+    if (oldList.length != newList.length) return false;
+    
+    // 按路径排序后比较
+    final oldPaths = oldList.map((item) => item.path).toList()..sort();
+    final newPaths = newList.map((item) => item.path).toList()..sort();
+    
+    for (int i = 0; i < oldPaths.length; i++) {
+      if (oldPaths[i] != newPaths[i]) return false;
+    }
+    
+    return true;
   }
 
   void _toggleMaximize() {
@@ -328,11 +380,24 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   @override
+  // 设置自动刷新
+  void _setupAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    if (_autoRefresh) {
+      // 每5秒刷新一次桌面
+      _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+        if (!mounted) return;
+        await _loadShortcuts(showLoading: false);
+      });
+    }
+  }
+
   void dispose() {
     _hotCornerTimer?.cancel();
     _desktopIconSyncTimer?.cancel();
     _saveWindowTimer?.cancel();
     _dragEndTimer?.cancel();
+    _autoRefreshTimer?.cancel();
     _dockManager.dispose();
     windowManager.removeListener(this);
     _windowFocusNotifier.dispose();
@@ -831,6 +896,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           onAutoRefreshChanged: (v) {
             setState(() => _autoRefresh = v);
             AppPreferences.saveAutoRefresh(v);
+            _setupAutoRefresh();
           },
           onAutoLaunchChanged: (v) async {
             setState(() => _autoLaunch = v);
@@ -934,7 +1000,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                 ),
                 const Spacer(),
                 ElevatedButton.icon(
-                  onPressed: _loadShortcuts,
+                  onPressed: () => _loadShortcuts(showLoading: false),
                   icon: const Icon(Icons.refresh),
                   style: ElevatedButton.styleFrom(
                     elevation: 0,
