@@ -194,6 +194,13 @@ Future<void> _showFileMenu(
         ),
       ),
       PopupMenuItem(
+        value: 'copy_clipboard',
+        child: ListTile(
+          leading: Icon(Icons.copy),
+          title: Text('复制到剪贴板(系统)'),
+        ),
+      ),
+      PopupMenuItem(
         value: 'delete',
         child: ListTile(
           leading: Icon(Icons.delete),
@@ -237,6 +244,14 @@ Future<void> _showFileMenu(
       break;
     case 'copy':
       await _promptCopyFile(context, file);
+      break;
+    case 'copy_clipboard':
+      final ok = copyEntityPathsToClipboard([file.path]);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok ? '已复制到剪贴板' : '复制到剪贴板失败')),
+        );
+      }
       break;
     case 'delete':
       final ok = moveToRecycleBin(file.path);

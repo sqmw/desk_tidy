@@ -215,6 +215,13 @@ class _AllPageState extends State<AllPage> {
           ),
         ),
         PopupMenuItem(
+          value: 'copy_clipboard',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('复制到剪贴板(系统)'),
+          ),
+        ),
+        PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete),
@@ -265,6 +272,12 @@ class _AllPageState extends State<AllPage> {
         break;
       case 'copy':
         _promptCopy(entity);
+        break;
+      case 'copy_clipboard':
+        final ok = copyEntityPathsToClipboard([entity.path]);
+        if (mounted) {
+          _showSnackBar(ok ? '已复制到剪贴板' : '复制到剪贴板失败');
+        }
         break;
       case 'copy_name':
         await _copyToClipboard(displayName, label: 'name', quoted: false);

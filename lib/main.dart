@@ -27,7 +27,7 @@ Future<void> main() async {
       titleBarStyle: TitleBarStyle.hidden,
       windowButtonVisibility: true,
       backgroundColor: Colors.transparent,
-      skipTaskbar: false,
+      skipTaskbar: true,
       size: bounds == null
           ? null
           : Size(bounds.width.toDouble(), bounds.height.toDouble()),
@@ -38,8 +38,7 @@ Future<void> main() async {
         await windowManager
             .setPosition(Offset(bounds.x.toDouble(), bounds.y.toDouble()));
       }
-      await windowManager.show();
-      await windowManager.focus();
+      await windowManager.hide();
     },
   );
 

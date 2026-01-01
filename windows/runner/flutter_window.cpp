@@ -27,13 +27,10 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  // Start hidden; Dart controls when to show (after tray is ready).
+  flutter_controller_->engine()->SetNextFrameCallback([&]() {});
 
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  // Keep a frame pending so the Flutter view is ready even while hidden.
   flutter_controller_->ForceRedraw();
 
   return true;

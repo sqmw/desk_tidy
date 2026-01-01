@@ -110,8 +110,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _startDesktopIconSync();
     _startHotCornerWatcher();
 
-    // Default: show in taskbar on startup.
-    windowManager.setSkipTaskbar(false);
+    // Start in tray; keep the window out of taskbar until user opens it.
+    windowManager.setSkipTaskbar(true);
 
     windowManager.isMaximized().then((value) {
       if (mounted) {
@@ -177,10 +177,28 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       await windowManager.setSkipTaskbar(true);
       await windowManager.hide();
       _dockManager.onDismissToTray();
+      unawaited(_showTrayStartupHint());
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
       _trayReady = false;
       await windowManager.setPreventClose(false);
+      await windowManager.setSkipTaskbar(false);
+      await windowManager.show();
+      await windowManager.focus();
+    }
+  }
+
+  Future<void> _showTrayStartupHint() async {
+    try {
+      final handle = await windowManager.getId();
+      _windowHandle = handle;
+      showTrayBalloon(
+        windowHandle: handle,
+        title: 'Desk Tidy',
+        message: 'Desk Tidy 已隐藏在系统托盘',
+      );
+    } catch (_) {
+      // Ignore tray hint failures.
     }
   }
 

@@ -30,6 +30,9 @@ const int _shcneAssocChanged = 0x08000000;
 const int _shcnfIdList = 0x0000;
 const int _wmCommand = 0x0111;
 const int _cmdToggleDesktopIcons = 0x7402;
+const int _dropEffectCopy = 1;
+const int _dropEffectMove = 2;
+const String _clipboardDropEffectFormat = 'Preferred DropEffect';
 
 math.Point<int> getPrimaryScreenSize() {
   final w = GetSystemMetrics(SM_CXSCREEN);
@@ -741,6 +744,127 @@ Future<bool> openWithApp(String appPath, String target) async {
     return true;
   } catch (_) {
     return false;
+  }
+}
+
+bool showTrayBalloon({
+  required int windowHandle,
+  required String title,
+  required String message,
+  int timeoutMs = 4000,
+}) {
+  if (!Platform.isWindows || windowHandle == 0) return false;
+  final nid = calloc<NOTIFYICONDATA>();
+  try {
+    nid.ref
+      ..cbSize = sizeOf<NOTIFYICONDATA>()
+      ..hWnd = windowHandle
+      ..uID = 0
+      ..uFlags = NIF_INFO
+      ..dwInfoFlags = NIIF_INFO
+      ..uTimeout = timeoutMs;
+    nid.ref.szInfoTitle = title;
+    nid.ref.szInfo = message;
+    return Shell_NotifyIcon(NIM_MODIFY, nid) != 0;
+  } catch (_) {
+    return false;
+  } finally {
+    calloc.free(nid);
+  }
+}
+
+bool copyEntityPathsToClipboard(
+  List<String> paths, {
+  bool cut = false,
+}) {
+  if (!Platform.isWindows) return false;
+  final filtered = paths.where((p) => p.trim().isNotEmpty).toList();
+  if (filtered.isEmpty) return false;
+
+  final normalized = filtered.map(path.normalize).toList();
+  final units = <int>[];
+  for (final entry in normalized) {
+    units.addAll(entry.codeUnits);
+    units.add(0);
+  }
+  units.add(0);
+
+  final bytes = units.length * sizeOf<Uint16>();
+  final totalBytes = sizeOf<DROPFILES>() + bytes;
+  final hGlobal = GlobalAlloc(GMEM_MOVEABLE, totalBytes);
+  if (hGlobal == nullptr) return false;
+
+  final locked = GlobalLock(hGlobal);
+  if (locked == nullptr) {
+    GlobalFree(hGlobal);
+    return false;
+  }
+
+  try {
+    final dropFiles = locked.cast<DROPFILES>();
+    dropFiles.ref
+      ..pFiles = sizeOf<DROPFILES>()
+      ..fWide = 1
+      ..fNC = 0;
+    dropFiles.ref.pt
+      ..x = 0
+      ..y = 0;
+
+    final dataPtr = locked
+        .cast<Uint8>()
+        .elementAt(sizeOf<DROPFILES>())
+        .cast<Uint16>();
+    dataPtr.asTypedList(units.length).setAll(0, units);
+  } finally {
+    GlobalUnlock(hGlobal);
+  }
+
+  if (OpenClipboard(NULL) == 0) {
+    GlobalFree(hGlobal);
+    return false;
+  }
+
+  var success = false;
+  try {
+    if (EmptyClipboard() == 0) {
+      GlobalFree(hGlobal);
+      return false;
+    }
+    if (SetClipboardData(CF_HDROP, hGlobal.address) == 0) {
+      GlobalFree(hGlobal);
+      return false;
+    }
+    _setClipboardDropEffect(cut ? _dropEffectMove : _dropEffectCopy);
+    success = true;
+  } finally {
+    CloseClipboard();
+  }
+
+  return success;
+}
+
+void _setClipboardDropEffect(int effect) {
+  final formatPtr = _clipboardDropEffectFormat.toNativeUtf16();
+  try {
+    final format = RegisterClipboardFormat(formatPtr);
+    if (format == 0) return;
+    final hGlobal = GlobalAlloc(GMEM_MOVEABLE, sizeOf<Uint32>());
+    if (hGlobal == nullptr) return;
+    final locked = GlobalLock(hGlobal);
+    if (locked == nullptr) {
+      GlobalFree(hGlobal);
+      return;
+    }
+    try {
+      locked.cast<Uint32>().value = effect;
+    } finally {
+      GlobalUnlock(hGlobal);
+    }
+    if (SetClipboardData(format, hGlobal.address) == 0) {
+      GlobalFree(hGlobal);
+    }
+  } finally {
+    calloc.free(formatPtr);
   }
 }
 

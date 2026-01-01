@@ -1,12 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:system_tray/system_tray.dart';
-import 'package:window_manager/window_manager.dart';
 
 class TrayHelper {
   final SystemTray _tray = SystemTray();
   bool _initialized = false;
+  static const String _trayIconAsset = 'windows/runner/resources/app_icon.ico';
 
   Future<void> init({
     required VoidCallback onShowRequested,
@@ -17,10 +15,14 @@ class TrayHelper {
 
     try {
       final iconPath = _resolveTrayIconPath();
-      await _tray.initSystemTray(
+      final ok = await _tray.initSystemTray(
         title: 'Desk Tidy',
         iconPath: iconPath,
+        toolTip: 'Desk Tidy',
       );
+      if (!ok) {
+        throw StateError('System tray initialization failed.');
+      }
 
       final menu = Menu();
       await menu.buildFrom([
@@ -65,16 +67,5 @@ class TrayHelper {
     }
   }
 
-  String _resolveTrayIconPath() {
-    // Dev fallback: use the Windows runner icon if available.
-    final cwd = Directory.current.path;
-    final candidate = File(
-      '$cwd\\windows\\runner\\resources\\app_icon.ico',
-    );
-    if (candidate.existsSync()) return candidate.path;
-
-    // If not found, system_tray still needs a path; fall back to executable path
-    // (Windows uses the process icon in many cases).
-    return Platform.resolvedExecutable;
-  }
+  String _resolveTrayIconPath() => _trayIconAsset;
 }
