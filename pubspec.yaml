@@ -39,9 +39,9 @@ dependencies:
   win32: ^5.0.0
   settings_ui: ^2.0.2
   image: ^4.0.21
-  file_picker: ^8.0.3
-  process_run: ^0.13.1
-  system_tray: ^2.0.3
+  file_picker: ^10.3.8
+  process_run: ^1.2.4
+  system_tray: 2.0.3
   shared_preferences: ^2.3.2
   path_provider: ^2.1.4
   path: ^1.9.0
@@ -55,7 +55,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
   msix: ^3.16.12
 
@@ -120,7 +120,7 @@ msix_config:
   capabilities: internetClient
   # 可选：输出控制
   # output_name: MyApp
-  # output_path: build\msix
+  output_path: installers\build\installer
   # architecture: x64
   # 可选：签名（外部分发更建议用你自己的证书）
   # certificate_path: C:\certs\mycert.pfx
