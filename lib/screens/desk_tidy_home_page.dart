@@ -176,6 +176,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       await windowManager.setSkipTaskbar(true);
       await windowManager.hide();
       _dockManager.onDismissToTray();
+      _windowHandle = await windowManager.getId();
       unawaited(_showTrayStartupHint());
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
@@ -406,6 +407,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _trayMode = false;
     if (mounted) setState(() => _panelVisible = false);
     
+    await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
     await windowManager.restore();
@@ -413,6 +415,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    // Drop always-on-top after we are visible.
+    unawaited(Future.delayed(const Duration(milliseconds: 800), () {
+      windowManager.setAlwaysOnTop(false);
+    }));
     
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -427,12 +433,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _trayMode = false;
     if (mounted) setState(() => _panelVisible = false);
     
+    await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
     await windowManager.restore();
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    unawaited(Future.delayed(const Duration(milliseconds: 800), () {
+      windowManager.setAlwaysOnTop(false);
+    }));
     
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {

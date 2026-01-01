@@ -109,7 +109,6 @@ int _enumFindFlutterWindowProc(int hwnd, int lParam) {
       free(classNamePtr);
     }
 
-    if (IsWindowVisible(hwnd) == 0) return 1;
     _enumFoundHwnd = hwnd;
     return 0;
   } finally {
