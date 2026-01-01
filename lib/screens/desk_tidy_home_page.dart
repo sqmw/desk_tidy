@@ -225,7 +225,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       final incomingPaths = [...shortcutsPaths]..sort();
       final currentPaths = _shortcuts.map((e) => e.path).toList()..sort();
       final pathsUnchanged = _pathsEqual(currentPaths, incomingPaths);
-      if (pathsUnchanged) {
+      
+      // 如果路径没有变化且不是强制显示加载状态（即非手动刷新），则直接返回
+      if (pathsUnchanged && !showLoading) {
         if (shouldShowLoading) {
           setState(() => _isLoading = false);
         }
@@ -303,15 +305,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _shortcutsEqual(List<ShortcutItem> oldList, List<ShortcutItem> newList) {
     if (oldList.length != newList.length) return false;
     
-    // 按路径排序后比较
-    final oldPaths = oldList.map((item) => item.path).toList()..sort();
-    final newPaths = newList.map((item) => item.path).toList()..sort();
+    // 使用Set来比较，性能更好
+    final oldPathSet = oldList.map((item) => item.path).toSet();
+    final newPathSet = newList.map((item) => item.path).toSet();
     
-    for (int i = 0; i < oldPaths.length; i++) {
-      if (oldPaths[i] != newPaths[i]) return false;
-    }
-    
-    return true;
+    return oldPathSet.length == newPathSet.length && oldPathSet.containsAll(newPathSet);
   }
 
   void _toggleMaximize() {
@@ -1000,7 +998,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                 ),
                 const Spacer(),
                 ElevatedButton.icon(
-                  onPressed: () => _loadShortcuts(showLoading: false),
+                  onPressed: () => _loadShortcuts(showLoading: true),
                   icon: const Icon(Icons.refresh),
                   style: ElevatedButton.styleFrom(
                     elevation: 0,
