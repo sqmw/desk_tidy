@@ -212,7 +212,8 @@ class SettingsPage extends StatelessWidget {
               onToggle: onAutoRefreshChanged,
               initialValue: autoRefresh,
               leading: const Icon(Icons.refresh),
-              title: const Text('自动刷新桌面'),
+              title: const Text('桌面图标自动更新'),
+              description: const Text('周期性扫描桌面并仅在内容变化时悄然刷新'),
             ),
             SettingsTile.switchTile(
               onToggle: onAutoLaunchChanged,
