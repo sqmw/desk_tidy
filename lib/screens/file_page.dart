@@ -164,51 +164,58 @@ Future<void> _showFileMenu(
       position.dx + 1,
       position.dy + 1,
     ),
-    items: [
-      const PopupMenuItem(
+    items: const [
+      PopupMenuItem(
         value: 'open',
         child: ListTile(
           leading: Icon(Icons.open_in_new),
           title: Text('打开'),
         ),
       ),
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'open_with',
         child: ListTile(
           leading: Icon(Icons.app_registration),
           title: Text('使用其他应用打开'),
         ),
       ),
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'move',
         child: ListTile(
           leading: Icon(Icons.drive_file_move),
-          title: Text('移动到...'),
+          title: Text('移动到..'),
         ),
       ),
-      const PopupMenuItem(
+      PopupMenuItem(
+        value: 'copy',
+        child: ListTile(
+          leading: Icon(Icons.copy),
+          title: Text('复制到...'),
+        ),
+      ),
+      PopupMenuItem(
         value: 'delete',
         child: ListTile(
           leading: Icon(Icons.delete),
           title: Text('删除(回收站)'),
         ),
       ),
-      const PopupMenuDivider(),
-      const PopupMenuItem(
+      PopupMenuDivider(),
+      PopupMenuItem(
         value: 'copy_name',
         child: ListTile(
           leading: Icon(Icons.copy),
           title: Text('复制名称'),
         ),
       ),
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'copy_path',
         child: ListTile(
           leading: Icon(Icons.link),
           title: Text('复制路径'),
         ),
       ),
-      const PopupMenuItem(
+      PopupMenuItem(
         value: 'copy_folder',
         child: ListTile(
           leading: Icon(Icons.folder),
@@ -227,6 +234,9 @@ Future<void> _showFileMenu(
       break;
     case 'move':
       await _promptMoveFile(context, file);
+      break;
+    case 'copy':
+      await _promptCopyFile(context, file);
       break;
     case 'delete':
       final ok = moveToRecycleBin(file.path);
@@ -281,6 +291,28 @@ Future<void> _promptMoveFile(BuildContext context, File file) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('移动失败: $e')),
+      );
+    }
+  }
+}
+
+Future<void> _promptCopyFile(BuildContext context, File file) async {
+  final targetDir = await showFolderPicker(
+    context: context,
+    initialPath: path.dirname(file.path),
+    showHidden: true,
+  );
+  if (targetDir == null || targetDir.isEmpty) return;
+
+  final result = await copyEntityToDirectory(file.path, targetDir);
+  if (context.mounted) {
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已复制到 ${result.destPath}')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('复制失败: ${result.message ?? 'unknown'}')),
       );
     }
   }

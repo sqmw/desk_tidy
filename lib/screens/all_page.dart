@@ -185,55 +185,62 @@ class _AllPageState extends State<AllPage> {
         position.dx + 1,
         position.dy + 1,
       ),
-      items: [
-        const PopupMenuItem(
+      items: const [
+        PopupMenuItem(
           value: 'open',
           child: ListTile(
             leading: Icon(Icons.open_in_new),
             title: Text('打开'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'open_with',
           child: ListTile(
             leading: Icon(Icons.app_registration),
             title: Text('使用其他应用打开'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'move',
           child: ListTile(
             leading: Icon(Icons.drive_file_move),
-            title: Text('移动到...'),
+            title: Text('移动到..'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
+          value: 'copy',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('复制到...'),
+          ),
+        ),
+        PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete),
             title: Text('删除(回收站)'),
           ),
         ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
+        PopupMenuDivider(),
+        PopupMenuItem(
           value: 'copy_name',
           child: ListTile(
             leading: Icon(Icons.copy),
-            title: Text('Copy name'),
+            title: Text('复制名称'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'copy_path',
           child: ListTile(
             leading: Icon(Icons.link),
-            title: Text('Copy path'),
+            title: Text('复制路径'),
           ),
         ),
-        const PopupMenuItem(
+        PopupMenuItem(
           value: 'copy_folder',
           child: ListTile(
             leading: Icon(Icons.folder),
-            title: Text('Copy folder'),
+            title: Text('复制所在文件夹'),
           ),
         ),
       ],
@@ -255,6 +262,9 @@ class _AllPageState extends State<AllPage> {
         break;
       case 'move':
         _promptMove(entity);
+        break;
+      case 'copy':
+        _promptCopy(entity);
         break;
       case 'copy_name':
         await _copyToClipboard(displayName, label: 'name', quoted: false);
@@ -451,6 +461,25 @@ class _AllPageState extends State<AllPage> {
       _refresh();
     } catch (e) {
       _showSnackBar('移动失败: $e');
+    }
+  }
+
+  Future<void> _promptCopy(FileSystemEntity entity) async {
+    final initial = _currentPath ?? path.dirname(entity.path);
+    final targetDir = await showFolderPicker(
+      context: context,
+      initialPath: initial,
+      showHidden: widget.showHidden,
+    );
+    if (targetDir == null || targetDir.isEmpty) return;
+
+    final result = await copyEntityToDirectory(entity.path, targetDir);
+    if (!mounted) return;
+    if (result.success) {
+      _showSnackBar('已复制到 ${result.destPath}');
+      _refresh();
+    } else {
+      _showSnackBar('复制失败: ${result.message ?? 'unknown'}');
     }
   }
 

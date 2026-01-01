@@ -386,6 +386,49 @@ Future<bool> setDesktopIconsVisible(bool visible) async {
   }
 }
 
+Future<bool> setAutoLaunchEnabled(
+  bool enabled, {
+  String appName = 'DeskTidy',
+  String? executablePath,
+}) async {
+  if (!Platform.isWindows) return false;
+  final exe = executablePath ?? Platform.resolvedExecutable;
+  if (exe.isEmpty) return false;
+
+  try {
+    final shell = pr.Shell(runInShell: true, verbose: false);
+    if (enabled) {
+      final quotedExe = '"${exe.replaceAll('"', '\\"')}"';
+      await shell.run(
+        'reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run '
+        '/v $appName /t REG_SZ /d $quotedExe /f',
+      );
+    } else {
+      await shell.run(
+        'reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run '
+        '/v $appName /f',
+      );
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+Future<bool> isAutoLaunchEnabled({String appName = 'DeskTidy'}) async {
+  if (!Platform.isWindows) return false;
+  try {
+    final shell = pr.Shell(runInShell: true, verbose: false);
+    final output = await shell.run(
+      'reg query HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run '
+      '/v $appName',
+    );
+    return output.outText.toLowerCase().contains(appName.toLowerCase());
+  } catch (_) {
+    return false;
+  }
+}
+
 class IImageList extends IUnknown {
   IImageList(super.ptr);
 
@@ -698,6 +741,83 @@ Future<bool> openWithApp(String appPath, String target) async {
     return true;
   } catch (_) {
     return false;
+  }
+}
+
+class CopyResult {
+  final bool success;
+  final String? message;
+  final String? destPath;
+
+  const CopyResult({
+    required this.success,
+    this.message,
+    this.destPath,
+  });
+}
+
+Future<CopyResult> copyEntityToDirectory(
+  String sourcePath,
+  String targetDirectory,
+) async {
+  try {
+    if (targetDirectory.trim().isEmpty) {
+      return const CopyResult(success: false, message: '目标路径为空');
+    }
+    final destDir = Directory(targetDirectory);
+    if (!destDir.existsSync()) {
+      return const CopyResult(success: false, message: '目标不存在');
+    }
+
+    final destPath = path.join(destDir.path, path.basename(sourcePath));
+    final normalizedSource = path.normalize(sourcePath);
+    final normalizedDest = path.normalize(destPath);
+
+    if (normalizedSource == normalizedDest) {
+      return const CopyResult(success: false, message: '目标与源相同');
+    }
+    if (path.isWithin(normalizedSource, normalizedDest)) {
+      return const CopyResult(success: false, message: '目标在源目录内部');
+    }
+    if (File(destPath).existsSync() || Directory(destPath).existsSync()) {
+      return const CopyResult(success: false, message: '目标已存在同名项');
+    }
+
+    final type =
+        FileSystemEntity.typeSync(sourcePath, followLinks: false);
+    if (type == FileSystemEntityType.directory) {
+      await _copyDirectoryRecursive(
+        Directory(sourcePath),
+        Directory(destPath),
+      );
+    } else if (type == FileSystemEntityType.file) {
+      await File(sourcePath).copy(destPath);
+    } else {
+      return const CopyResult(success: false, message: '源不存在');
+    }
+
+    return CopyResult(success: true, destPath: destPath);
+  } catch (e) {
+    return CopyResult(success: false, message: e.toString());
+  }
+}
+
+Future<void> _copyDirectoryRecursive(
+  Directory source,
+  Directory destination,
+) async {
+  await destination.create(recursive: true);
+  await for (final entity in source.list(followLinks: false)) {
+    final name = path.basename(entity.path);
+    final destPath = path.join(destination.path, name);
+    if (entity is Directory) {
+      await _copyDirectoryRecursive(entity, Directory(destPath));
+    } else if (entity is File) {
+      await entity.copy(destPath);
+    } else if (entity is Link) {
+      final target = await entity.target();
+      await Link(destPath).create(target);
+    }
   }
 }
 

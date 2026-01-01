@@ -13,6 +13,7 @@ class SettingsPage extends StatelessWidget {
   final double iconSize;
   final bool showHidden;
   final bool autoRefresh;
+  final bool autoLaunch;
   final bool hideDesktopItems;
   final ThemeModeOption themeModeOption;
   final String? backgroundPath;
@@ -22,6 +23,7 @@ class SettingsPage extends StatelessWidget {
   final ValueChanged<double> onIconSizeChanged;
   final ValueChanged<bool> onShowHiddenChanged;
   final ValueChanged<bool> onAutoRefreshChanged;
+  final ValueChanged<bool> onAutoLaunchChanged;
   final ValueChanged<bool> onHideDesktopItemsChanged;
   final ValueChanged<ThemeModeOption?> onThemeModeChanged;
   final ValueChanged<String?> onBackgroundPathChanged;
@@ -33,6 +35,7 @@ class SettingsPage extends StatelessWidget {
     required this.iconSize,
     required this.showHidden,
     required this.autoRefresh,
+    required this.autoLaunch,
     required this.hideDesktopItems,
     required this.themeModeOption,
     required this.backgroundPath,
@@ -41,6 +44,7 @@ class SettingsPage extends StatelessWidget {
     required this.onIconSizeChanged,
     required this.onShowHiddenChanged,
     required this.onAutoRefreshChanged,
+    required this.onAutoLaunchChanged,
     required this.onHideDesktopItemsChanged,
     required this.onThemeModeChanged,
     required this.onBackgroundPathChanged,
@@ -201,6 +205,12 @@ class SettingsPage extends StatelessWidget {
               initialValue: autoRefresh,
               leading: const Icon(Icons.refresh),
               title: const Text('自动刷新桌面'),
+            ),
+            SettingsTile.switchTile(
+              onToggle: onAutoLaunchChanged,
+              initialValue: autoLaunch,
+              leading: const Icon(Icons.power_settings_new),
+              title: const Text('开机自动启动(Windows)'),
             ),
           ],
         ),

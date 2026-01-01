@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -16,10 +16,10 @@ class FolderPage extends StatefulWidget {
   final bool showHidden;
 
   const FolderPage({
-    Key? key,
+    super.key,
     required this.desktopPath,
     this.showHidden = false,
-  }) : super(key: key);
+  });
 
   @override
   State<FolderPage> createState() => _FolderPageState();
@@ -118,13 +118,11 @@ class _FolderPageState extends State<FolderPage> {
     required String label,
     required bool quoted,
   }) async {
-    final value = quoted ? _quote(raw) : raw;
+    final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
     _showSnackBar('已复制$label');
   }
-
-  String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
 
   Future<void> _showEntityMenu(
     FileSystemEntity entity,
@@ -154,7 +152,14 @@ class _FolderPageState extends State<FolderPage> {
           value: 'move',
           child: ListTile(
             leading: Icon(Icons.drive_file_move),
-            title: Text('移动到...'),
+            title: Text('移动到..'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'copy',
+          child: ListTile(
+            leading: Icon(Icons.copy),
+            title: Text('复制到...'),
           ),
         ),
         const PopupMenuItem(
@@ -198,6 +203,9 @@ class _FolderPageState extends State<FolderPage> {
         break;
       case 'move':
         _promptMove(entity);
+        break;
+      case 'copy':
+        _promptCopy(entity);
         break;
       case 'copy_name':
         await _copyToClipboard(displayName, label: '名称', quoted: false);
@@ -340,6 +348,24 @@ class _FolderPageState extends State<FolderPage> {
       _refresh();
     } catch (e) {
       _showSnackBar('移动失败: $e');
+    }
+  }
+
+  Future<void> _promptCopy(FileSystemEntity entity) async {
+    final targetDir = await showFolderPicker(
+      context: context,
+      initialPath: _currentPath,
+      showHidden: widget.showHidden,
+    );
+    if (targetDir == null || targetDir.isEmpty) return;
+
+    final result = await copyEntityToDirectory(entity.path, targetDir);
+    if (!mounted) return;
+    if (result.success) {
+      _showSnackBar('已复制到 ${result.destPath}');
+      _refresh();
+    } else {
+      _showSnackBar('复制失败: ${result.message ?? 'unknown'}');
     }
   }
 

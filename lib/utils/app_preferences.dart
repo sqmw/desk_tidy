@@ -12,6 +12,7 @@ class AppPreferences {
   static const _kShowHidden = 'behavior.showHidden';
   static const _kHideDesktopItems = 'behavior.hideDesktopItems';
   static const _kAutoRefresh = 'behavior.autoRefresh';
+  static const _kAutoLaunch = 'behavior.autoLaunch';
   static const _kThemeMode = 'ui.themeMode';
   static const _kBackgroundPath = 'ui.backgroundPath';
   static const _kWinX = 'window.x';
@@ -27,6 +28,7 @@ class AppPreferences {
     final showHidden = prefs.getBool(_kShowHidden) ?? false;
     final hideDesktopItems = prefs.getBool(_kHideDesktopItems) ?? false;
     final autoRefresh = prefs.getBool(_kAutoRefresh) ?? false;
+    final autoLaunch = prefs.getBool(_kAutoLaunch) ?? true;
     final themeModeIndex =
         prefs.getInt(_kThemeMode) ?? ThemeModeOption.dark.index;
     final themeMode = ThemeModeOption
@@ -40,6 +42,7 @@ class AppPreferences {
       showHidden: showHidden,
       hideDesktopItems: hideDesktopItems,
       autoRefresh: autoRefresh,
+      autoLaunch: autoLaunch,
       themeModeOption: themeMode,
       backgroundPath: backgroundPath,
     );
@@ -73,6 +76,11 @@ class AppPreferences {
   static Future<void> saveAutoRefresh(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAutoRefresh, v);
+  }
+
+  static Future<void> saveAutoLaunch(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAutoLaunch, v);
   }
 
   static Future<void> saveThemeMode(ThemeModeOption v) async {
@@ -152,6 +160,7 @@ class DeskTidyConfig {
   final bool showHidden;
   final bool hideDesktopItems;
   final bool autoRefresh;
+  final bool autoLaunch;
   final ThemeModeOption themeModeOption;
   final String? backgroundPath;
 
@@ -162,6 +171,7 @@ class DeskTidyConfig {
     required this.showHidden,
     required this.hideDesktopItems,
     required this.autoRefresh,
+    required this.autoLaunch,
     required this.themeModeOption,
     required this.backgroundPath,
   });

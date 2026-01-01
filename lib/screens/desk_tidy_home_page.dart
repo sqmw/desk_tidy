@@ -25,6 +25,7 @@ import 'window_dock_manager.dart';
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
 bool _autoRefresh = false;
+bool _autoLaunch = true;
 double _iconSize = 32;
 
 class DeskTidyHomePage extends StatefulWidget {
@@ -773,6 +774,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           iconSize: _iconSize,
           showHidden: _showHidden,
           autoRefresh: _autoRefresh,
+          autoLaunch: _autoLaunch,
           hideDesktopItems: _hideDesktopItems,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
@@ -796,6 +798,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           onAutoRefreshChanged: (v) {
             setState(() => _autoRefresh = v);
             AppPreferences.saveAutoRefresh(v);
+          },
+          onAutoLaunchChanged: (v) async {
+            setState(() => _autoLaunch = v);
+            AppPreferences.saveAutoLaunch(v);
+            final ok = await setAutoLaunchEnabled(v);
+            if (!mounted) return;
+            if (!ok) {
+              setState(() => _autoLaunch = !v);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('开机启动设置失败')),
+              );
+            }
           },
           onHideDesktopItemsChanged: _handleHideDesktopItemsChanged,
           onThemeModeChanged: (v) {
