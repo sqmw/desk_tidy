@@ -6,8 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateService {
   // Replace these values with the actual Gitee repository owner and name.
-  static const String _giteeOwner = 'your-gitee-username';
-  static const String _giteeRepo = 'desk-tidy';
+  static const String _giteeOwner = 'zlmw';
+  static const String _giteeRepo = 'desk_tidy';
   static const String _giteeApiBaseUrl = 'https://gitee.com/api/v5';
 
   /// 检查 Gitee 上的最新 Release 是否高于当前版本。

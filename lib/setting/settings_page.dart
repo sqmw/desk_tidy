@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:settings_ui/settings_ui.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:desk_tidy/services/update_service.dart';
 
 enum ThemeModeOption { system, light, dark }
@@ -58,6 +59,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _checkingUpdate = false;
   String? _updateStatus;
+  String? _appVersion;
 
   Future<void> _pickBackground() async {
     final picked = await FilePicker.platform.pickFiles(
@@ -73,6 +75,22 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // 添加检查更新方法
+  @override
+  void initState() {
+    super.initState();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _appVersion = 'v${info.version}');
+    } catch (_) {
+      // Silence failures.
+    }
+  }
+
   Future<void> _checkForUpdate() async {
     setState(() {
       _checkingUpdate = true;
@@ -319,7 +337,7 @@ class _SettingsPageState extends State<SettingsPage> {
         SettingsSection(
           title: const Text(''),
           tiles: [
-            SettingsTile.navigation(
+            SettingsTile(
               leading: Icon(Icons.update, color: theme.colorScheme.primary),
               title: const Text('检查更新'),
               description: status == null
@@ -334,13 +352,26 @@ class _SettingsPageState extends State<SettingsPage> {
                                 : Colors.red,
                       ),
                     ),
-              trailing: _checkingUpdate
-                  ? const SizedBox(
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_checkingUpdate) ...[
+                    const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : null,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    _appVersion ?? 'v?',
+                    style: TextStyle(
+                      color:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ),
               onPressed: (_) => _checkForUpdate(),
             ),
           ],

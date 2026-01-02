@@ -7,10 +7,23 @@ class SingleInstance {
   static const String _activateMessage = 'activate';
 
   static ServerSocket? _server;
+  static RandomAccessFile? _lockFile;
+  static final String _lockPath = () {
+    final base =
+        Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
+    return '${base.replaceAll('\\', '/')}/desk_tidy_single_instance.lock';
+  }();
 
   static Future<bool> ensure({
     required Future<void> Function() onActivate,
   }) async {
+    // File lock guard to prevent multiple processes.
+    final ok = await _acquireFileLock();
+    if (!ok) {
+      await _sendActivate();
+      return false;
+    }
+
     try {
       _server = await ServerSocket.bind(
         InternetAddress.loopbackIPv4,
@@ -58,6 +71,36 @@ class SingleInstance {
       await socket.close();
     } catch (_) {
       // Ignore; we tried to notify the existing instance.
+    }
+  }
+
+  /// Release resources (only needed for tests; OS cleans up on exit).
+  static Future<void> dispose() async {
+    final file = _lockFile;
+    await file?.unlock();
+    await file?.close();
+    _lockFile = null;
+    await _server?.close();
+    _server = null;
+  }
+
+  static Future<bool> _acquireFileLock() async {
+    try {
+      final file = File(_lockPath);
+      if (!file.existsSync()) {
+        file.createSync(recursive: true);
+      }
+      final raf = await file.open(mode: FileMode.write);
+      try {
+        await raf.lock(FileLock.exclusive);
+      } on FileSystemException {
+        await raf.close();
+        return false;
+      }
+      _lockFile = raf;
+      return true;
+    } catch (_) {
+      return true; // Fail open to avoid blocking launch if fs not writable.
     }
   }
 }
