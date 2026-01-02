@@ -1,11 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UpdateService {
-  // Replace these values with the actual Gitee repository owner and name.
   static const String _giteeOwner = 'zlmw';
   static const String _giteeRepo = 'desk_tidy';
   static const String _giteeApiBaseUrl = 'https://gitee.com/api/v5';
@@ -13,24 +13,37 @@ class UpdateService {
   /// 检查 Gitee 上的最新 Release 是否高于当前版本。
   static Future<UpdateInfo?> checkForUpdate() async {
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final currentVersion = packageInfo.version;
-
-      final response = await http.get(
-        Uri.parse(
-          '$_giteeApiBaseUrl/repos/$_giteeOwner/$_giteeRepo/releases/latest',
-        ),
-        headers: {'Accept': 'application/json'},
+      final currentVersion = await _resolveCurrentVersion();
+      final requestUri = Uri.parse(
+        '$_giteeApiBaseUrl/repos/$_giteeOwner/$_giteeRepo/releases/latest',
       );
 
+      print('UpdateService: checking $requestUri, current=$currentVersion');
+
+      final response = await http
+          .get(
+            requestUri,
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'desk_tidy/$currentVersion',
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
       if (response.statusCode != 200) {
-        print('获取更新信息失败: ${response.statusCode}');
-        return null;
+        final bodyPreview = response.body.length > 160
+            ? '${response.body.substring(0, 160)}...'
+            : response.body;
+        throw HttpException(
+          'HTTP ${response.statusCode} when requesting $requestUri, body: $bodyPreview',
+          uri: requestUri,
+        );
       }
 
-      final releaseData = jsonDecode(response.body);
+      final releaseData =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       final latestVersion =
-          releaseData['tag_name']?.toString().replaceAll('v', '') ?? '';
+          (releaseData['tag_name']?.toString() ?? '').replaceAll('v', '');
       final releaseUrl = releaseData['html_url'] as String?;
       final assets = releaseData['assets'] as List<dynamic>?;
       String? downloadUrl;
@@ -45,8 +58,9 @@ class UpdateService {
         }
       }
 
-      final hasUpdate = latestVersion.isNotEmpty &&
-          _compareVersions(currentVersion, latestVersion) < 0;
+      final normalizedLatest = latestVersion.split('+').first;
+      final hasUpdate = normalizedLatest.isNotEmpty &&
+          _compareVersions(currentVersion, normalizedLatest) < 0;
 
       return UpdateInfo(
         hasUpdate: hasUpdate,
@@ -56,10 +70,49 @@ class UpdateService {
         downloadUrl: downloadUrl,
         releaseNotes: releaseData['body']?.toString() ?? '',
       );
-    } catch (e) {
-      print('检查更新时出错: $e');
+    } catch (e, st) {
+      print('检查更新时出错: $e\n$st');
       return null;
     }
+  }
+
+  /// 优先通过 package_info_plus 读取版本；若插件不可用（如 MissingPlugin），
+  /// 退回到编译期的环境变量或者本地 pubspec 里的版本号，避免直接失败。
+  static Future<String> _resolveCurrentVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      return packageInfo.version.split('+').first;
+    } catch (e) {
+      print('UpdateService: PackageInfo.fromPlatform failed, fallback. $e');
+      final envVersion =
+          const String.fromEnvironment('DESK_TIDY_VERSION', defaultValue: '')
+              .trim();
+      if (envVersion.isNotEmpty) {
+        return envVersion.split('+').first;
+      }
+      final pubspecVersion = await _readLocalPubspecVersion();
+      if (pubspecVersion != null) return pubspecVersion;
+      // 最后退回一个兜底版本，保证 HTTP 请求能继续。
+      return '0.0.0';
+    }
+  }
+
+  static Future<String?> _readLocalPubspecVersion() async {
+    try {
+      final file = File('pubspec.yaml');
+      if (!await file.exists()) return null;
+      final lines = await file.readAsLines();
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('version:')) {
+          final version = trimmed.split(':').last.trim();
+          return version.split('+').first;
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+    return null;
   }
 
   static int _compareVersions(String v1, String v2) {

@@ -61,6 +61,22 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _updateStatus;
   String? _appVersion;
 
+  void _showInfoDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('好的'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickBackground() async {
     final picked = await FilePicker.platform.pickFiles(
       allowMultiple: false,
@@ -105,6 +121,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _updateStatus = '无法获取更新信息';
           _checkingUpdate = false;
         });
+        _showInfoDialog('检查更新失败', '无法获取更新信息，请稍后重试。');
         return;
       }
 
@@ -121,12 +138,14 @@ class _SettingsPageState extends State<SettingsPage> {
           _updateStatus = '当前已是最新版本 v${updateInfo.currentVersion}';
           _checkingUpdate = false;
         });
+        _showInfoDialog('已是最新', '当前已是最新版本 v${updateInfo.currentVersion}');
       }
     } catch (e) {
       setState(() {
         _updateStatus = '检查更新失败: $e';
         _checkingUpdate = false;
       });
+      _showInfoDialog('检查更新失败', '检查更新失败: $e');
     }
   }
 
