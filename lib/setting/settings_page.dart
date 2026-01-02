@@ -121,7 +121,6 @@ class _SettingsPageState extends State<SettingsPage> {
           _updateStatus = '无法获取更新信息';
           _checkingUpdate = false;
         });
-        _showInfoDialog('检查更新失败', '无法获取更新信息，请稍后重试。');
         return;
       }
 
@@ -145,7 +144,6 @@ class _SettingsPageState extends State<SettingsPage> {
         _updateStatus = '检查更新失败: $e';
         _checkingUpdate = false;
       });
-      _showInfoDialog('检查更新失败', '检查更新失败: $e');
     }
   }
 
