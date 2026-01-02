@@ -126,7 +126,7 @@ int _enumFindFlutterWindowProc(int hwnd, int lParam) {
       final len = GetClassName(hwnd, classNamePtr, 256);
       if (len == 0) return 1;
       final className = classNamePtr.toDartString(length: len);
-      if (className != 'FLUTTER_RUNNER_WIN32_WINDOW') return 1;
+      if (className != 'DESK_TIDY_WIN32_WINDOW') return 1;
     } finally {
       free(classNamePtr);
     }

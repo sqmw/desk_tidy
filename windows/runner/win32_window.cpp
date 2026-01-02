@@ -16,7 +16,8 @@ namespace {
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+// Unique top-level window class name for Desk Tidy.
+constexpr const wchar_t kWindowClassName[] = L"DESK_TIDY_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
 ///
