@@ -137,6 +137,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _iconSize = config.iconSize;
       _showHidden = config.showHidden;
       _autoRefresh = config.autoRefresh;
+      _autoLaunch = config.autoLaunch;
       _hideDesktopItems = config.hideDesktopItems || _hideDesktopItems;
       _themeModeOption = config.themeModeOption;
       _backgroundImagePath = config.backgroundPath;
@@ -898,16 +899,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             _setupAutoRefresh();
           },
           onAutoLaunchChanged: (v) async {
+            final previous = _autoLaunch;
             setState(() => _autoLaunch = v);
-            AppPreferences.saveAutoLaunch(v);
             final ok = await setAutoLaunchEnabled(v);
             if (!mounted) return;
             if (!ok) {
-              setState(() => _autoLaunch = !v);
+              setState(() => _autoLaunch = previous);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('开机启动设置失败')),
               );
+              return;
             }
+            await AppPreferences.saveAutoLaunch(v);
           },
           onHideDesktopItemsChanged: _handleHideDesktopItemsChanged,
           onThemeModeChanged: (v) {
