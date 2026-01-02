@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
@@ -141,14 +142,28 @@ class _FolderPageState extends State<FolderPage> {
         position.dy + 1,
       ),
       items: [
-        if (isDir)
+        PopupMenuItem(
+          value: 'open',
+          child: ListTile(
+            leading: Icon(isDir ? Icons.folder_open : Icons.open_in_new),
+            title: const Text('打开'),
+          ),
+        ),
+        if (!isDir)
           const PopupMenuItem(
-            value: 'open',
+            value: 'open_with',
             child: ListTile(
-              leading: Icon(Icons.folder_open),
-              title: Text('打开'),
+              leading: Icon(Icons.app_registration),
+              title: Text('使用其它应用打开'),
             ),
           ),
+        const PopupMenuItem(
+          value: 'open_in_explorer',
+          child: ListTile(
+            leading: Icon(Icons.folder),
+            title: Text('在资源管理器打开'),
+          ),
+        ),
         const PopupMenuItem(
           value: 'move',
           child: ListTile(
@@ -204,7 +219,19 @@ class _FolderPageState extends State<FolderPage> {
 
     switch (result) {
       case 'open':
-        if (isDir) _openFolder(entity.path);
+        if (isDir) {
+          _openFolder(entity.path);
+        } else {
+          await openWithDefault(entity.path);
+        }
+        break;
+      case 'open_with':
+        if (!isDir) {
+          await _promptOpenWith(entity.path);
+        }
+        break;
+      case 'open_in_explorer':
+        await openInExplorer(entity.path);
         break;
       case 'delete':
         _deleteEntity(entity);
@@ -238,6 +265,18 @@ class _FolderPageState extends State<FolderPage> {
         break;
     }
     _entityMenuActive = false;
+  }
+
+  Future<void> _promptOpenWith(String targetPath) async {
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final appPath = picked.files.single.path;
+    if (appPath == null || appPath.isEmpty) return;
+    await openWithApp(appPath, targetPath);
   }
 
   Future<void> _showPageMenu(Offset position) async {
@@ -463,6 +502,13 @@ class _FolderPageState extends State<FolderPage> {
                         color: Colors.transparent,
                         child: InkWell(
                           onTap: isDir ? () => _openFolder(entity.path) : null,
+                          onDoubleTap: () async {
+                            if (isDir) {
+                              _openFolder(entity.path);
+                            } else {
+                              await openWithDefault(entity.path);
+                            }
+                          },
                           onSecondaryTapDown: (details) {
                             _showEntityMenu(entity, details.globalPosition);
                           },

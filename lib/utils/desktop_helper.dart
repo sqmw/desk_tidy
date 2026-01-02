@@ -701,6 +701,27 @@ Future<bool> openWithDefault(String fullPath) async {
   }
 }
 
+/// Open Windows File Explorer for [fullPath].
+///
+/// - If [select] is true, attempts to select the file/folder in its parent.
+/// - If [select] is false, opens the folder (or selects the file by default).
+Future<bool> openInExplorer(
+  String fullPath, {
+  bool? select,
+}) async {
+  try {
+    if (!Platform.isWindows) return false;
+    final shouldSelect = select ?? !isDirectory(fullPath);
+    final shell = pr.Shell(runInShell: true, verbose: false);
+    final escaped = fullPath.replaceAll('"', '\\"');
+    final args = shouldSelect ? '/select,"$escaped"' : '"$escaped"';
+    await shell.run('explorer.exe $args');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 /// Open target file with a specific application executable.
 Future<bool> openWithApp(String appPath, String target) async {
   try {
