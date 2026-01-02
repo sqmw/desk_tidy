@@ -38,7 +38,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     with WindowListener {
   final TrayHelper _trayHelper = TrayHelper();
   late final WindowDockManager _dockManager;
-  
+
   bool _trayReady = false;
   Timer? _saveWindowTimer;
   Timer? _dragEndTimer;
@@ -49,7 +49,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _isLoading = true;
   bool _isMaximized = false;
   final ValueNotifier<bool> _windowFocusNotifier = ValueNotifier(true);
-  
+
   // Controls how much of the desktop shows through (via the background layer).
   // 1.0 = fully opaque, 0.0 = fully transparent.
   double _backgroundOpacity = 0.8;
@@ -58,7 +58,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _hideDesktopItems = false;
   bool _panelVisible = true;
   bool _trayMode = false;
-  
+
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
   Timer? _hotCornerTimer;
@@ -225,7 +225,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       final incomingPaths = [...shortcutsPaths]..sort();
       final currentPaths = _shortcuts.map((e) => e.path).toList()..sort();
       final pathsUnchanged = _pathsEqual(currentPaths, incomingPaths);
-      
+
       // 如果路径没有变化且不是强制显示加载状态（即非手动刷新），则直接返回
       if (pathsUnchanged && !showLoading) {
         if (shouldShowLoading) {
@@ -292,7 +292,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _isRefreshing = false;
     }
   }
-  
+
   bool _pathsEqual(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
@@ -304,12 +304,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   // 比较两个快捷方式列表是否相等
   bool _shortcutsEqual(List<ShortcutItem> oldList, List<ShortcutItem> newList) {
     if (oldList.length != newList.length) return false;
-    
+
     // 使用Set来比较，性能更好
     final oldPathSet = oldList.map((item) => item.path).toSet();
     final newPathSet = newList.map((item) => item.path).toSet();
-    
-    return oldPathSet.length == newPathSet.length && oldPathSet.containsAll(newPathSet);
+
+    return oldPathSet.length == newPathSet.length &&
+        oldPathSet.containsAll(newPathSet);
   }
 
   void _toggleMaximize() {
@@ -377,7 +378,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
-  @override
   // 设置自动刷新
   void _setupAutoRefresh() {
     _autoRefreshTimer?.cancel();
@@ -390,6 +390,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
+  @override
   void dispose() {
     _hotCornerTimer?.cancel();
     _desktopIconSyncTimer?.cancel();
@@ -417,7 +418,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _scheduleSaveWindowBounds();
     if (_dockManager.shouldSuppressMoveTracking()) return;
     _dockManager.markWindowMoving();
-    
+
     // 检测拖动结束：如果窗口停止移动一段时间，认为鼠标已松开
     _dragEndTimer?.cancel();
     _dragEndTimer = Timer(const Duration(milliseconds: 150), () {
@@ -449,7 +450,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         Timer.periodic(const Duration(milliseconds: 520), (_) async {
       if (!mounted) return;
       if (!_trayMode && !_dockManager.isDocked) return;
-      
+
       final cursorPos = getCursorScreenPosition();
       if (cursorPos == null) return;
       final screen = getPrimaryScreenSize();
@@ -460,7 +461,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         Offset(cursorPos.x.toDouble(), cursorPos.y.toDouble()),
       );
       final ctrlDown = isCtrlPressed();
-      
+
       if (_trayMode && inHotCorner && ctrlDown) {
         await _presentFromHotCorner();
       }
@@ -472,7 +473,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     if (mounted) setState(() => _panelVisible = false);
-    
+
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
@@ -485,7 +486,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     unawaited(Future.delayed(const Duration(milliseconds: 800), () {
       windowManager.setAlwaysOnTop(false);
     }));
-    
+
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -498,7 +499,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     if (mounted) setState(() => _panelVisible = false);
-    
+
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.show();
@@ -509,7 +510,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     unawaited(Future.delayed(const Duration(milliseconds: 800), () {
       windowManager.setAlwaysOnTop(false);
     }));
-    
+
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -526,7 +527,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.hide();
   }
 
-  Future<bool> _isCursorInsideWindow() async { // 这里的判定通过获取当前鼠标位置，以及窗口位置即可判定
+  Future<bool> _isCursorInsideWindow() async {
+    // 这里的判定通过获取当前鼠标位置，以及窗口位置即可判定
     try {
       if (_windowHandle == 0) {
         _windowHandle = findMainFlutterWindowHandle() ?? 0;
@@ -552,7 +554,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       return false;
     }
   }
-
 
   Future<void> _syncDesktopIconVisibility() async {
     final visible = await isDesktopIconsVisible();
@@ -622,136 +623,136 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           child: Stack(
             fit: StackFit.expand,
             children: [
-          Positioned.fill(
-            child: Opacity(
-              opacity: _backgroundOpacity,
-              child: backgroundExists
-                  ? Image.file(
-                      File(backgroundPath),
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                    ),
-            ),
-          ),
-          Column(
-            children: [
-              _buildTitleBar(),
-              Expanded(
-                child: Row(
-                  children: [
-                    Listener(
-                      onPointerDown: _onNavigationRailPointer,
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: railPadH,
-                          vertical: railPadV,
+              Positioned.fill(
+                child: Opacity(
+                  opacity: _backgroundOpacity,
+                  child: backgroundExists
+                      ? Image.file(
+                          File(backgroundPath),
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          color: Theme.of(context).scaffoldBackgroundColor,
                         ),
-                        child: GlassContainer(
-                          borderRadius: BorderRadius.circular(18),
-                          opacity: _chromeOpacity,
-                          blurSigma: 20,
-                          border: Border.all(
-                            color:
-                                theme.dividerColor.withValues(alpha: 0.16),
-                          ),
-                          child: NavigationRail(
-                            backgroundColor: Colors.transparent,
-                            minWidth: railMinWidth,
-                            useIndicator: true,
-                            indicatorColor: theme.colorScheme.primary
-                                .withValues(alpha: _indicatorOpacity),
-                            selectedIconTheme: IconThemeData(
-                              color: theme.colorScheme.primary,
-                            ),
-                            unselectedIconTheme: IconThemeData(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.72),
-                            ),
-                            selectedLabelTextStyle: theme.textTheme.labelMedium
-                                ?.copyWith(
-                                    color: theme.colorScheme.primary),
-                            unselectedLabelTextStyle:
-                                theme.textTheme.labelMedium?.copyWith(
-                              color:
-                                  theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.72),
-                            ),
-                            selectedIndex: _selectedIndex,
-                            onDestinationSelected:
-                                _onNavigationRailItemSelected,
-                            labelType: NavigationRailLabelType.none,
-                            destinations: [
-                              NavigationRailDestination(
-                                icon: Tooltip(
-                                  message: '应用',
-                                  child: Icon(Icons.apps),
-                                ),
-                                label: const Text('应用'),
-                              ),
-                              NavigationRailDestination(
-                                icon: Tooltip(
-                                  message: '全部',
-                                  child: Icon(Icons.all_inbox),
-                                ),
-                                label: const Text('全部'),
-                              ),
-                              NavigationRailDestination(
-                                icon: Tooltip(
-                                  message: '文件夹',
-                                  child: Icon(Icons.folder),
-                                ),
-                                label: const Text('文件夹'),
-                              ),
-                              NavigationRailDestination(
-                                icon: Tooltip(
-                                  message: '文件',
-                                  child: Icon(Icons.insert_drive_file),
-                                ),
-                                label: const Text('文件'),
-                              ),
-                              NavigationRailDestination(
-                                icon: Tooltip(
-                                  message: '设置',
-                                  child: Icon(Icons.settings),
-                                ),
-                                label: const Text('设置'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    VerticalDivider(
-                      thickness: 1,
-                      width: 1,
-                            color: theme.dividerColor.withValues(alpha: 0.12),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          10 * scale,
-                          6 * scale,
-                          10 * scale,
-                          10 * scale,
-                        ),
-                        child: GlassContainer(
-                          borderRadius: BorderRadius.circular(18),
-                          opacity: _contentPanelOpacity,
-                          blurSigma: _contentPanelBlur,
-                          border: Border.all(
-                            color: theme.dividerColor.withValues(alpha: 0.16),
-                          ),
-                          child: _buildContent(),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ],
-          ),
+              Column(
+                children: [
+                  _buildTitleBar(),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Listener(
+                          onPointerDown: _onNavigationRailPointer,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: railPadH,
+                              vertical: railPadV,
+                            ),
+                            child: GlassContainer(
+                              borderRadius: BorderRadius.circular(18),
+                              opacity: _chromeOpacity,
+                              blurSigma: 20,
+                              border: Border.all(
+                                color:
+                                    theme.dividerColor.withValues(alpha: 0.16),
+                              ),
+                              child: NavigationRail(
+                                backgroundColor: Colors.transparent,
+                                minWidth: railMinWidth,
+                                useIndicator: true,
+                                indicatorColor: theme.colorScheme.primary
+                                    .withValues(alpha: _indicatorOpacity),
+                                selectedIconTheme: IconThemeData(
+                                  color: theme.colorScheme.primary,
+                                ),
+                                unselectedIconTheme: IconThemeData(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.72),
+                                ),
+                                selectedLabelTextStyle:
+                                    theme.textTheme.labelMedium?.copyWith(
+                                        color: theme.colorScheme.primary),
+                                unselectedLabelTextStyle:
+                                    theme.textTheme.labelMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.72),
+                                ),
+                                selectedIndex: _selectedIndex,
+                                onDestinationSelected:
+                                    _onNavigationRailItemSelected,
+                                labelType: NavigationRailLabelType.none,
+                                destinations: [
+                                  NavigationRailDestination(
+                                    icon: Tooltip(
+                                      message: '应用',
+                                      child: Icon(Icons.apps),
+                                    ),
+                                    label: const Text('应用'),
+                                  ),
+                                  NavigationRailDestination(
+                                    icon: Tooltip(
+                                      message: '全部',
+                                      child: Icon(Icons.all_inbox),
+                                    ),
+                                    label: const Text('全部'),
+                                  ),
+                                  NavigationRailDestination(
+                                    icon: Tooltip(
+                                      message: '文件夹',
+                                      child: Icon(Icons.folder),
+                                    ),
+                                    label: const Text('文件夹'),
+                                  ),
+                                  NavigationRailDestination(
+                                    icon: Tooltip(
+                                      message: '文件',
+                                      child: Icon(Icons.insert_drive_file),
+                                    ),
+                                    label: const Text('文件'),
+                                  ),
+                                  NavigationRailDestination(
+                                    icon: Tooltip(
+                                      message: '设置',
+                                      child: Icon(Icons.settings),
+                                    ),
+                                    label: const Text('设置'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        VerticalDivider(
+                          thickness: 1,
+                          width: 1,
+                          color: theme.dividerColor.withValues(alpha: 0.12),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              10 * scale,
+                              6 * scale,
+                              10 * scale,
+                              10 * scale,
+                            ),
+                            child: GlassContainer(
+                              borderRadius: BorderRadius.circular(18),
+                              opacity: _contentPanelOpacity,
+                              blurSigma: _contentPanelBlur,
+                              border: Border.all(
+                                color:
+                                    theme.dividerColor.withValues(alpha: 0.16),
+                              ),
+                              child: _buildContent(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -983,8 +984,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             opacity: _toolbarPanelOpacity,
             blurSigma: _toolbarPanelBlur,
             border: Border.all(
-              color:
-                  Theme.of(context).dividerColor.withValues(alpha: 0.16),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
             padding: EdgeInsets.symmetric(
               horizontal: 10 * scale,
@@ -1004,10 +1004,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     elevation: 0,
                     shadowColor: Colors.transparent,
                     backgroundColor:
-                        Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(
+                        Theme.of(context).colorScheme.primary.withValues(
                               alpha: 0.10 + 0.10 * _backgroundOpacity,
                             ),
                     foregroundColor: Theme.of(context).colorScheme.onSurface,
