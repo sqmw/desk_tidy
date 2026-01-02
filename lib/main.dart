@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'screens/desk_tidy_home_page.dart';
@@ -6,11 +8,11 @@ import 'utils/single_instance.dart';
 import 'utils/app_preferences.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
-
+  // Guard as early as possible to prevent extra processes from fully spinning up.
+  final windowReady = Completer<void>();
   final isPrimary = await SingleInstance.ensure(
     onActivate: () async {
+      await windowReady.future;
       await windowManager.show();
       await windowManager.restore();
       await windowManager.setAlignment(Alignment.center);
@@ -19,28 +21,37 @@ Future<void> main() async {
   );
   if (!isPrimary) return;
 
+  WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
   final bounds = await AppPreferences.loadWindowBounds();
 
-  await windowManager.waitUntilReadyToShow(
-    WindowOptions(
-      title: 'desk_tidy',
-      titleBarStyle: TitleBarStyle.hidden,
-      windowButtonVisibility: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: true,
-      size: bounds == null
-          ? null
-          : Size(bounds.width.toDouble(), bounds.height.toDouble()),
-      center: bounds == null,
-    ),
-    () async {
-      if (bounds != null) {
-        await windowManager
-            .setPosition(Offset(bounds.x.toDouble(), bounds.y.toDouble()));
-      }
-      await windowManager.hide();
-    },
-  );
+  try {
+    await windowManager.waitUntilReadyToShow(
+      WindowOptions(
+        title: 'desk_tidy',
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: true,
+        size: bounds == null
+            ? null
+            : Size(bounds.width.toDouble(), bounds.height.toDouble()),
+        center: bounds == null,
+      ),
+      () async {
+        if (bounds != null) {
+          await windowManager
+              .setPosition(Offset(bounds.x.toDouble(), bounds.y.toDouble()));
+        }
+        await windowManager.hide();
+      },
+    );
+  } finally {
+    if (!windowReady.isCompleted) {
+      windowReady.complete();
+    }
+  }
 
   runApp(const MyApp());
 }
