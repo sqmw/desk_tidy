@@ -538,6 +538,74 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await _toggleShortcutInCategory(target, shortcut);
   }
 
+  Future<void> _showCategoryAssignmentDialog() async {
+    final id = _activeCategoryId;
+    if (id == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            final category = _categories.firstWhere(
+              (c) => c.id == id,
+              orElse: () => AppCategory.empty,
+            );
+            if (category.id.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return AlertDialog(
+              title: Text('管理分类：${category.name}'),
+              content: SizedBox(
+                width: 420,
+                height: 520,
+                child: ListView.builder(
+                  itemCount: _shortcuts.length,
+                  itemBuilder: (context, index) {
+                    final shortcut = _shortcuts[index];
+                    final selected = category.paths.contains(shortcut.path);
+                    return CheckboxListTile(
+                      value: selected,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      title: Text(
+                        shortcut.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        shortcut.path,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: Colors.grey),
+                      ),
+                      onChanged: (_) async {
+                        final latest = _categories.firstWhere(
+                          (c) => c.id == id,
+                          orElse: () => AppCategory.empty,
+                        );
+                        if (latest.id.isEmpty) return;
+                        await _toggleShortcutInCategory(latest, shortcut);
+                        setStateDialog(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('关闭'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _reorderVisibleCategories(int oldIndex, int newIndex) {
     final visible = _visibleCategories;
     if (newIndex > oldIndex) newIndex -= 1;
@@ -549,6 +617,49 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _categories = [...visible, ...empties];
     });
     unawaited(_saveCategories());
+  }
+
+  Future<void> _confirmDeleteCategory(String id) async {
+    final target = _categories.firstWhere(
+      (c) => c.id == id,
+      orElse: () => AppCategory.empty,
+    );
+    if (target.id.isEmpty) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除分类'),
+          content: Text('确定删除分类“${target.name}”吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    setState(() {
+      _categories = _categories.where((c) => c.id != id).toList();
+      if (_activeCategoryId == id) {
+        _activeCategoryId = null;
+      }
+    });
+    await _saveCategories();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除分类：${target.name}')),
+      );
+    }
   }
 
   bool _pathsEqual(List<String> a, List<String> b) {
@@ -1270,6 +1381,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                   onCategorySelected: (id) =>
                       setState(() => _activeCategoryId = id),
                   onReorder: _reorderVisibleCategories,
+                  onCategorySecondaryTap: _confirmDeleteCategory,
                 ),
               ],
             ),
@@ -1324,7 +1436,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                         final aspectRatio =
                             cardHeight <= 0 ? 1 : tileMaxExtent / cardHeight;
 
-                        return GridView.builder(
+                        final grid = GridView.builder(
                           padding: EdgeInsets.fromLTRB(
                             14 * scale,
                             0,
@@ -1351,6 +1463,17 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                                   _showCategoryMenuForShortcut,
                             );
                           },
+                        );
+
+                        return Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (event) async {
+                            if (_activeCategoryId == null) return;
+                            if (event.kind != PointerDeviceKind.mouse) return;
+                            if (event.buttons != kSecondaryMouseButton) return;
+                            await _showCategoryAssignmentDialog();
+                          },
+                          child: grid,
                         );
                       },
                     ),

@@ -10,6 +10,7 @@ class CategoryStrip extends StatelessWidget {
   final VoidCallback onAllSelected;
   final ValueChanged<String> onCategorySelected;
   final void Function(int oldIndex, int newIndex) onReorder;
+  final ValueChanged<String>? onCategorySecondaryTap;
 
   const CategoryStrip({
     super.key,
@@ -20,6 +21,7 @@ class CategoryStrip extends StatelessWidget {
     required this.onAllSelected,
     required this.onCategorySelected,
     required this.onReorder,
+    this.onCategorySecondaryTap,
   });
 
   @override
@@ -58,9 +60,14 @@ class CategoryStrip extends StatelessWidget {
                   return Padding(
                     key: ValueKey(cat.id),
                     padding: EdgeInsets.only(right: spacing),
-                    child: ReorderableDragStartListener(
-                      index: index,
-                      child: chip,
+                    child: GestureDetector(
+                      onSecondaryTap: onCategorySecondaryTap == null
+                          ? null
+                          : () => onCategorySecondaryTap!(cat.id),
+                      child: ReorderableDragStartListener(
+                        index: index,
+                        child: chip,
+                      ),
                     ),
                   );
                 },
