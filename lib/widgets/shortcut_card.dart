@@ -12,6 +12,8 @@ class ShortcutCard extends StatefulWidget {
   final double iconSize;
   final ValueListenable<bool>? windowFocusNotifier;
   final VoidCallback? onDeleted;
+  final Future<void> Function(ShortcutItem shortcut, Offset position)?
+      onCategoryMenuRequested;
 
   const ShortcutCard({
     super.key,
@@ -19,6 +21,7 @@ class ShortcutCard extends StatefulWidget {
     this.iconSize = 32,
     this.windowFocusNotifier,
     this.onDeleted,
+    this.onCategoryMenuRequested,
   });
 
   @override
@@ -122,6 +125,13 @@ class _ShortcutCardState extends State<ShortcutCard> {
           ),
         ),
         PopupMenuItem(
+          value: 'categorize',
+          child: ListTile(
+            leading: Icon(Icons.bookmarks_outlined),
+            title: Text('添加到分类'),
+          ),
+        ),
+        PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete),
@@ -156,6 +166,9 @@ class _ShortcutCardState extends State<ShortcutCard> {
     switch (result) {
       case 'open':
         openWithDefault(resolvedPath);
+        break;
+      case 'categorize':
+        await widget.onCategoryMenuRequested?.call(shortcut, globalPosition);
         break;
       case 'delete':
         final ok = moveToRecycleBin(shortcut.path);

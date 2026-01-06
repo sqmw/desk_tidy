@@ -27,6 +27,30 @@ bool _autoRefresh = false;
 bool _autoLaunch = true;
 double _iconSize = 32;
 
+class AppCategory {
+  final String id;
+  final String name;
+  final Set<String> paths;
+
+  const AppCategory({
+    required this.id,
+    required this.name,
+    required this.paths,
+  });
+
+  AppCategory copyWith({
+    String? id,
+    String? name,
+    Set<String>? paths,
+  }) {
+    return AppCategory(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      paths: paths ?? this.paths,
+    );
+  }
+}
+
 class DeskTidyHomePage extends StatefulWidget {
   const DeskTidyHomePage({super.key});
 
@@ -45,6 +69,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Timer? _autoRefreshTimer;
   bool _isRefreshing = false;
   List<ShortcutItem> _shortcuts = [];
+  List<AppCategory> _categories = [];
+  String? _activeCategoryId;
   String _desktopPath = '';
   bool _isLoading = true;
   bool _isMaximized = false;
@@ -86,6 +112,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   double get _indicatorOpacity =>
       (0.10 + 0.12 * _backgroundOpacity).clamp(0.10, 0.22);
+
+  List<AppCategory> get _visibleCategories =>
+      _categories.where((c) => c.paths.isNotEmpty).toList();
+
+  List<ShortcutItem> get _filteredShortcuts {
+    if (_activeCategoryId == null) return _shortcuts;
+    final category = _categories.firstWhere(
+      (c) => c.id == _activeCategoryId,
+      orElse: () => const AppCategory(id: '', name: '', paths: {}),
+    );
+    if (category.id.isEmpty || category.paths.isEmpty) return _shortcuts;
+    final allowed = category.paths;
+    return _shortcuts.where((s) => allowed.contains(s.path)).toList();
+  }
 
   double _uiScale(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
@@ -143,6 +183,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _backgroundImagePath = config.backgroundPath;
     });
     _handleThemeChange(_themeModeOption);
+    await _loadCategories();
     await _loadShortcuts();
     await _syncDesktopIconVisibility();
     _setupAutoRefresh();
@@ -204,6 +245,37 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     } catch (_) {
       // Ignore tray hint failures.
     }
+  }
+
+  Future<void> _loadCategories() async {
+    final stored = await AppPreferences.loadCategories();
+    if (!mounted) return;
+    setState(() {
+      _categories = stored
+          .where((c) => c.id.isNotEmpty && c.name.isNotEmpty)
+          .map(
+            (c) => AppCategory(
+              id: c.id,
+              name: c.name,
+              paths: {...c.shortcutPaths},
+            ),
+          )
+          .toList();
+    });
+  }
+
+  Future<void> _saveCategories() async {
+    await AppPreferences.saveCategories(
+      _categories
+          .map(
+            (c) => StoredCategory(
+              id: c.id,
+              name: c.name,
+              shortcutPaths: c.paths.toList(),
+            ),
+          )
+          .toList(),
+    );
   }
 
   Future<void> _loadShortcuts({bool showLoading = true}) async {
@@ -279,6 +351,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         setState(() {
           _shortcuts = shortcutItems;
         });
+        _syncCategoriesWithShortcuts(shortcutItems);
       }
 
       if (shouldShowLoading) {
@@ -292,6 +365,212 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     } finally {
       _isRefreshing = false;
     }
+  }
+
+  void _syncCategoriesWithShortcuts(List<ShortcutItem> shortcuts) {
+    final existingPaths = shortcuts.map((e) => e.path).toSet();
+    bool changed = false;
+    bool clearActive = false;
+    final updated = _categories.map((c) {
+      final filtered = c.paths.where(existingPaths.contains).toSet();
+      if (filtered.length != c.paths.length) {
+        changed = true;
+      }
+      return c.copyWith(paths: filtered);
+    }).toList();
+
+    if (_activeCategoryId != null) {
+      final active = updated.firstWhere(
+        (c) => c.id == _activeCategoryId,
+        orElse: () => const AppCategory(id: '', name: '', paths: {}),
+      );
+      if (active.id.isEmpty || active.paths.isEmpty) {
+        clearActive = true;
+      }
+    }
+
+    if (changed || clearActive) {
+      setState(() {
+        _categories = updated;
+        if (clearActive) {
+          _activeCategoryId = null;
+        }
+      });
+      unawaited(_saveCategories());
+    }
+  }
+
+  String _nextCategoryId() =>
+      'cat_${DateTime.now().microsecondsSinceEpoch.toString()}';
+
+  Future<AppCategory?> _createCategory(
+    String name, {
+    ShortcutItem? initialShortcut,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    final exists = _categories.any(
+      (c) => c.name.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('分类已存在')),
+        );
+      }
+      return null;
+    }
+
+    final newCategory = AppCategory(
+      id: _nextCategoryId(),
+      name: trimmed,
+      paths: initialShortcut == null ? <String>{} : {initialShortcut.path},
+    );
+
+    setState(() {
+      _categories = [..._categories, newCategory];
+      if (initialShortcut != null && _activeCategoryId == null) {
+        _activeCategoryId = newCategory.id;
+      }
+    });
+    await _saveCategories();
+    return newCategory;
+  }
+
+  Future<void> _toggleShortcutInCategory(
+    AppCategory category,
+    ShortcutItem shortcut,
+  ) async {
+    final idx = _categories.indexWhere((c) => c.id == category.id);
+    if (idx < 0) return;
+    final updatedPaths = {...category.paths};
+    final alreadyIn = updatedPaths.contains(shortcut.path);
+    if (alreadyIn) {
+      updatedPaths.remove(shortcut.path);
+    } else {
+      updatedPaths.add(shortcut.path);
+    }
+    final updated = category.copyWith(paths: updatedPaths);
+    setState(() {
+      _categories = [
+        ..._categories.take(idx),
+        updated,
+        ..._categories.skip(idx + 1),
+      ];
+      if (updated.paths.isEmpty && _activeCategoryId == updated.id) {
+        _activeCategoryId = null;
+      }
+    });
+    await _saveCategories();
+    if (!mounted) return;
+    final text = alreadyIn ? '已从分类移除' : '已添加到分类';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$text：${category.name}')),
+    );
+  }
+
+  Future<String?> _promptCategoryName() async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('新建分类'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '分类名称',
+            ),
+            onSubmitted: (_) => Navigator.of(context).pop(controller.text),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showCategoryMenuForShortcut(
+    ShortcutItem shortcut,
+    Offset position,
+  ) async {
+    final items = <PopupMenuEntry<String>>[
+      const PopupMenuItem(
+        value: 'new',
+        child: ListTile(
+          leading: Icon(Icons.add),
+          title: Text('新建分类'),
+        ),
+      ),
+    ];
+    if (_categories.isNotEmpty) {
+      items.add(const PopupMenuDivider());
+      items.addAll(_categories.map((c) {
+        final selected = c.paths.contains(shortcut.path);
+        return PopupMenuItem(
+          value: c.id,
+          child: ListTile(
+            leading: Icon(
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
+            ),
+            title: Text(c.name),
+          ),
+        );
+      }));
+    }
+
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: items,
+    );
+
+    if (result == null) return;
+
+    if (result == 'new') {
+      final name = await _promptCategoryName();
+      if (name == null) return;
+      final created = await _createCategory(name, initialShortcut: shortcut);
+      if (!mounted || created == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已添加到分类：${created.name}')),
+      );
+      return;
+    }
+
+    final target = _categories.firstWhere(
+      (c) => c.id == result,
+      orElse: () => const AppCategory(id: '', name: '', paths: {}),
+    );
+    if (target.id.isEmpty) return;
+    await _toggleShortcutInCategory(target, shortcut);
+  }
+
+  void _reorderVisibleCategories(int oldIndex, int newIndex) {
+    final visible = _visibleCategories;
+    if (newIndex > oldIndex) newIndex -= 1;
+    final moved = visible.removeAt(oldIndex);
+    visible.insert(newIndex, moved);
+
+    final empties = _categories.where((c) => c.paths.isEmpty).toList();
+    setState(() {
+      _categories = [...visible, ...empties];
+    });
+    unawaited(_saveCategories());
   }
 
   bool _pathsEqual(List<String> a, List<String> b) {
@@ -337,6 +616,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   void _onNavigationRailItemSelected(int index) {
     setState(() => _selectedIndex = index);
+    if (index == 0) {
+      _loadShortcuts(showLoading: false);
+    }
   }
 
   void _onNavigationRailPointer(PointerDownEvent event) {
@@ -970,6 +1252,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   Widget _buildApplicationContent() {
     final scale = _uiScale(context);
+    final shortcuts = _filteredShortcuts;
+    final isFiltering = _activeCategoryId != null;
     return Column(
       children: [
         Padding(
@@ -989,37 +1273,45 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             border: Border.all(
               color: Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: 10 * scale,
-              vertical: 6 * scale,
+            padding: EdgeInsets.fromLTRB(
+              10 * scale,
+              8 * scale,
+              10 * scale,
+              10 * scale,
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '应用列表 (${_shortcuts.length})',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: () => _loadShortcuts(showLoading: true),
-                  icon: const Icon(Icons.refresh),
-                  style: ElevatedButton.styleFrom(
-                    elevation: 0,
-                    shadowColor: Colors.transparent,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primary.withValues(
-                              alpha: 0.10 + 0.10 * _backgroundOpacity,
-                            ),
-                    foregroundColor: Theme.of(context).colorScheme.onSurface,
-                    shape: const StadiumBorder(),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12 * scale,
-                      vertical: 8 * scale,
+                Row(
+                  children: [
+                    Text(
+                      '应用',
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  label: const Text('刷新'),
+                    SizedBox(width: 8 * scale),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8 * scale,
+                        vertical: 4 * scale,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_shortcuts.length}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
+                SizedBox(height: 10 * scale),
+                _buildCategoryStrip(scale),
               ],
             ),
           ),
@@ -1027,25 +1319,30 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : _shortcuts.isEmpty
+              : shortcuts.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.folder_open, size: 64, color: Colors.grey),
                           const SizedBox(height: 16),
-                          const Text(
-                            '未找到桌面快捷方式',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                          const SizedBox(height: 8),
                           Text(
-                            '桌面路径: $_desktopPath',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
+                            isFiltering ? '该分类暂无应用' : '未找到桌面快捷方式',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
                             ),
                           ),
+                          if (!isFiltering) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '桌面路径: $_desktopPath',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     )
@@ -1082,15 +1379,17 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             mainAxisSpacing: mainAxisSpacing,
                             childAspectRatio: aspectRatio.toDouble(),
                           ),
-                          itemCount: _shortcuts.length,
+                          itemCount: shortcuts.length,
                           itemBuilder: (context, index) {
                             return ShortcutCard(
-                              shortcut: _shortcuts[index],
+                              shortcut: shortcuts[index],
                               iconSize: _iconSize,
                               windowFocusNotifier: _windowFocusNotifier,
                               onDeleted: () {
                                 _loadShortcuts(showLoading: false);
                               },
+                              onCategoryMenuRequested:
+                                  _showCategoryMenuForShortcut,
                             );
                           },
                         );
@@ -1098,6 +1397,62 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCategoryStrip(double scale) {
+    final visible = _visibleCategories;
+    final spacing = 8.0 * scale;
+    return SizedBox(
+      height: 38 * scale,
+      child: Row(
+        children: [
+          _buildAllChip(scale),
+          if (visible.isNotEmpty) SizedBox(width: spacing),
+          if (visible.isNotEmpty)
+            Expanded(
+              child: ReorderableListView.builder(
+                scrollDirection: Axis.horizontal,
+                shrinkWrap: true,
+                buildDefaultDragHandles: false,
+                padding: EdgeInsets.zero,
+                onReorder: _reorderVisibleCategories,
+                itemCount: visible.length,
+                itemBuilder: (context, index) {
+                  final cat = visible[index];
+                  final selected = _activeCategoryId == cat.id;
+                  return Padding(
+                    key: ValueKey(cat.id),
+                    padding: EdgeInsets.only(right: spacing),
+                    child: ReorderableDragStartListener(
+                      index: index,
+                      child: FilterChip(
+                        selected: selected,
+                        label: Text('${cat.name} (${cat.paths.length})'),
+                        onSelected: (_) {
+                          setState(() => _activeCategoryId = cat.id);
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllChip(double scale) {
+    final selected = _activeCategoryId == null;
+    return FilterChip(
+      selected: selected,
+      label: Text('全部 (${_shortcuts.length})'),
+      onSelected: (_) {
+        setState(() => _activeCategoryId = null);
+      },
     );
   }
 

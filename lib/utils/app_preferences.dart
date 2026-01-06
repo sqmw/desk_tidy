@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -19,6 +20,7 @@ class AppPreferences {
   static const _kWinY = 'window.y';
   static const _kWinW = 'window.w';
   static const _kWinH = 'window.h';
+  static const _kCategories = 'categories.v1';
 
   static Future<DeskTidyConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -151,6 +153,28 @@ class AppPreferences {
     final ext = path.substring(idx);
     return ext.length > 8 ? '' : ext;
   }
+
+  static Future<List<StoredCategory>> loadCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kCategories);
+    if (raw == null || raw.trim().isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded
+          .whereType<Map>()
+          .map((e) => StoredCategory.fromJson(e.cast<String, dynamic>()))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveCategories(List<StoredCategory> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(categories.map((e) => e.toJson()).toList());
+    await prefs.setString(_kCategories, payload);
+  }
 }
 
 class DeskTidyConfig {
@@ -189,4 +213,33 @@ class WindowBounds {
     required this.width,
     required this.height,
   });
+}
+
+class StoredCategory {
+  final String id;
+  final String name;
+  final List<String> shortcutPaths;
+
+  const StoredCategory({
+    required this.id,
+    required this.name,
+    required this.shortcutPaths,
+  });
+
+  factory StoredCategory.fromJson(Map<String, dynamic> json) {
+    final paths = (json['paths'] as List?)?.whereType<String>().toList() ?? [];
+    return StoredCategory(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      shortcutPaths: paths,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'paths': shortcutPaths,
+    };
+  }
 }

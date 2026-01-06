@@ -4,7 +4,7 @@
 
 #ifndef MyAppVersion
   // Override via: iscc installers\desk_tidy.iss /dMyAppVersion=1.0.0
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.0.3"
 #endif
 
 #ifndef MyBuildDir
