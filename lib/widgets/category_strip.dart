@@ -78,6 +78,14 @@ class CategoryStrip extends StatelessWidget {
     );
   }
 
+  double _chipLabelWidth(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final desired = width * 0.22;
+    final min = 90.0 * scale;
+    final max = 150.0 * scale;
+    return desired.clamp(min, max);
+  }
+
   Widget _buildChip(
     BuildContext context, {
     required String label,
@@ -85,17 +93,33 @@ class CategoryStrip extends StatelessWidget {
     required VoidCallback onPressed,
   }) {
     final theme = Theme.of(context);
+    final labelWidth = _chipLabelWidth(context);
     final baseColor = theme.colorScheme.surface.withValues(alpha: 0.10);
-    final selectedColor =
-        theme.colorScheme.primary.withValues(alpha: 0.12 + 0.05 * scale);
-    final borderColor =
-        theme.colorScheme.onSurface.withValues(alpha: selected ? 0.12 : 0.08);
+    final selectedColor = theme.colorScheme.primary.withValues(
+      alpha: 0.12 + 0.05 * scale,
+    );
+    final borderColor = theme.colorScheme.onSurface.withValues(
+      alpha: selected ? 0.12 : 0.08,
+    );
     final textColor = selected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface.withValues(alpha: 0.86);
     return RawChip(
       showCheckmark: false,
-      label: Text(label),
+      label: SizedBox(
+        width: labelWidth,
+        child: Tooltip(
+          message: label,
+          waitDuration: const Duration(milliseconds: 350),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
       labelStyle: theme.textTheme.labelLarge?.copyWith(
         color: textColor,
         fontWeight: FontWeight.w600,
@@ -106,9 +130,7 @@ class CategoryStrip extends StatelessWidget {
       ),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
-      shape: StadiumBorder(
-        side: BorderSide(color: borderColor, width: 1),
-      ),
+      shape: StadiumBorder(side: BorderSide(color: borderColor, width: 1)),
       side: BorderSide.none,
       backgroundColor: baseColor,
       selectedColor: selectedColor,

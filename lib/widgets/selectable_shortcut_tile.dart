@@ -27,14 +27,17 @@ class SelectableShortcutTile extends StatelessWidget {
     final visualIconSize = math.max(12.0, iconContainerSize * 0.92);
     final radius = BorderRadius.circular(math.max(10.0, iconSize * 0.18));
     final baseBg = theme.colorScheme.surface.withValues(alpha: 0.12);
-    final selectedBg =
-        theme.colorScheme.primary.withValues(alpha: 0.14 + 0.04 * scale);
-    final borderColor =
-        theme.colorScheme.primary.withValues(alpha: selected ? 0.28 : 0.16);
+    final selectedBg = theme.colorScheme.primary.withValues(
+      alpha: 0.14 + 0.04 * scale,
+    );
+    final borderColor = theme.colorScheme.primary.withValues(
+      alpha: selected ? 0.28 : 0.16,
+    );
 
     return GestureDetector(
       onTap: onTap,
       child: Stack(
+        fit: StackFit.expand,
         children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 120),
@@ -56,24 +59,29 @@ class SelectableShortcutTile extends StatelessWidget {
                     width: iconContainerSize,
                     height: iconContainerSize,
                     child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(iconContainerSize * 0.22),
+                      borderRadius: BorderRadius.circular(
+                        iconContainerSize * 0.22,
+                      ),
                       child: _buildIcon(visualIconSize),
                     ),
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
-                    child: Text(
-                      shortcut.name,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: _textSize,
-                        height: 1.15,
-                        fontWeight: FontWeight.w600,
+                    child: Tooltip(
+                      message: shortcut.name,
+                      waitDuration: const Duration(milliseconds: 350),
+                      child: Text(
+                        shortcut.name,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: _textSize,
+                          height: 1.15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: true,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
                     ),
                   ),
                 ],
@@ -83,26 +91,12 @@ class SelectableShortcutTile extends StatelessWidget {
           Positioned(
             right: 6 * scale,
             top: 6 * scale,
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.colorScheme.surface.withValues(alpha: 0.9),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.18),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.all(2.4 * scale),
-              child: Icon(
-                selected ? Icons.check_circle : Icons.radio_button_unchecked,
-                size: 18 * scale,
-                color: selected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.65),
-              ),
+            child: Icon(
+              selected ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 20 * scale,
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.70),
             ),
           ),
         ],
@@ -123,11 +117,7 @@ class SelectableShortcutTile extends StatelessWidget {
         gaplessPlayback: true,
       );
     }
-    return Icon(
-      Icons.apps,
-      size: visualIconSize,
-      color: Colors.grey,
-    );
+    return Icon(Icons.apps, size: visualIconSize, color: Colors.grey);
   }
 
   double get _textSize {
