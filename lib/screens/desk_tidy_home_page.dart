@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/shortcut_item.dart';
+import '../models/app_category.dart';
 import '../setting/settings_page.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
@@ -15,6 +16,7 @@ import '../utils/desktop_helper.dart';
 import '../utils/tray_helper.dart';
 import '../widgets/glass.dart';
 import '../widgets/shortcut_card.dart';
+import '../widgets/category_strip.dart';
 import 'all_page.dart';
 import 'file_page.dart';
 import 'folder_page.dart';
@@ -26,30 +28,6 @@ bool _showHidden = false;
 bool _autoRefresh = false;
 bool _autoLaunch = true;
 double _iconSize = 32;
-
-class AppCategory {
-  final String id;
-  final String name;
-  final Set<String> paths;
-
-  const AppCategory({
-    required this.id,
-    required this.name,
-    required this.paths,
-  });
-
-  AppCategory copyWith({
-    String? id,
-    String? name,
-    Set<String>? paths,
-  }) {
-    return AppCategory(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      paths: paths ?? this.paths,
-    );
-  }
-}
 
 class DeskTidyHomePage extends StatefulWidget {
   const DeskTidyHomePage({super.key});
@@ -120,7 +98,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (_activeCategoryId == null) return _shortcuts;
     final category = _categories.firstWhere(
       (c) => c.id == _activeCategoryId,
-      orElse: () => const AppCategory(id: '', name: '', paths: {}),
+      orElse: () => AppCategory.empty,
     );
     if (category.id.isEmpty || category.paths.isEmpty) return _shortcuts;
     final allowed = category.paths;
@@ -382,7 +360,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (_activeCategoryId != null) {
       final active = updated.firstWhere(
         (c) => c.id == _activeCategoryId,
-        orElse: () => const AppCategory(id: '', name: '', paths: {}),
+        orElse: () => AppCategory.empty,
       );
       if (active.id.isEmpty || active.paths.isEmpty) {
         clearActive = true;
@@ -554,7 +532,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     final target = _categories.firstWhere(
       (c) => c.id == result,
-      orElse: () => const AppCategory(id: '', name: '', paths: {}),
+      orElse: () => AppCategory.empty,
     );
     if (target.id.isEmpty) return;
     await _toggleShortcutInCategory(target, shortcut);
@@ -1275,43 +1253,24 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             ),
             padding: EdgeInsets.fromLTRB(
               10 * scale,
-              8 * scale,
+              6 * scale,
               10 * scale,
               10 * scale,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '应用',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    SizedBox(width: 8 * scale),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8 * scale,
-                        vertical: 4 * scale,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_shortcuts.length}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                      ),
-                    ),
-                  ],
+                CategoryStrip(
+                  categories: _categories,
+                  activeCategoryId: _activeCategoryId,
+                  totalCount: _shortcuts.length,
+                  scale: scale,
+                  onAllSelected: () =>
+                      setState(() => _activeCategoryId = null),
+                  onCategorySelected: (id) =>
+                      setState(() => _activeCategoryId = id),
+                  onReorder: _reorderVisibleCategories,
                 ),
-                SizedBox(height: 10 * scale),
-                _buildCategoryStrip(scale),
               ],
             ),
           ),
@@ -1397,62 +1356,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCategoryStrip(double scale) {
-    final visible = _visibleCategories;
-    final spacing = 8.0 * scale;
-    return SizedBox(
-      height: 38 * scale,
-      child: Row(
-        children: [
-          _buildAllChip(scale),
-          if (visible.isNotEmpty) SizedBox(width: spacing),
-          if (visible.isNotEmpty)
-            Expanded(
-              child: ReorderableListView.builder(
-                scrollDirection: Axis.horizontal,
-                shrinkWrap: true,
-                buildDefaultDragHandles: false,
-                padding: EdgeInsets.zero,
-                onReorder: _reorderVisibleCategories,
-                itemCount: visible.length,
-                itemBuilder: (context, index) {
-                  final cat = visible[index];
-                  final selected = _activeCategoryId == cat.id;
-                  return Padding(
-                    key: ValueKey(cat.id),
-                    padding: EdgeInsets.only(right: spacing),
-                    child: ReorderableDragStartListener(
-                      index: index,
-                      child: FilterChip(
-                        selected: selected,
-                        label: Text('${cat.name} (${cat.paths.length})'),
-                        onSelected: (_) {
-                          setState(() => _activeCategoryId = cat.id);
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-            )
-          else
-            const Spacer(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAllChip(double scale) {
-    final selected = _activeCategoryId == null;
-    return FilterChip(
-      selected: selected,
-      label: Text('全部 (${_shortcuts.length})'),
-      onSelected: (_) {
-        setState(() => _activeCategoryId = null);
-      },
     );
   }
 
