@@ -1088,6 +1088,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                               shortcut: _shortcuts[index],
                               iconSize: _iconSize,
                               windowFocusNotifier: _windowFocusNotifier,
+                              onDeleted: () {
+                                _loadShortcuts(showLoading: false);
+                              },
                             );
                           },
                         );

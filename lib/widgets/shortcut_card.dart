@@ -11,12 +11,14 @@ class ShortcutCard extends StatefulWidget {
   final ShortcutItem shortcut;
   final double iconSize;
   final ValueListenable<bool>? windowFocusNotifier;
+  final VoidCallback? onDeleted;
 
   const ShortcutCard({
     super.key,
     required this.shortcut,
     this.iconSize = 32,
     this.windowFocusNotifier,
+    this.onDeleted,
   });
 
   @override
@@ -119,6 +121,13 @@ class _ShortcutCardState extends State<ShortcutCard> {
             title: Text('Open'),
           ),
         ),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(Icons.delete),
+            title: Text('删除(回收站)'),
+          ),
+        ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'copy_name',
@@ -147,6 +156,16 @@ class _ShortcutCardState extends State<ShortcutCard> {
     switch (result) {
       case 'open':
         openWithDefault(resolvedPath);
+        break;
+      case 'delete':
+        final ok = moveToRecycleBin(shortcut.path);
+        if (!mounted) break;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')),
+        );
+        if (ok) {
+          widget.onDeleted?.call();
+        }
         break;
       case 'copy_name':
         await _copyToClipboard(shortcut.name, label: 'name', quoted: false);
