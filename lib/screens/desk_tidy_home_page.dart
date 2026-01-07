@@ -311,9 +311,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           return null;
         }
 
-        final primaryIcon =
-            await extractIconAsync(shortcutPath, size: requestIconSize);
-        final iconData = primaryIcon ??
+        final primaryIcon = await extractIconAsync(
+          shortcutPath,
+          size: requestIconSize,
+        );
+        final iconData =
+            primaryIcon ??
             await extractIconAsync(targetPath, size: requestIconSize);
 
         return ShortcutItem(
@@ -326,9 +329,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         );
       }).toList();
 
-      final shortcutItems = (await Future.wait(shortcutFutures))
-          .whereType<ShortcutItem>()
-          .toList();
+      final shortcutItems = (await Future.wait(
+        shortcutFutures,
+      )).whereType<ShortcutItem>().toList();
 
       // 只在数据变化时更新UI，实现无感更新
       if (!_shortcutsEqual(_shortcuts, shortcutItems)) {
@@ -395,6 +398,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   }
 
   void _beginInlineCategoryEdit() {
+    if (_isEditingCategory) return;
     final id = _activeCategoryId;
     if (id == null) return;
     final category = _categories.firstWhere(
@@ -406,8 +410,117 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _isEditingCategory = true;
       _editingCategoryId = id;
       _editingSelection = {...category.paths};
-      _categoryEditBackup = {id: {...category.paths}};
+      _categoryEditBackup = {
+        id: {...category.paths},
+      };
     });
+  }
+
+  Future<String?> _promptRenameCategoryName(String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('重命名分类'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '分类名称'),
+            onSubmitted: (_) => Navigator.of(context).pop(controller.text),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('确定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _renameCategory(AppCategory category) async {
+    if (category.id.isEmpty) return;
+    if (_isEditingCategory) {
+      _cancelInlineCategoryEdit(save: false);
+    }
+
+    final name = await _promptRenameCategoryName(category.name);
+    if (name == null) return;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+
+    final exists = _categories.any(
+      (c) =>
+          c.id != category.id && c.name.toLowerCase() == trimmed.toLowerCase(),
+    );
+    if (exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('分类已存在')));
+      }
+      return;
+    }
+
+    final idx = _categories.indexWhere((c) => c.id == category.id);
+    if (idx < 0) return;
+    setState(() {
+      _categories = [
+        ..._categories.take(idx),
+        _categories[idx].copyWith(name: trimmed),
+        ..._categories.skip(idx + 1),
+      ];
+    });
+    await _saveCategories();
+  }
+
+  Future<void> _deleteCategory(AppCategory category) async {
+    if (category.id.isEmpty) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除分类'),
+          content: Text('确定删除“${category.name}”吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    if (_isEditingCategory && _editingCategoryId == category.id) {
+      _cancelInlineCategoryEdit(save: false);
+    }
+
+    setState(() {
+      _categories = _categories.where((c) => c.id != category.id).toList();
+      if (_activeCategoryId == category.id) {
+        _activeCategoryId = null;
+      }
+    });
+    await _saveCategories();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已删除分类')));
   }
 
   void _toggleInlineSelection(ShortcutItem shortcut) {
@@ -446,8 +559,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (!save && id != null && backup != null && backup.containsKey(id)) {
       final idx = _categories.indexWhere((c) => c.id == id);
       if (idx >= 0) {
-        restoredCategory =
-            _categories[idx].copyWith(paths: {...backup[id]!});
+        restoredCategory = _categories[idx].copyWith(paths: {...backup[id]!});
       }
     }
 
@@ -478,9 +590,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     );
     if (exists) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('分类已存在')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('分类已存在')));
       }
       return null;
     }
@@ -528,9 +640,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await _saveCategories();
     if (!mounted) return;
     final text = alreadyIn ? '已从分类移除' : '已添加到分类';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$text：${category.name}')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$text：${category.name}')));
   }
 
   Future<String?> _promptCategoryName() async {
@@ -543,9 +655,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '分类名称',
-            ),
+            decoration: const InputDecoration(labelText: '分类名称'),
             onSubmitted: (_) => Navigator.of(context).pop(controller.text),
           ),
           actions: [
@@ -570,26 +680,25 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     final items = <PopupMenuEntry<String>>[
       const PopupMenuItem(
         value: 'new',
-        child: ListTile(
-          leading: Icon(Icons.add),
-          title: Text('新建分类'),
-        ),
+        child: ListTile(leading: Icon(Icons.add), title: Text('新建分类')),
       ),
     ];
     if (_categories.isNotEmpty) {
       items.add(const PopupMenuDivider());
-      items.addAll(_categories.map((c) {
-        final selected = c.paths.contains(shortcut.path);
-        return PopupMenuItem(
-          value: c.id,
-          child: ListTile(
-            leading: Icon(
-              selected ? Icons.check_box : Icons.check_box_outline_blank,
+      items.addAll(
+        _categories.map((c) {
+          final selected = c.paths.contains(shortcut.path);
+          return PopupMenuItem(
+            value: c.id,
+            child: ListTile(
+              leading: Icon(
+                selected ? Icons.check_box : Icons.check_box_outline_blank,
+              ),
+              title: Text(c.name),
             ),
-            title: Text(c.name),
-          ),
-        );
-      }));
+          );
+        }),
+      );
     }
 
     final result = await showMenu<String>(
@@ -610,9 +719,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       if (name == null) return;
       final created = await _createCategory(name, initialShortcut: shortcut);
       if (!mounted || created == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已添加到分类：${created.name}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已添加到分类：${created.name}')));
       return;
     }
 
@@ -796,8 +905,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   // 热区监视器（用于从托盘唤起窗口）
   void _startHotCornerWatcher() {
     _hotCornerTimer?.cancel();
-    _hotCornerTimer =
-        Timer.periodic(const Duration(milliseconds: 520), (_) async {
+    _hotCornerTimer = Timer.periodic(const Duration(milliseconds: 520), (
+      _,
+    ) async {
       if (!mounted) return;
       if (!_trayMode && !_dockManager.isDocked) return;
 
@@ -833,9 +943,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.focus();
     await _syncDesktopIconVisibility();
     // Drop always-on-top after we are visible.
-    unawaited(Future.delayed(const Duration(milliseconds: 800), () {
-      windowManager.setAlwaysOnTop(false);
-    }));
+    unawaited(
+      Future.delayed(const Duration(milliseconds: 800), () {
+        windowManager.setAlwaysOnTop(false);
+      }),
+    );
 
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -857,9 +969,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
-    unawaited(Future.delayed(const Duration(milliseconds: 800), () {
-      windowManager.setAlwaysOnTop(false);
-    }));
+    unawaited(
+      Future.delayed(const Duration(milliseconds: 800), () {
+        windowManager.setAlwaysOnTop(false);
+      }),
+    );
 
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -916,8 +1030,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   void _startDesktopIconSync() {
     _desktopIconSyncTimer?.cancel();
-    _desktopIconSyncTimer =
-        Timer.periodic(const Duration(milliseconds: 900), (_) async {
+    _desktopIconSyncTimer = Timer.periodic(const Duration(milliseconds: 900), (
+      _,
+    ) async {
       if (!mounted) return;
       final visible = await isDesktopIconsVisible();
       if (!mounted) return;
@@ -956,7 +1071,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     final railPadH = 2.0 * scale;
     final railPadV = 4.0 * scale;
     final backgroundPath = _backgroundImagePath;
-    final backgroundExists = backgroundPath != null &&
+    final backgroundExists =
+        backgroundPath != null &&
         backgroundPath.isNotEmpty &&
         File(backgroundPath).existsSync();
 
@@ -977,10 +1093,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                 child: Opacity(
                   opacity: _backgroundOpacity,
                   child: backgroundExists
-                      ? Image.file(
-                          File(backgroundPath),
-                          fit: BoxFit.cover,
-                        )
+                      ? Image.file(File(backgroundPath), fit: BoxFit.cover)
                       : Container(
                           color: Theme.of(context).scaffoldBackgroundColor,
                         ),
@@ -1004,8 +1117,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                               opacity: _chromeOpacity,
                               blurSigma: 20,
                               border: Border.all(
-                                color:
-                                    theme.dividerColor.withValues(alpha: 0.16),
+                                color: theme.dividerColor.withValues(
+                                  alpha: 0.16,
+                                ),
                               ),
                               child: NavigationRail(
                                 backgroundColor: Colors.transparent,
@@ -1017,17 +1131,23 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                                   color: theme.colorScheme.primary,
                                 ),
                                 unselectedIconTheme: IconThemeData(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.72),
+                                  color: theme.colorScheme.onSurface.withValues(
+                                    alpha: 0.72,
+                                  ),
                                 ),
-                                selectedLabelTextStyle:
-                                    theme.textTheme.labelMedium?.copyWith(
-                                        color: theme.colorScheme.primary),
-                                unselectedLabelTextStyle:
-                                    theme.textTheme.labelMedium?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.72),
-                                ),
+                                selectedLabelTextStyle: theme
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                unselectedLabelTextStyle: theme
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.72),
+                                    ),
                                 selectedIndex: _selectedIndex,
                                 onDestinationSelected:
                                     _onNavigationRailItemSelected,
@@ -1091,8 +1211,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                               opacity: _contentPanelOpacity,
                               blurSigma: _contentPanelBlur,
                               border: Border.all(
-                                color:
-                                    theme.dividerColor.withValues(alpha: 0.16),
+                                color: theme.dividerColor.withValues(
+                                  alpha: 0.16,
+                                ),
                               ),
                               child: _buildContent(),
                             ),
@@ -1254,9 +1375,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             if (!mounted) return;
             if (!ok) {
               setState(() => _autoLaunch = previous);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('开机启动设置失败')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('开机启动设置失败')));
               return;
             }
             await AppPreferences.saveAutoLaunch(v);
@@ -1269,8 +1390,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             }
           },
           onBackgroundPathChanged: (path) async {
-            final saved =
-                await AppPreferences.backupAndSaveBackgroundPath(path);
+            final saved = await AppPreferences.backupAndSaveBackgroundPath(
+              path,
+            );
             if (!mounted) return;
             setState(() => _backgroundImagePath = saved);
           },
@@ -1287,16 +1409,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (!mounted) return;
     if (!ok) {
       setState(() => _hideDesktopItems = !hide);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('切换失败，请重试')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('切换失败，请重试')));
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标')));
     await _syncDesktopIconVisibility();
   }
 
@@ -1361,13 +1481,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                   activeCategoryId: _activeCategoryId,
                   totalCount: _shortcuts.length,
                   scale: scale,
-                  onAllSelected: () =>
-                      _handleCategorySelected(null),
+                  onAllSelected: () => _handleCategorySelected(null),
                   onCategorySelected: (id) => _handleCategorySelected(id),
                   onReorder: _reorderVisibleCategories,
-                  onManageRequested: _activeCategoryId == null
-                      ? null
-                      : _beginInlineCategoryEdit,
+                  onRenameRequested: _renameCategory,
+                  onDeleteRequested: _deleteCategory,
+                  onEditRequested: (_) => _beginInlineCategoryEdit(),
                 ),
               ],
             ),
@@ -1379,117 +1498,219 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
               horizontal: 16 * scale,
               vertical: 4 * scale,
             ),
-            child: Row(
-              children: [
-                Text(
-                  '正在编辑：$editingName',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => _cancelInlineCategoryEdit(save: false),
-                  child: const Text('取消'),
-                ),
-                const SizedBox(width: 4),
-                FilledButton(
-                  onPressed: _saveInlineCategoryEdit,
-                  child: const Text('保存'),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 420 * scale;
+
+                Future<void> handleDelete() async {
+                  final id = _editingCategoryId;
+                  if (id == null) return;
+                  final category = _categories.firstWhere(
+                    (c) => c.id == id,
+                    orElse: () => AppCategory.empty,
+                  );
+                  if (category.id.isEmpty) return;
+                  await _deleteCategory(category);
+                }
+
+                Widget actions;
+                if (compact) {
+                  final iconSize = (constraints.maxWidth * 0.045).clamp(
+                    20 * scale,
+                    24 * scale,
+                  );
+                  final btnWidth = (constraints.maxWidth * 0.085).clamp(
+                    40 * scale,
+                    56 * scale,
+                  );
+                  final btnHeight = (constraints.maxWidth * 0.070).clamp(
+                    34 * scale,
+                    40 * scale,
+                  );
+                  final btnConstraints = BoxConstraints.tightFor(
+                    width: btnWidth,
+                    height: btnHeight,
+                  );
+                  actions = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: '删除',
+                        child: IconButton(
+                          onPressed: handleDelete,
+                          constraints: btnConstraints,
+                          padding: EdgeInsets.zero,
+                          iconSize: iconSize,
+                          visualDensity: VisualDensity.compact,
+                          color: Theme.of(context).colorScheme.error,
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ),
+                      Tooltip(
+                        message: '取消',
+                        child: IconButton(
+                          onPressed: () =>
+                              _cancelInlineCategoryEdit(save: false),
+                          constraints: btnConstraints,
+                          padding: EdgeInsets.zero,
+                          iconSize: iconSize,
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
+                      Tooltip(
+                        message: '保存',
+                        child: IconButton(
+                          onPressed: _saveInlineCategoryEdit,
+                          constraints: btnConstraints,
+                          padding: EdgeInsets.zero,
+                          iconSize: iconSize,
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.check),
+                        ),
+                      ),
+                    ],
+                  );
+                } else {
+                  actions = Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: handleDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('删除'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed: () => _cancelInlineCategoryEdit(save: false),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed: _saveInlineCategoryEdit,
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('保存'),
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '编辑：$editingName',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    actions,
+                  ],
+                );
+              },
             ),
           ),
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : shortcuts.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.folder_open, size: 64, color: Colors.grey),
-                          const SizedBox(height: 16),
-                          Text(
-                            isFiltering ? '该分类暂无应用' : '未找到桌面快捷方式',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          if (!isFiltering) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              '桌面路径: $_desktopPath',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        isFiltering ? '该分类暂无应用' : '未找到桌面快捷方式',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
                       ),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final crossAxisSpacing = 12.0 * scale;
-                        final mainAxisSpacing = 12.0 * scale;
-                        final estimatedTextHeight = _estimateTextHeight();
-                        final padding = math.max(8.0, _iconSize * 0.28);
-                        final iconContainerSize =
-                            math.max(28.0, _iconSize * 1.65);
-                        final tileMaxExtent = math.max(
-                          120.0,
-                          iconContainerSize + padding * 2,
-                        );
-                        final cardHeight = padding * 0.6 * 2 +
-                            iconContainerSize +
-                            padding * 0.6 +
-                            estimatedTextHeight;
-                        final aspectRatio =
-                            cardHeight <= 0 ? 1 : tileMaxExtent / cardHeight;
+                      if (!isFiltering) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '桌面路径: $_desktopPath',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final crossAxisSpacing = 12.0 * scale;
+                    final mainAxisSpacing = 12.0 * scale;
+                    final estimatedTextHeight = _estimateTextHeight();
+                    final padding = math.max(8.0, _iconSize * 0.28);
+                    final iconContainerSize = math.max(28.0, _iconSize * 1.65);
+                    final tileMaxExtent = math.max(
+                      120.0,
+                      iconContainerSize + padding * 2,
+                    );
+                    final cardHeight =
+                        padding * 0.6 * 2 +
+                        iconContainerSize +
+                        padding * 0.6 +
+                        estimatedTextHeight;
+                    final aspectRatio = cardHeight <= 0
+                        ? 1
+                        : tileMaxExtent / cardHeight;
 
-                        final grid = GridView.builder(
-                          padding: EdgeInsets.fromLTRB(
-                            14 * scale,
-                            0,
-                            14 * scale,
-                            14 * scale,
-                          ),
-                          gridDelegate:
-                              SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: tileMaxExtent,
-                            crossAxisSpacing: crossAxisSpacing,
-                            mainAxisSpacing: mainAxisSpacing,
-                            childAspectRatio: aspectRatio.toDouble(),
-                          ),
-                          itemCount: shortcuts.length,
-                          itemBuilder: (context, index) {
-                            final shortcut = shortcuts[index];
-                            if (editingCategory) {
-                              return SelectableShortcutTile(
-                                shortcut: shortcut,
-                                iconSize: _iconSize,
-                                scale: scale,
-                                selected:
-                                    _editingSelection.contains(shortcut.path),
-                                onTap: () => _toggleInlineSelection(shortcut),
-                              );
-                            }
-                            return ShortcutCard(
-                              shortcut: shortcut,
-                              iconSize: _iconSize,
-                              windowFocusNotifier: _windowFocusNotifier,
-                              onDeleted: () {
-                                _loadShortcuts(showLoading: false);
-                              },
-                              onCategoryMenuRequested:
-                                  _showCategoryMenuForShortcut,
-                            );
+                    final grid = GridView.builder(
+                      padding: EdgeInsets.fromLTRB(
+                        14 * scale,
+                        0,
+                        14 * scale,
+                        14 * scale,
+                      ),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: tileMaxExtent,
+                        crossAxisSpacing: crossAxisSpacing,
+                        mainAxisSpacing: mainAxisSpacing,
+                        childAspectRatio: aspectRatio.toDouble(),
+                      ),
+                      itemCount: shortcuts.length,
+                      itemBuilder: (context, index) {
+                        final shortcut = shortcuts[index];
+                        if (editingCategory) {
+                          return SelectableShortcutTile(
+                            shortcut: shortcut,
+                            iconSize: _iconSize,
+                            scale: scale,
+                            selected: _editingSelection.contains(shortcut.path),
+                            onTap: () => _toggleInlineSelection(shortcut),
+                          );
+                        }
+                        return ShortcutCard(
+                          shortcut: shortcut,
+                          iconSize: _iconSize,
+                          windowFocusNotifier: _windowFocusNotifier,
+                          onDeleted: () {
+                            _loadShortcuts(showLoading: false);
                           },
+                          onCategoryMenuRequested: _showCategoryMenuForShortcut,
                         );
-
-                        return grid;
                       },
-                    ),
+                    );
+
+                    return grid;
+                  },
+                ),
         ),
       ],
     );

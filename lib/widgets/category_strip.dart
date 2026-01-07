@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/app_category.dart';
 
+enum CategoryTabMenuAction { rename, delete, edit }
+
 class CategoryStrip extends StatelessWidget {
   final List<AppCategory> categories;
   final String? activeCategoryId;
@@ -10,7 +12,9 @@ class CategoryStrip extends StatelessWidget {
   final VoidCallback onAllSelected;
   final ValueChanged<String> onCategorySelected;
   final void Function(int oldIndex, int newIndex) onReorder;
-  final VoidCallback? onManageRequested;
+  final ValueChanged<AppCategory>? onRenameRequested;
+  final ValueChanged<AppCategory>? onDeleteRequested;
+  final ValueChanged<AppCategory>? onEditRequested;
 
   const CategoryStrip({
     super.key,
@@ -21,7 +25,9 @@ class CategoryStrip extends StatelessWidget {
     required this.onAllSelected,
     required this.onCategorySelected,
     required this.onReorder,
-    this.onManageRequested,
+    this.onRenameRequested,
+    this.onDeleteRequested,
+    this.onEditRequested,
   });
 
   @override
@@ -34,7 +40,8 @@ class CategoryStrip extends StatelessWidget {
         children: [
           _buildChip(
             context,
-            label: '全部 ($totalCount)',
+            name: '全部',
+            count: totalCount,
             selected: activeCategoryId == null,
             onPressed: onAllSelected,
           ),
@@ -53,7 +60,8 @@ class CategoryStrip extends StatelessWidget {
                   final selected = activeCategoryId == cat.id;
                   final chip = _buildChip(
                     context,
-                    label: '${cat.name} (${cat.paths.length})',
+                    name: cat.name,
+                    count: cat.paths.length,
                     selected: selected,
                     onPressed: () => onCategorySelected(cat.id),
                   );
@@ -61,7 +69,16 @@ class CategoryStrip extends StatelessWidget {
                     key: ValueKey(cat.id),
                     padding: EdgeInsets.only(right: spacing),
                     child: GestureDetector(
-                      onLongPress: selected ? onManageRequested : null,
+                      onSecondaryTapDown: _hasMenu
+                          ? (details) async {
+                              if (!selected) onCategorySelected(cat.id);
+                              await _showCategoryTabMenu(
+                                context,
+                                category: cat,
+                                position: details.globalPosition,
+                              );
+                            }
+                          : null,
                       child: ReorderableDragStartListener(
                         index: index,
                         child: chip,
@@ -78,6 +95,69 @@ class CategoryStrip extends StatelessWidget {
     );
   }
 
+  bool get _hasMenu =>
+      onRenameRequested != null ||
+      onDeleteRequested != null ||
+      onEditRequested != null;
+
+  Future<void> _showCategoryTabMenu(
+    BuildContext context, {
+    required AppCategory category,
+    required Offset position,
+  }) async {
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlaySize = overlayBox?.size ?? const Size(1, 1);
+    final menuPosition = RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      overlaySize.width - position.dx,
+      overlaySize.height - position.dy,
+    );
+
+    final action = await showMenu<CategoryTabMenuAction>(
+      context: context,
+      position: menuPosition,
+      items: const [
+        PopupMenuItem(
+          value: CategoryTabMenuAction.rename,
+          child: ListTile(
+            leading: Icon(Icons.drive_file_rename_outline),
+            title: Text('重命名'),
+          ),
+        ),
+        PopupMenuItem(
+          value: CategoryTabMenuAction.delete,
+          child: ListTile(
+            leading: Icon(Icons.delete_outline),
+            title: Text('删除'),
+          ),
+        ),
+        PopupMenuItem(
+          value: CategoryTabMenuAction.edit,
+          child: ListTile(
+            leading: Icon(Icons.edit_outlined),
+            title: Text('编辑'),
+          ),
+        ),
+      ],
+    );
+
+    switch (action) {
+      case CategoryTabMenuAction.rename:
+        onRenameRequested?.call(category);
+        break;
+      case CategoryTabMenuAction.delete:
+        onDeleteRequested?.call(category);
+        break;
+      case CategoryTabMenuAction.edit:
+        onEditRequested?.call(category);
+        break;
+      case null:
+        break;
+    }
+  }
+
   double _chipLabelWidth(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final desired = width * 0.22;
@@ -88,7 +168,8 @@ class CategoryStrip extends StatelessWidget {
 
   Widget _buildChip(
     BuildContext context, {
-    required String label,
+    required String name,
+    required int count,
     required bool selected,
     required VoidCallback onPressed,
   }) {
@@ -104,26 +185,26 @@ class CategoryStrip extends StatelessWidget {
     final textColor = selected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface.withValues(alpha: 0.86);
+    final labelStyle = theme.textTheme.labelLarge?.copyWith(
+      color: textColor,
+      fontWeight: FontWeight.w600,
+    );
     return RawChip(
       showCheckmark: false,
       label: SizedBox(
         width: labelWidth,
         child: Tooltip(
-          message: label,
+          message: '$name ($count)',
           waitDuration: const Duration(milliseconds: 350),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
-            textAlign: TextAlign.center,
+          child: _buildChipLabel(
+            context,
+            name: name,
+            count: count,
+            style: labelStyle,
           ),
         ),
       ),
-      labelStyle: theme.textTheme.labelLarge?.copyWith(
-        color: textColor,
-        fontWeight: FontWeight.w600,
-      ),
+      labelStyle: labelStyle,
       padding: EdgeInsets.symmetric(
         horizontal: 12 * scale,
         vertical: 6 * scale,
@@ -136,6 +217,35 @@ class CategoryStrip extends StatelessWidget {
       selectedColor: selectedColor,
       selected: selected,
       onPressed: onPressed,
+    );
+  }
+
+  Widget _buildChipLabel(
+    BuildContext context, {
+    required String name,
+    required int count,
+    required TextStyle? style,
+  }) {
+    final countText = '($count)';
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            name,
+            style: style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(width: 4 * scale),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(countText, style: style, maxLines: 1, softWrap: false),
+        ),
+      ],
     );
   }
 }
