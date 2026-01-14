@@ -1390,10 +1390,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             }
           },
           onBackgroundPathChanged: (path) async {
+            final previous = _backgroundImagePath;
             final saved = await AppPreferences.backupAndSaveBackgroundPath(
               path,
             );
             if (!mounted) return;
+            if (saved != null && saved.isNotEmpty) {
+              unawaited(FileImage(File(saved)).evict());
+            } else if (previous != null && previous.isNotEmpty) {
+              unawaited(FileImage(File(previous)).evict());
+            }
             setState(() => _backgroundImagePath = saved);
           },
         );
