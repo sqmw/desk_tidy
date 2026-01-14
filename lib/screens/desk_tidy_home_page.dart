@@ -12,6 +12,7 @@ import '../models/app_category.dart';
 import '../setting/settings_page.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
+import '../utils/app_search_index.dart';
 import '../utils/desktop_helper.dart';
 import '../utils/tray_helper.dart';
 import '../widgets/glass.dart';
@@ -75,6 +76,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   int _windowHandle = 0;
 
   int _selectedIndex = 0;
+  final TextEditingController _appSearchController = TextEditingController();
+  final FocusNode _appSearchFocus = FocusNode();
+  String _appSearchQuery = '';
+  String? _categoryBeforeSearch;
+  bool _searchHasFocus = false;
+  Map<String, AppSearchIndex> _searchIndexByPath = {};
 
   double get _chromeOpacity =>
       (0.12 + 0.28 * _backgroundOpacity).clamp(0.12, 0.42);
@@ -100,15 +107,26 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _categories.where((c) => c.paths.isNotEmpty).toList();
 
   List<ShortcutItem> get _filteredShortcuts {
-    if (_isEditingCategory) return _shortcuts;
-    if (_activeCategoryId == null) return _shortcuts;
-    final category = _categories.firstWhere(
-      (c) => c.id == _activeCategoryId,
-      orElse: () => AppCategory.empty,
-    );
-    if (category.id.isEmpty || category.paths.isEmpty) return _shortcuts;
-    final allowed = category.paths;
-    return _shortcuts.where((s) => allowed.contains(s.path)).toList();
+    Iterable<ShortcutItem> results = _shortcuts;
+    if (!_isEditingCategory && _activeCategoryId != null) {
+      final category = _categories.firstWhere(
+        (c) => c.id == _activeCategoryId,
+        orElse: () => AppCategory.empty,
+      );
+      if (category.id.isNotEmpty && category.paths.isNotEmpty) {
+        final allowed = category.paths;
+        results = results.where((s) => allowed.contains(s.path));
+      }
+    }
+
+    final normalizedQuery = normalizeSearchText(_appSearchQuery);
+    if (normalizedQuery.isNotEmpty) {
+      results = results.where(
+        (shortcut) => _matchesSearch(shortcut, normalizedQuery),
+      );
+    }
+
+    return results.toList();
   }
 
   double _uiScale(BuildContext context) {
@@ -146,6 +164,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     windowManager.addListener(this);
     _initTray();
+    _appSearchFocus.addListener(() {
+      if (!mounted) return;
+      setState(() => _searchHasFocus = _appSearchFocus.hasFocus);
+    });
   }
 
   void _applyDefaults() {
@@ -335,8 +357,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
       // 只在数据变化时更新UI，实现无感更新
       if (!_shortcutsEqual(_shortcuts, shortcutItems)) {
+        final searchIndex = _buildSearchIndex(shortcutItems);
         setState(() {
           _shortcuts = shortcutItems;
+          _searchIndexByPath = searchIndex;
         });
         _syncCategoriesWithShortcuts(shortcutItems);
       }
@@ -394,7 +418,18 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (_isEditingCategory) {
       _cancelInlineCategoryEdit(save: false);
     }
-    setState(() => _activeCategoryId = id);
+    final shouldClearSearch =
+        _appSearchQuery.trim().isNotEmpty && id != null;
+    if (shouldClearSearch) {
+      _appSearchController.clear();
+    }
+    setState(() {
+      if (shouldClearSearch) {
+        _appSearchQuery = '';
+        _categoryBeforeSearch = null;
+      }
+      _activeCategoryId = id;
+    });
   }
 
   void _beginInlineCategoryEdit() {
@@ -766,6 +801,75 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         oldPathSet.containsAll(newPathSet);
   }
 
+  Map<String, AppSearchIndex> _buildSearchIndex(
+    List<ShortcutItem> shortcuts,
+  ) {
+    final index = <String, AppSearchIndex>{};
+    for (final shortcut in shortcuts) {
+      index[shortcut.path] = AppSearchIndex.fromName(shortcut.name);
+    }
+    return index;
+  }
+
+  bool _matchesSearch(ShortcutItem shortcut, String normalizedQuery) {
+    final cached = _searchIndexByPath[shortcut.path];
+    final index = cached ?? AppSearchIndex.fromName(shortcut.name);
+    if (cached == null) {
+      _searchIndexByPath[shortcut.path] = index;
+    }
+    return index.matchesPrefix(normalizedQuery);
+  }
+
+  bool _isCategoryAvailable(String id) {
+    return _categories.any((c) => c.id == id && c.paths.isNotEmpty);
+  }
+
+  void _updateSearchQuery(String value) {
+    final hadQuery = _appSearchQuery.trim().isNotEmpty;
+    final hasQuery = value.trim().isNotEmpty;
+
+    setState(() {
+      _appSearchQuery = value;
+
+      if (!_isEditingCategory) {
+        if (!hadQuery && hasQuery) {
+          _categoryBeforeSearch ??= _activeCategoryId;
+          _activeCategoryId = null;
+        } else if (hadQuery && !hasQuery) {
+          final restore = _categoryBeforeSearch;
+          _categoryBeforeSearch = null;
+          if (restore != null && _isCategoryAvailable(restore)) {
+            _activeCategoryId = restore;
+          }
+        }
+      } else {
+        _categoryBeforeSearch = null;
+      }
+    });
+  }
+
+  void _clearSearch({bool keepFocus = false, bool restoreCategory = true}) {
+    final hasQuery =
+        _appSearchQuery.trim().isNotEmpty ||
+        _appSearchController.text.trim().isNotEmpty;
+    if (!hasQuery) {
+      if (keepFocus) _appSearchFocus.requestFocus();
+      return;
+    }
+
+    final restore =
+        restoreCategory && !_isEditingCategory ? _categoryBeforeSearch : null;
+    setState(() {
+      _appSearchQuery = '';
+      _categoryBeforeSearch = null;
+      if (restore != null && _isCategoryAvailable(restore)) {
+        _activeCategoryId = restore;
+      }
+    });
+    _appSearchController.clear();
+    if (keepFocus) _appSearchFocus.requestFocus();
+  }
+
   void _toggleMaximize() {
     if (_isMaximized) {
       windowManager.restore();
@@ -859,6 +963,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dockManager.dispose();
     windowManager.removeListener(this);
     _windowFocusNotifier.dispose();
+    _appSearchController.dispose();
+    _appSearchFocus.dispose();
     super.dispose();
   }
 
@@ -1443,9 +1549,102 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
   }
 
+  Widget _buildSearchBar(double scale) {
+    final theme = Theme.of(context);
+    final hasQuery = _appSearchQuery.trim().isNotEmpty;
+    final iconSize = (18 * scale).clamp(16.0, 22.0);
+    final borderColor = _searchHasFocus
+        ? theme.colorScheme.primary.withValues(alpha: 0.45)
+        : theme.dividerColor.withValues(alpha: 0.16);
+    final iconColor = _searchHasFocus
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withValues(alpha: 0.72);
+    final opacity = (_toolbarPanelOpacity + (_searchHasFocus ? 0.06 : 0.0))
+        .clamp(0.0, 1.0);
+
+    return GlassContainer(
+      borderRadius: BorderRadius.circular(14),
+      opacity: opacity,
+      blurSigma: _toolbarPanelBlur,
+      border: Border.all(color: borderColor, width: 1),
+      padding: EdgeInsets.symmetric(
+        horizontal: 10 * scale,
+        vertical: 6 * scale,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.search, size: iconSize, color: iconColor),
+          SizedBox(width: 6 * scale),
+          Expanded(
+            child: TextField(
+              controller: _appSearchController,
+              focusNode: _appSearchFocus,
+              onChanged: _updateSearchQuery,
+              autocorrect: false,
+              enableSuggestions: false,
+              maxLines: 1,
+              textInputAction: TextInputAction.search,
+              cursorColor: theme.colorScheme.primary,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索应用（支持拼音前缀）',
+                hintStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          if (hasQuery)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints.tightFor(
+                width: 28 * scale,
+                height: 28 * scale,
+              ),
+              iconSize: iconSize,
+              tooltip: '清除',
+              onPressed: () => _clearSearch(keepFocus: true),
+              icon: const Icon(Icons.close),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchCountChip(
+    double scale, {
+    required int matchCount,
+    required int totalCount,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: 10 * scale,
+        vertical: 6 * scale,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: theme.colorScheme.primary.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Text(
+        '匹配 $matchCount/$totalCount',
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _buildApplicationContent() {
     final scale = _uiScale(context);
     final shortcuts = _filteredShortcuts;
+    final searchActive = normalizeSearchText(_appSearchQuery).isNotEmpty;
     final isFiltering = _activeCategoryId != null;
     final editingCategory = _isEditingCategory;
     final editingName = _categories
@@ -1493,6 +1692,26 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                   onRenameRequested: _renameCategory,
                   onDeleteRequested: _deleteCategory,
                   onEditRequested: (_) => _beginInlineCategoryEdit(),
+                ),
+                SizedBox(height: 8 * scale),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final showCount =
+                        searchActive && constraints.maxWidth > 420 * scale;
+                    return Row(
+                      children: [
+                        Expanded(child: _buildSearchBar(scale)),
+                        if (showCount) ...[
+                          SizedBox(width: 8 * scale),
+                          _buildSearchCountChip(
+                            scale,
+                            matchCount: shortcuts.length,
+                            totalCount: _shortcuts.length,
+                          ),
+                        ],
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
@@ -1638,13 +1857,17 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                       Icon(Icons.folder_open, size: 64, color: Colors.grey),
                       const SizedBox(height: 16),
                       Text(
-                        isFiltering ? '该分类暂无应用' : '未找到桌面快捷方式',
+                        searchActive
+                            ? '没有匹配的应用'
+                            : isFiltering
+                                ? '该分类暂无应用'
+                                : '未找到桌面快捷方式',
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,
                         ),
                       ),
-                      if (!isFiltering) ...[
+                      if (!isFiltering && !searchActive) ...[
                         const SizedBox(height: 8),
                         Text(
                           '桌面路径: $_desktopPath',
