@@ -245,6 +245,16 @@ class _ShortcutCardState extends State<ShortcutCard> {
 
     final name = widget.shortcut.name;
     final theme = Theme.of(context);
+    final spec =
+        iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
+    final labelColor = widget.beautifyIcon && spec.labelColor != null
+        ? spec.labelColor!
+        : theme.textTheme.bodyMedium?.color ??
+            theme.colorScheme.onSurface.withValues(alpha: 0.86);
+    final labelShadowColor =
+        widget.beautifyIcon && spec.labelShadowColor != null
+            ? spec.labelShadowColor!
+            : const Color(0xD6000000);
 
     _labelOverlay = OverlayEntry(
       builder: (context) {
@@ -283,11 +293,12 @@ class _ShortcutCardState extends State<ShortcutCard> {
                           fontSize: _textSize,
                           height: 1.15,
                           fontWeight: FontWeight.w600,
-                          shadows: const [
+                          color: labelColor,
+                          shadows: [
                             Shadow(
-                              color: Color(0xD6000000),
+                              color: labelShadowColor,
                               blurRadius: 8,
-                              offset: Offset(0, 2),
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
@@ -310,6 +321,16 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final iconSize = widget.iconSize;
     final shortcut = widget.shortcut;
     final theme = Theme.of(context);
+    final spec =
+        iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
+    final labelColor = widget.beautifyIcon && spec.labelColor != null
+        ? spec.labelColor!
+        : theme.textTheme.bodyMedium?.color ??
+            theme.colorScheme.onSurface.withValues(alpha: 0.86);
+    final labelShadowColor =
+        widget.beautifyIcon && spec.labelShadowColor != null
+            ? spec.labelShadowColor!
+            : const Color(0xD6000000);
 
     final padding = math.max(8.0, iconSize * 0.28);
     final iconContainerSize = math.max(28.0, iconSize * 1.65);
@@ -402,11 +423,12 @@ class _ShortcutCardState extends State<ShortcutCard> {
                             fontSize: _textSize,
                             height: 1.15,
                             fontWeight: FontWeight.w600,
-                            shadows: const [
+                            color: labelColor,
+                            shadows: [
                               Shadow(
-                                color: Color(0xD6000000),
+                                color: labelShadowColor,
                                 blurRadius: 8,
-                                offset: Offset(0, 2),
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),

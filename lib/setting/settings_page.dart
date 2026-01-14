@@ -384,12 +384,12 @@ class _SettingsPageState extends State<SettingsPage> {
               onToggle: widget.onBeautifyAllChanged,
               initialValue: beautifyAny,
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('图标美化（全局）'),
-              description: const Text('开启后默认同时替换桌面与应用列表图标'),
+              title: const Text('图标主题（图标+文字）'),
+              description: const Text('开启后默认同时替换桌面与应用列表的图标与文字色调'),
             ),
             SettingsTile(
               leading: const Icon(Icons.palette_outlined),
-              title: const Text('风格'),
+              title: const Text('主题风格'),
               description: Wrap(
                 spacing: 8,
                 runSpacing: 8,

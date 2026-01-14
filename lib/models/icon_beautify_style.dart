@@ -24,6 +24,8 @@ class IconBeautifyStyleSpec {
   final List<BoxShadow> shadows;
   final IconFilterMode iconFilterMode;
   final Color? iconColor;
+  final Color? labelColor;
+  final Color? labelShadowColor;
 
   const IconBeautifyStyleSpec({
     required this.label,
@@ -37,6 +39,8 @@ class IconBeautifyStyleSpec {
     required this.shadows,
     required this.iconFilterMode,
     required this.iconColor,
+    required this.labelColor,
+    required this.labelShadowColor,
   });
 }
 
@@ -67,6 +71,8 @@ IconBeautifyStyleSpec iconBeautifyStyleSpec(
         ],
         iconFilterMode: IconFilterMode.lumaTint,
         iconColor: const Color(0xFFFF6FAE),
+        labelColor: const Color(0xFFE55597),
+        labelShadowColor: Colors.black.withValues(alpha: 0.45),
       );
     case IconBeautifyStyle.cartoon:
       return IconBeautifyStyleSpec(
@@ -92,6 +98,10 @@ IconBeautifyStyleSpec iconBeautifyStyleSpec(
         iconColor: brightness == Brightness.dark
             ? const Color(0xFFFFC28A)
             : const Color(0xFFFFB46B),
+        labelColor: brightness == Brightness.dark
+            ? const Color(0xFFE69A57)
+            : const Color(0xFFD58644),
+        labelShadowColor: Colors.black.withValues(alpha: 0.50),
       );
     case IconBeautifyStyle.neon:
       return IconBeautifyStyleSpec(
@@ -115,6 +125,8 @@ IconBeautifyStyleSpec iconBeautifyStyleSpec(
         ],
         iconFilterMode: IconFilterMode.lumaTint,
         iconColor: const Color(0xFF5DEBFF),
+        labelColor: const Color(0xFF6FF3FF),
+        labelShadowColor: const Color(0xFF0A101F).withValues(alpha: 0.65),
       );
   }
 }

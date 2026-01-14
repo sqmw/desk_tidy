@@ -29,6 +29,12 @@ class SelectableShortcutTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final padding = math.max(8.0, iconSize * 0.28);
+    final spec =
+        iconBeautifyStyleSpec(beautifyStyle, theme.brightness);
+    final labelColor = beautifyIcon && spec.labelColor != null
+        ? spec.labelColor!
+        : theme.textTheme.bodyMedium?.color ??
+            theme.colorScheme.onSurface.withValues(alpha: 0.86);
     final iconContainerSize = math.max(28.0, iconSize * 1.65);
     final visualIconSize = math.max(12.0, iconContainerSize * 0.92);
     final radius = BorderRadius.circular(math.max(10.0, iconSize * 0.18));
@@ -84,6 +90,7 @@ class SelectableShortcutTile extends StatelessWidget {
                           fontSize: _textSize,
                           height: 1.15,
                           fontWeight: FontWeight.w600,
+                          color: labelColor,
                         ),
                         overflow: TextOverflow.ellipsis,
                         softWrap: false,

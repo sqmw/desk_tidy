@@ -5,7 +5,7 @@
 ## 数据流
 - 扫描：`lib/screens/desk_tidy_home_page.dart` 的 `_loadShortcuts()` 扫描用户桌面与公共桌面，过滤隐藏/系统文件（除非开启“显示隐藏项”），跳过 `.lnk` 指向文件夹的快捷方式。
 - 提取：每个入口文件调用 `extractIconAsync()`（请求 256px），结果写入 `ShortcutItem.iconData`，UI 复用该内存，避免重复提取。
-- 展示：`lib/widgets/shortcut_card.dart` 将已有 `iconData` 直接 `Image.memory`；缺失时用 `extractIconAsync` 兜底。
+- 展示：`lib/widgets/shortcut_card.dart` 将已有 `iconData` 直接 `Image.memory`；缺失时用 `extractIconAsync` 兜底，开启“图标主题”时图标与文字一并换色。
 
 ## 提取顺序（lib/utils/desktop_helper.dart）
 `extractIcon(String filePath, {int size = 64})` 优先级：
