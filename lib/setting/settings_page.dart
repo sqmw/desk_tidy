@@ -4,6 +4,10 @@ import 'package:settings_ui/settings_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:desk_tidy/services/update_service.dart';
 
+import '../models/icon_beautify_style.dart';
+import '../models/icon_extract_mode.dart';
+import '../widgets/beautified_icon.dart';
+
 enum ThemeModeOption { system, light, dark }
 
 class SettingsPage extends StatefulWidget {
@@ -19,6 +23,10 @@ class SettingsPage extends StatefulWidget {
   final bool hideDesktopItems;
   final ThemeModeOption themeModeOption;
   final String? backgroundPath;
+  final bool beautifyAppIcons;
+  final bool beautifyDesktopIcons;
+  final IconBeautifyStyle beautifyStyle;
+  final IconExtractMode iconExtractMode;
 
   final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onFrostStrengthChanged;
@@ -29,6 +37,11 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onHideDesktopItemsChanged;
   final ValueChanged<ThemeModeOption?> onThemeModeChanged;
   final ValueChanged<String?> onBackgroundPathChanged;
+  final ValueChanged<bool> onBeautifyAppIconsChanged;
+  final ValueChanged<bool> onBeautifyDesktopIconsChanged;
+  final ValueChanged<bool> onBeautifyAllChanged;
+  final ValueChanged<IconBeautifyStyle> onBeautifyStyleChanged;
+  final ValueChanged<IconExtractMode> onIconExtractModeChanged;
 
   const SettingsPage({
     super.key,
@@ -41,6 +54,10 @@ class SettingsPage extends StatefulWidget {
     required this.hideDesktopItems,
     required this.themeModeOption,
     required this.backgroundPath,
+    required this.beautifyAppIcons,
+    required this.beautifyDesktopIcons,
+    required this.beautifyStyle,
+    required this.iconExtractMode,
     required this.onTransparencyChanged,
     required this.onFrostStrengthChanged,
     required this.onIconSizeChanged,
@@ -50,6 +67,11 @@ class SettingsPage extends StatefulWidget {
     required this.onHideDesktopItemsChanged,
     required this.onThemeModeChanged,
     required this.onBackgroundPathChanged,
+    required this.onBeautifyAppIconsChanged,
+    required this.onBeautifyDesktopIconsChanged,
+    required this.onBeautifyAllChanged,
+    required this.onBeautifyStyleChanged,
+    required this.onIconExtractModeChanged,
   });
 
   @override
@@ -131,6 +153,39 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  List<Widget> _buildStyleOptions(BuildContext context) {
+    const previewSize = 28.0;
+    const styles = [
+      IconBeautifyStyle.cute,
+      IconBeautifyStyle.cartoon,
+      IconBeautifyStyle.neon,
+    ];
+
+    return styles.map((style) {
+      return _StyleOptionChip(
+        label: iconBeautifyStyleLabel(style),
+        selected: widget.beautifyStyle == style,
+        onTap: () => widget.onBeautifyStyleChanged(style),
+        preview: BeautifiedIcon(
+          bytes: null,
+          fallback: Icons.apps,
+          size: previewSize,
+          enabled: true,
+          style: style,
+        ),
+      );
+    }).toList();
+  }
+
+  String _iconExtractModeLabel(IconExtractMode mode) {
+    switch (mode) {
+      case IconExtractMode.system:
+        return '系统渲染';
+      case IconExtractMode.bitmapMask:
+        return '位图合成(默认)';
+    }
+  }
+
   // 显示更新对话框
   void _showUpdateDialog(UpdateInfo updateInfo) {
     showDialog(
@@ -176,6 +231,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final dividerOpacity = (0.10 + 0.10 * (1.0 - widget.transparency))
         .clamp(0.10, 0.20)
         .toDouble();
+    final beautifyAny =
+        widget.beautifyAppIcons || widget.beautifyDesktopIcons;
 
     SettingsThemeData buildTheme(Color base) => SettingsThemeData(
           settingsListBackground: base.withValues(alpha: panelOpacity),
@@ -334,6 +391,63 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
 
+        SettingsSection(
+          title: const Text(''),
+          tiles: [
+            SettingsTile.switchTile(
+              onToggle: widget.onBeautifyAllChanged,
+              initialValue: beautifyAny,
+              leading: const Icon(Icons.auto_awesome),
+              title: const Text('图标美化（全局）'),
+              description: const Text('开启后默认同时替换桌面与应用列表图标'),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('风格'),
+              description: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _buildStyleOptions(context),
+              ),
+            ),
+            SettingsTile.switchTile(
+              onToggle: widget.onBeautifyAppIconsChanged,
+              initialValue: widget.beautifyAppIcons,
+              leading: const Icon(Icons.apps),
+              title: const Text('应用列表'),
+            ),
+            SettingsTile.switchTile(
+              onToggle: widget.onBeautifyDesktopIconsChanged,
+              initialValue: widget.beautifyDesktopIcons,
+              leading: const Icon(Icons.desktop_windows),
+              title: const Text('桌面列表'),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('图标提取方式(高级)'),
+              description: const Text('通常不建议修改，仅在透明图标异常时切换'),
+              trailing: DropdownButtonHideUnderline(
+                child: DropdownButton<IconExtractMode>(
+                  value: widget.iconExtractMode,
+                  isDense: true,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    widget.onIconExtractModeChanged(value);
+                  },
+                  items: IconExtractMode.values
+                      .map(
+                        (mode) => DropdownMenuItem(
+                          value: mode,
+                          child: Text(_iconExtractModeLabel(mode)),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+
         /// 检查更新
         SettingsSection(
           title: const Text(''),
@@ -378,6 +492,65 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _StyleOptionChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget preview;
+
+  const _StyleOptionChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.preview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = selected
+        ? theme.colorScheme.primary.withValues(alpha: 0.14)
+        : theme.colorScheme.surface.withValues(alpha: 0.08);
+    final border = selected
+        ? theme.colorScheme.primary.withValues(alpha: 0.55)
+        : theme.dividerColor.withValues(alpha: 0.28);
+    final textColor = selected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withValues(alpha: 0.86);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              preview,
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../models/shortcut_item.dart';
+import '../models/icon_beautify_style.dart';
+import '../widgets/beautified_icon.dart';
 
 class SelectableShortcutTile extends StatelessWidget {
   final ShortcutItem shortcut;
@@ -9,6 +11,8 @@ class SelectableShortcutTile extends StatelessWidget {
   final double scale;
   final bool selected;
   final VoidCallback onTap;
+  final bool beautifyIcon;
+  final IconBeautifyStyle beautifyStyle;
 
   const SelectableShortcutTile({
     super.key,
@@ -17,6 +21,8 @@ class SelectableShortcutTile extends StatelessWidget {
     required this.scale,
     required this.selected,
     required this.onTap,
+    this.beautifyIcon = false,
+    this.beautifyStyle = IconBeautifyStyle.cute,
   });
 
   @override
@@ -58,12 +64,14 @@ class SelectableShortcutTile extends StatelessWidget {
                   SizedBox(
                     width: iconContainerSize,
                     height: iconContainerSize,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        iconContainerSize * 0.22,
-                      ),
-                      child: _buildIcon(visualIconSize),
-                    ),
+                    child: beautifyIcon
+                        ? _buildIcon(visualIconSize)
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              iconContainerSize * 0.22,
+                            ),
+                            child: _buildIcon(visualIconSize),
+                          ),
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
@@ -106,18 +114,14 @@ class SelectableShortcutTile extends StatelessWidget {
 
   Widget _buildIcon(double visualIconSize) {
     final bytes = shortcut.iconData;
-    if (bytes != null && bytes.isNotEmpty) {
-      return Image.memory(
-        bytes,
-        width: visualIconSize,
-        height: visualIconSize,
-        fit: BoxFit.cover,
-        alignment: Alignment.center,
-        filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
-      );
-    }
-    return Icon(Icons.apps, size: visualIconSize, color: Colors.grey);
+    return BeautifiedIcon(
+      bytes: bytes,
+      fallback: Icons.apps,
+      size: visualIconSize,
+      enabled: beautifyIcon,
+      style: beautifyStyle,
+      fit: BoxFit.cover,
+    );
   }
 
   double get _textSize {

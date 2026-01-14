@@ -12,10 +12,11 @@
 1) **显式资源**：`SHGetFileInfo(..., SHGFI_ICONLOCATION)` 拿到图标文件路径 + 索引，`PrivateExtractIconsW` 提取指定尺寸 HICON（16–256）。
 2) **系统大图标表**：`SHGetImageList(SHIL_JUMBO)` 取 256px 系统大图标（含 PNG-in-ICO）。
 3) **Shell 默认**：`SHGetFileInfo(..., SHGFI_ICON|SHGFI_LARGEICON)` 获取 HICON。
+4) **提取方式选择**：在设置页可选择“位图合成(默认)”或“系统渲染”，仅影响 HICON → PNG 的转换路径。
 
 ## HICON 转 PNG
-- `_hiconToPng`：创建顶向下 32bpp DIB，`DrawIconEx` 绘制到内存 DC，转 `img.Image`，经 `_normalizeIcon` 归一化后编码 PNG，释放 HICON/DC。
-- `_normalizeIcon`：找非透明像素外接矩形（留 1px padding），目标边长 `size*0.92` 等比缩放居中，避免不同来源图标大小不一。
+- `_hiconToPng`：创建顶向下 32bpp DIB，`DrawIconEx` 绘制到内存 DC，转 `img.Image`，读取 AND mask 后将透明位的 alpha 设为 0，再按需做反预乘与缩放。
+- `_hiconToPngBitmap`：通过 `GetIconInfo` 拿到 `hbmColor` + `hbmMask`，用 `GetDIBits` 读出 BGRA；若 alpha 无有效透明信息则用 AND mask 生成 alpha，否则仅清理 mask 透明位；最后反预乘并缩放到目标尺寸（流程参考 CairoShell/ManagedShell 的 AND mask 合成思路）。
 
 ## 缓存与异步
 - **LRU 缓存（64）**：按 IconLocation / 系统索引 / 文件路径 + 尺寸做缓存，失败也记录，重复调用直接命中。
@@ -24,6 +25,7 @@
 ## 性能/排查提示
 - 若自动刷新或桌面文件量大，CPU/IO 抖动多来自初次提取；可下调请求尺寸或加入磁盘缓存。
 - 若看到重复 FFI 栈，检查是否遗漏了 `iconData` 复用或命中了兜底提取。
+- 若出现图标黑色背景，多与 icon 的 alpha 丢失或 AND mask 未正确应用有关；重点排查 `_hiconToPngBitmap` 的 mask 提取与 `_applyMaskToAlpha` 分支。
 - 需要进一步定位时，可在 `extractIcon`、`_hiconToPng` 周围加耗时日志，区分 `.lnk/.exe/.url` 的开销。
 
 ## 相关代码

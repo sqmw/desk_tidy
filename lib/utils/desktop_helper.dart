@@ -11,6 +11,8 @@ import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
 import 'package:process_run/shell.dart' as pr;
 
+import '../models/icon_extract_mode.dart';
+
 const int _invalidFileAttributes = 0xFFFFFFFF;
 const int _shilJumbo = 0x4;
 const int _ildTransparent = 0x00000001;
@@ -36,9 +38,18 @@ const int _dropEffectMove = 2;
 const String _clipboardDropEffectFormat = 'Preferred DropEffect';
 
 // Cache extracted icons by a stable key to avoid repeated FFI work.
+const int _iconCacheVersion = 8;
 const int _iconCacheCapacity = 64;
 final LinkedHashMap<String, Uint8List?> _iconCache =
     LinkedHashMap<String, Uint8List?>();
+
+IconExtractMode _iconExtractMode = IconExtractMode.bitmapMask;
+
+void setIconExtractMode(IconExtractMode mode) {
+  _iconExtractMode = mode;
+}
+
+IconExtractMode getIconExtractMode() => _iconExtractMode;
 
 class _IconTask {
   final String path;
@@ -1036,7 +1047,7 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
     final hicon =
         _extractHiconFromLocation(location.path, location.index, desiredSize);
     if (hicon != 0) {
-      final png = _hiconToPng(hicon, size: desiredSize);
+      final png = _encodeHicon(hicon, size: desiredSize);
       DestroyIcon(hicon);
       if (png != null && png.isNotEmpty) {
         _writeIconCache(cacheKey, png);
@@ -1082,7 +1093,7 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
       return null;
     }
 
-    cachedValue = _hiconToPng(iconHandle, size: desiredSize);
+    cachedValue = _encodeHicon(iconHandle, size: desiredSize);
     DestroyIcon(iconHandle);
   }
 
@@ -1113,7 +1124,7 @@ Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
       final hr2 =
           imageList.getIcon(iconIndex, _ildTransparent | _ildImage, hiconPtr);
       if (FAILED(hr2) || hiconPtr.value == 0) return null;
-      final png = _hiconToPng(hiconPtr.value, size: desiredSize);
+      final png = _encodeHicon(hiconPtr.value, size: desiredSize);
       DestroyIcon(hiconPtr.value);
       if (png != null && png.isNotEmpty) {
         _writeIconCache(cacheKey, png);
@@ -1215,128 +1226,355 @@ int _extractHiconFromLocation(String iconPath, int iconIndex, int size) {
   return hicon;
 }
 
+Uint8List? _encodeHicon(int icon, {required int size}) {
+  switch (_iconExtractMode) {
+    case IconExtractMode.system:
+      return _hiconToPng(icon, size: size);
+    case IconExtractMode.bitmapMask:
+      return _hiconToPngBitmap(icon, size: size) ??
+          _hiconToPng(icon, size: size);
+  }
+}
+
 Uint8List? _hiconToPng(int icon, {required int size}) {
   final screenDC = GetDC(NULL);
   if (screenDC == 0) return null;
   final memDC = CreateCompatibleDC(screenDC);
-
-  final bmi = calloc<BITMAPINFO>();
-  bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
-  bmi.ref.bmiHeader.biWidth = size;
-  bmi.ref.bmiHeader.biHeight = -size; // top-down DIB
-  bmi.ref.bmiHeader.biPlanes = 1;
-  bmi.ref.bmiHeader.biBitCount = 32;
-  bmi.ref.bmiHeader.biCompression = BI_RGB;
-
-  final ppBits = calloc<Pointer<Void>>();
-  final dib = CreateDIBSection(screenDC, bmi, DIB_RGB_COLORS, ppBits, NULL, 0);
-  if (dib == 0) {
-    calloc.free(ppBits);
-    calloc.free(bmi);
-    DeleteDC(memDC);
+  if (memDC == 0) {
     ReleaseDC(NULL, screenDC);
     return null;
   }
 
-  final oldBmp = SelectObject(memDC, dib);
-  final pixelCount = size * size * 4;
-  final pixels = ppBits.value.cast<Uint8>().asTypedList(pixelCount);
-  pixels.fillRange(0, pixels.length, 0);
+  final bmi = calloc<BITMAPINFO>();
+  final ppBits = calloc<Pointer<Void>>();
+  var dib = 0;
+  var oldBmp = 0;
+  try {
+    bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+    bmi.ref.bmiHeader.biWidth = size;
+    bmi.ref.bmiHeader.biHeight = -size; // top-down DIB
+    bmi.ref.bmiHeader.biPlanes = 1;
+    bmi.ref.bmiHeader.biBitCount = 32;
+    bmi.ref.bmiHeader.biCompression = BI_RGB;
 
-  _drawIconEx(memDC, 0, 0, icon, size, size, 0, NULL, _diNormal);
+    dib = CreateDIBSection(screenDC, bmi, DIB_RGB_COLORS, ppBits, NULL, 0);
+    if (dib == 0) return null;
 
-  final image = img.Image.fromBytes(
-    width: size,
-    height: size,
-    bytes: pixels.buffer,
-    numChannels: 4,
-    order: img.ChannelOrder.bgra,
-    rowStride: size * 4,
-  );
+    oldBmp = SelectObject(memDC, dib);
+    final pixelCount = size * size * 4;
+    final pixelsView =
+        ppBits.value.cast<Uint8>().asTypedList(pixelCount);
+    pixelsView.fillRange(0, pixelsView.length, 0);
 
-  final normalized = _normalizeIcon(image, fill: 0.92);
+    _drawIconEx(memDC, 0, 0, icon, size, size, 0, NULL, _diNormal);
 
-  final png = Uint8List.fromList(
-    img.encodePng(
-      normalized,
-    ),
-  );
+    final pixels = Uint8List.fromList(pixelsView);
+    final image = img.Image.fromBytes(
+      width: size,
+      height: size,
+      bytes: pixels.buffer,
+      numChannels: 4,
+      order: img.ChannelOrder.bgra,
+      rowStride: size * 4,
+    );
 
-  SelectObject(memDC, oldBmp);
-  DeleteObject(dib);
-  DeleteDC(memDC);
-  ReleaseDC(NULL, screenDC);
-  calloc.free(ppBits);
-  calloc.free(bmi);
-  return png;
+    final mask = _readMaskBitsFromIcon(icon, image.width, image.height);
+    final alphaMeaningful = _alphaHasMeaning(image);
+    if (mask != null) {
+      _applyMaskToAlpha(image, mask, alphaMeaningful: alphaMeaningful);
+    } else if (!alphaMeaningful) {
+      _forceOpaque(image);
+    }
+    _unpremultiplyAlphaIfNeeded(image);
+
+    final output = (image.width == size && image.height == size)
+        ? image
+        : img.copyResize(
+            image,
+            width: size,
+            height: size,
+            interpolation: img.Interpolation.cubic,
+          );
+
+    return Uint8List.fromList(img.encodePng(output));
+  } finally {
+    if (oldBmp != 0) {
+      SelectObject(memDC, oldBmp);
+    }
+    if (dib != 0) {
+      DeleteObject(dib);
+    }
+    DeleteDC(memDC);
+    ReleaseDC(NULL, screenDC);
+    calloc.free(ppBits);
+    calloc.free(bmi);
+  }
 }
 
-img.Image _normalizeIcon(img.Image source, {double fill = 0.92}) {
-  final width = source.width;
-  final height = source.height;
-  if (width == 0 || height == 0) return source;
+Uint8List? _hiconToPngBitmap(int icon, {required int size}) {
+  final iconInfo = calloc<ICONINFO>();
+  var hbmMask = 0;
+  var hbmColor = 0;
+  try {
+    final ok = GetIconInfo(icon, iconInfo);
+    if (ok == 0) return null;
+    hbmMask = iconInfo.ref.hbmMask;
+    hbmColor = iconInfo.ref.hbmColor;
+    if (hbmColor == 0) return _hiconToPng(icon, size: size);
 
-  const alphaThreshold = 4;
-  var minX = width;
-  var minY = height;
-  var maxX = -1;
-  var maxY = -1;
+    final bitmap = calloc<BITMAP>();
+    try {
+      final res = GetObject(hbmColor, sizeOf<BITMAP>(), bitmap.cast());
+      if (res == 0) return null;
+      final width = bitmap.ref.bmWidth;
+      final height = bitmap.ref.bmHeight.abs();
+      if (width <= 0 || height <= 0) return null;
 
+      final stride = width * 4;
+      final buffer = calloc<Uint8>(stride * height);
+      final bmi = calloc<BITMAPINFO>();
+      final dc = GetDC(NULL);
+      try {
+        if (dc == 0) return null;
+        bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+        bmi.ref.bmiHeader.biWidth = width;
+        bmi.ref.bmiHeader.biHeight = -height;
+        bmi.ref.bmiHeader.biPlanes = 1;
+        bmi.ref.bmiHeader.biBitCount = 32;
+        bmi.ref.bmiHeader.biCompression = BI_RGB;
+        final lines = GetDIBits(
+          dc,
+          hbmColor,
+          0,
+          height,
+          buffer.cast(),
+          bmi,
+          DIB_RGB_COLORS,
+        );
+        if (lines == 0) return null;
+
+        final pixels =
+            Uint8List.fromList(buffer.asTypedList(stride * height));
+        final image = img.Image.fromBytes(
+          width: width,
+          height: height,
+          bytes: pixels.buffer,
+          numChannels: 4,
+          order: img.ChannelOrder.bgra,
+          rowStride: stride,
+        );
+
+        final mask =
+            hbmMask != 0 ? _readMaskBits(hbmMask, width, height, hasColor: true) : null;
+        final alphaMeaningful = _alphaHasMeaning(image);
+        if (mask != null) {
+          _applyMaskToAlpha(image, mask, alphaMeaningful: alphaMeaningful);
+        } else if (!alphaMeaningful) {
+          _forceOpaque(image);
+        }
+        _unpremultiplyAlphaIfNeeded(image);
+
+        final output = (width == size && height == size)
+            ? image
+            : img.copyResize(
+                image,
+                width: size,
+                height: size,
+                interpolation: img.Interpolation.cubic,
+              );
+
+        return Uint8List.fromList(img.encodePng(output));
+      } finally {
+        if (dc != 0) ReleaseDC(NULL, dc);
+        calloc.free(bmi);
+        calloc.free(buffer);
+      }
+    } finally {
+      calloc.free(bitmap);
+    }
+  } finally {
+    if (hbmMask != 0) DeleteObject(hbmMask);
+    if (hbmColor != 0) DeleteObject(hbmColor);
+    calloc.free(iconInfo);
+  }
+}
+
+class _MaskBits {
+  final Uint8List bytes;
+  final int width;
+  final int height;
+  final int rowBytes;
+
+  const _MaskBits(this.bytes, this.width, this.height, this.rowBytes);
+}
+
+_MaskBits? _readMaskBitsFromIcon(int hicon, int maxWidth, int maxHeight) {
+  final iconInfo = calloc<ICONINFO>();
+  var hbmMask = 0;
+  var hbmColor = 0;
+  try {
+    final ok = GetIconInfo(hicon, iconInfo);
+    if (ok == 0) return null;
+    hbmMask = iconInfo.ref.hbmMask;
+    hbmColor = iconInfo.ref.hbmColor;
+    if (hbmMask == 0) return null;
+    return _readMaskBits(hbmMask, maxWidth, maxHeight, hasColor: hbmColor != 0);
+  } finally {
+    if (hbmMask != 0) DeleteObject(hbmMask);
+    if (hbmColor != 0) DeleteObject(hbmColor);
+    calloc.free(iconInfo);
+  }
+}
+
+_MaskBits? _readMaskBits(
+  int hbmMask,
+  int maxWidth,
+  int maxHeight, {
+  required bool hasColor,
+}) {
+  final bitmap = calloc<BITMAP>();
+  try {
+    final res = GetObject(hbmMask, sizeOf<BITMAP>(), bitmap.cast());
+    if (res == 0) return null;
+    final maskWidth = bitmap.ref.bmWidth;
+    var maskHeight = bitmap.ref.bmHeight.abs();
+    if (!hasColor && maskHeight >= maxHeight * 2) {
+      maskHeight = maskHeight ~/ 2;
+    }
+
+    final targetWidth = math.min(maxWidth, maskWidth);
+    final targetHeight = math.min(maxHeight, maskHeight);
+    if (targetWidth <= 0 || targetHeight <= 0) return null;
+
+    final rowBytes = ((maskWidth + 31) ~/ 32) * 4;
+    final totalBytes = rowBytes * maskHeight;
+    final buffer = calloc<Uint8>(totalBytes);
+    final bmi = calloc<BITMAPINFO>();
+    final dc = GetDC(NULL);
+    try {
+      if (dc == 0) return null;
+      bmi.ref.bmiHeader.biSize = sizeOf<BITMAPINFOHEADER>();
+      bmi.ref.bmiHeader.biWidth = maskWidth;
+      bmi.ref.bmiHeader.biHeight = -maskHeight;
+      bmi.ref.bmiHeader.biPlanes = 1;
+      bmi.ref.bmiHeader.biBitCount = 1;
+      bmi.ref.bmiHeader.biCompression = BI_RGB;
+      final lines = GetDIBits(
+        dc,
+        hbmMask,
+        0,
+        maskHeight,
+        buffer.cast(),
+        bmi,
+        DIB_RGB_COLORS,
+      );
+      if (lines == 0) return null;
+
+      final bytes = Uint8List.fromList(buffer.asTypedList(totalBytes));
+      return _MaskBits(bytes, targetWidth, targetHeight, rowBytes);
+    } finally {
+      if (dc != 0) ReleaseDC(NULL, dc);
+      calloc.free(bmi);
+      calloc.free(buffer);
+    }
+  } finally {
+    calloc.free(bitmap);
+  }
+}
+
+bool _alphaHasMeaning(img.Image image) {
+  if (!image.hasAlpha) return false;
+  var hasTransparent = false;
+  var hasOpaque = false;
+  for (final p in image) {
+    final a = p.a.toInt();
+    if (a == 0) {
+      hasTransparent = true;
+    } else if (a == 255) {
+      hasOpaque = true;
+    } else {
+      return true;
+    }
+  }
+  return hasTransparent && hasOpaque;
+}
+
+void _applyMaskToAlpha(
+  img.Image image,
+  _MaskBits mask, {
+  required bool alphaMeaningful,
+}) {
+  if (!image.hasAlpha) return;
+  final width = math.min(image.width, mask.width);
+  final height = math.min(image.height, mask.height);
+  final bytes = mask.bytes;
   for (var y = 0; y < height; y++) {
+    final rowOffset = y * mask.rowBytes;
     for (var x = 0; x < width; x++) {
-      final p = source.getPixel(x, y);
-      if (p.a > alphaThreshold) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
+      final byteIndex = rowOffset + (x >> 3);
+      final bitMask = 0x80 >> (x & 7);
+      final transparent = (bytes[byteIndex] & bitMask) != 0;
+      final p = image.getPixel(x, y);
+      if (transparent) {
+        p
+          ..r = 0
+          ..g = 0
+          ..b = 0
+          ..a = 0;
+      } else if (!alphaMeaningful) {
+        p.a = 255;
       }
     }
   }
+}
 
-  if (maxX < 0 || maxY < 0) return source;
+void _forceOpaque(img.Image image) {
+  if (!image.hasAlpha) return;
+  for (final p in image) {
+    p.a = 255;
+  }
+}
 
-  minX = math.max(0, minX - 1);
-  minY = math.max(0, minY - 1);
-  maxX = math.min(width - 1, maxX + 1);
-  maxY = math.min(height - 1, maxY + 1);
+void _unpremultiplyAlphaIfNeeded(img.Image image) {
+  if (!image.hasAlpha) return;
+  if (!_isLikelyPremultiplied(image)) return;
+  _unpremultiplyAlpha(image);
+}
 
-  final cropWidth = maxX - minX + 1;
-  final cropHeight = maxY - minY + 1;
-  if (cropWidth <= 0 || cropHeight <= 0) return source;
+bool _isLikelyPremultiplied(img.Image image) {
+  if (!image.hasAlpha) return false;
+  var samples = 0;
+  var premultiplied = 0;
+  for (final p in image) {
+    final a = p.a.toInt();
+    if (a == 0 || a == 255) continue;
+    samples++;
+    if (p.r <= a && p.g <= a && p.b <= a) {
+      premultiplied++;
+    }
+    if (samples >= 2000) break;
+  }
+  if (samples == 0) return false;
+  return premultiplied / samples >= 0.9;
+}
 
-  final cropped = img.copyCrop(
-    source,
-    x: minX,
-    y: minY,
-    width: cropWidth,
-    height: cropHeight,
-  );
-
-  final targetEdge = (width * fill).round().clamp(1, width);
-  final scale =
-      math.min(targetEdge / cropped.width, targetEdge / cropped.height);
-  final scaledWidth = math.max(1, (cropped.width * scale).round());
-  final scaledHeight = math.max(1, (cropped.height * scale).round());
-
-  final resized = img.copyResize(
-    cropped,
-    width: scaledWidth,
-    height: scaledHeight,
-    interpolation: img.Interpolation.cubic,
-  );
-
-  final canvas = img.Image(width: width, height: height);
-  img.fill(canvas, color: img.ColorRgba8(0, 0, 0, 0));
-
-  img.compositeImage(
-    canvas,
-    resized,
-    dstX: ((width - scaledWidth) / 2).round(),
-    dstY: ((height - scaledHeight) / 2).round(),
-  );
-
-  return canvas;
+void _unpremultiplyAlpha(img.Image image) {
+  for (final p in image) {
+    final a = p.a.toInt();
+    if (a == 0) {
+      p
+        ..r = 0
+        ..g = 0
+        ..b = 0;
+      continue;
+    }
+    if (a >= 255) continue;
+    final scale = 255.0 / a;
+    p
+      ..r = (p.r * scale).round().clamp(0, 255)
+      ..g = (p.g * scale).round().clamp(0, 255)
+      ..b = (p.b * scale).round().clamp(0, 255);
+  }
 }
 
 Future<Uint8List?> extractIconAsync(String filePath, {int size = 64}) {
@@ -1394,9 +1632,10 @@ void _writeIconCache(String key, Uint8List? value) {
 }
 
 String _cacheKeyForLocation(_IconLocation loc, int size) =>
-    'loc:${path.normalize(loc.path)}|${loc.index}|$size';
+    'v$_iconCacheVersion|m${_iconExtractMode.index}|loc:${path.normalize(loc.path)}|${loc.index}|$size';
 
-String _cacheKeyForSystemIndex(int index, int size) => 'sys:$index|$size';
+String _cacheKeyForSystemIndex(int index, int size) =>
+    'v$_iconCacheVersion|m${_iconExtractMode.index}|sys:$index|$size';
 
 String _cacheKeyForFile(String filePath, int size) =>
-    'file:${path.normalize(filePath)}|$size';
+    'v$_iconCacheVersion|m${_iconExtractMode.index}|file:${path.normalize(filePath)}|$size';

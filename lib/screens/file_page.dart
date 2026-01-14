@@ -6,17 +6,23 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
+import '../models/icon_beautify_style.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/middle_ellipsis_text.dart';
+import '../widgets/beautified_icon.dart';
 
 class FilePage extends StatelessWidget {
   final String desktopPath;
   final bool showHidden;
+  final bool beautifyIcons;
+  final IconBeautifyStyle beautifyStyle;
 
   const FilePage({
     Key? key,
     required this.desktopPath,
     this.showHidden = false,
+    this.beautifyIcons = false,
+    this.beautifyStyle = IconBeautifyStyle.cute,
   }) : super(key: key);
 
   @override
@@ -70,7 +76,11 @@ class FilePage extends StatelessWidget {
             child: ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              leading: _FileIcon(filePath: file.path),
+              leading: _FileIcon(
+                filePath: file.path,
+                beautifyIcon: beautifyIcons,
+                beautifyStyle: beautifyStyle,
+              ),
               title: Tooltip(
                 message: path.basename(file.path),
                 child: Text(
@@ -97,7 +107,14 @@ class FilePage extends StatelessWidget {
 
 class _FileIcon extends StatelessWidget {
   final String filePath;
-  const _FileIcon({required this.filePath});
+  final bool beautifyIcon;
+  final IconBeautifyStyle beautifyStyle;
+
+  const _FileIcon({
+    required this.filePath,
+    required this.beautifyIcon,
+    required this.beautifyStyle,
+  });
 
   static final Map<String, Future<Uint8List?>> _iconFutures = {};
 
@@ -108,18 +125,25 @@ class _FileIcon extends StatelessWidget {
       builder: (context, snapshot) {
         final data = snapshot.data;
         if (data != null && data.isNotEmpty) {
-          return Image.memory(
-            data,
-            width: 28,
-            height: 28,
-            fit: BoxFit.contain,
+          return BeautifiedIcon(
+            bytes: data,
+            fallback: Icons.apps,
+            size: 28,
+            enabled: beautifyIcon,
+            style: beautifyStyle,
           );
         }
         final ext = path.extension(filePath).toLowerCase();
         final icon = ['.exe', '.lnk', '.url', '.appref-ms'].contains(ext)
             ? Icons.apps
             : Icons.insert_drive_file;
-        return Icon(icon, size: 28);
+        return BeautifiedIcon(
+          bytes: null,
+          fallback: icon,
+          size: 28,
+          enabled: beautifyIcon,
+          style: beautifyStyle,
+        );
       },
     );
   }

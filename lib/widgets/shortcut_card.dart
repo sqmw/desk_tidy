@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../models/shortcut_item.dart';
+import '../models/icon_beautify_style.dart';
 import '../utils/desktop_helper.dart';
+import '../widgets/beautified_icon.dart';
 
 class ShortcutCard extends StatefulWidget {
   final ShortcutItem shortcut;
@@ -14,6 +16,8 @@ class ShortcutCard extends StatefulWidget {
   final VoidCallback? onDeleted;
   final Future<void> Function(ShortcutItem shortcut, Offset position)?
       onCategoryMenuRequested;
+  final bool beautifyIcon;
+  final IconBeautifyStyle beautifyStyle;
 
   const ShortcutCard({
     super.key,
@@ -22,6 +26,8 @@ class ShortcutCard extends StatefulWidget {
     this.windowFocusNotifier,
     this.onDeleted,
     this.onCategoryMenuRequested,
+    this.beautifyIcon = false,
+    this.beautifyStyle = IconBeautifyStyle.cute,
   });
 
   @override
@@ -371,11 +377,16 @@ class _ShortcutCardState extends State<ShortcutCard> {
                   SizedBox(
                     width: iconContainerSize,
                     height: iconContainerSize,
-                    child: ClipRRect(
-                      borderRadius:
-                          BorderRadius.circular(iconContainerSize * 0.22),
-                      child: _buildIcon(context, visualIconSize.toDouble()),
-                    ),
+                    child: widget.beautifyIcon
+                        ? _buildIcon(context, visualIconSize.toDouble())
+                        : ClipRRect(
+                            borderRadius:
+                                BorderRadius.circular(iconContainerSize * 0.22),
+                            child: _buildIcon(
+                              context,
+                              visualIconSize.toDouble(),
+                            ),
+                          ),
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
@@ -420,14 +431,13 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final shortcut = widget.shortcut;
     final bytes = shortcut.iconData;
     if (bytes != null && bytes.isNotEmpty) {
-      return Image.memory(
-        bytes,
-        width: visualIconSize,
-        height: visualIconSize,
+      return BeautifiedIcon(
+        bytes: bytes,
+        fallback: Icons.apps,
+        size: visualIconSize,
+        enabled: widget.beautifyIcon,
+        style: widget.beautifyStyle,
         fit: BoxFit.cover,
-        alignment: Alignment.center,
-        filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
       );
     }
     if (shortcut.targetPath.isNotEmpty) {
@@ -442,24 +452,31 @@ class _ShortcutCardState extends State<ShortcutCard> {
         builder: (context, snapshot) {
           final buf = snapshot.data;
           if (buf != null && buf.isNotEmpty) {
-            return Image.memory(
-              buf,
-              width: visualIconSize,
-              height: visualIconSize,
+            return BeautifiedIcon(
+              bytes: buf,
+              fallback: Icons.apps,
+              size: visualIconSize,
+              enabled: widget.beautifyIcon,
+              style: widget.beautifyStyle,
               fit: BoxFit.cover,
-              alignment: Alignment.center,
-              filterQuality: FilterQuality.high,
-              gaplessPlayback: true,
             );
           }
-          return const Icon(Icons.apps);
+          return BeautifiedIcon(
+            bytes: null,
+            fallback: Icons.apps,
+            size: visualIconSize,
+            enabled: widget.beautifyIcon,
+            style: widget.beautifyStyle,
+          );
         },
       );
     }
-    return Icon(
-      Icons.apps,
+    return BeautifiedIcon(
+      bytes: null,
+      fallback: Icons.apps,
       size: visualIconSize,
-      color: Colors.grey,
+      enabled: widget.beautifyIcon,
+      style: widget.beautifyStyle,
     );
   }
 

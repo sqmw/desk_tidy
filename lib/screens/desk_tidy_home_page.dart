@@ -9,6 +9,8 @@ import 'package:window_manager/window_manager.dart';
 
 import '../models/shortcut_item.dart';
 import '../models/app_category.dart';
+import '../models/icon_beautify_style.dart';
+import '../models/icon_extract_mode.dart';
 import '../setting/settings_page.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
@@ -68,6 +70,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _hideDesktopItems = false;
   bool _panelVisible = true;
   bool _trayMode = false;
+  bool _beautifyAppIcons = false;
+  bool _beautifyDesktopIcons = false;
+  IconBeautifyStyle _beautifyStyle = IconBeautifyStyle.cute;
+  IconExtractMode _iconExtractMode = IconExtractMode.bitmapMask;
 
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
@@ -187,7 +193,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _hideDesktopItems = config.hideDesktopItems || _hideDesktopItems;
       _themeModeOption = config.themeModeOption;
       _backgroundImagePath = config.backgroundPath;
+      _beautifyAppIcons = config.beautifyAppIcons;
+      _beautifyDesktopIcons = config.beautifyDesktopIcons;
+      _beautifyStyle = config.beautifyStyle;
+      _iconExtractMode = config.iconExtractMode;
     });
+    setIconExtractMode(_iconExtractMode);
     _handleThemeChange(_themeModeOption);
     await _loadCategories();
     await _loadShortcuts();
@@ -284,7 +295,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     );
   }
 
-  Future<void> _loadShortcuts({bool showLoading = true}) async {
+  Future<void> _loadShortcuts({
+    bool showLoading = true,
+    bool forceReloadIcons = false,
+  }) async {
     if (_isRefreshing) return;
     _isRefreshing = true;
     final shouldShowLoading = showLoading || _shortcuts.isEmpty;
@@ -306,7 +320,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       final pathsUnchanged = _pathsEqual(currentPaths, incomingPaths);
 
       // 如果路径没有变化且不是强制显示加载状态（即非手动刷新），则直接返回
-      if (pathsUnchanged && !showLoading) {
+      if (pathsUnchanged && !showLoading && !forceReloadIcons) {
         if (shouldShowLoading) {
           setState(() => _isLoading = false);
         }
@@ -356,7 +370,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       )).whereType<ShortcutItem>().toList();
 
       // 只在数据变化时更新UI，实现无感更新
-      if (!_shortcutsEqual(_shortcuts, shortcutItems)) {
+      if (forceReloadIcons || !_shortcutsEqual(_shortcuts, shortcutItems)) {
         final searchIndex = _buildSearchIndex(shortcutItems);
         setState(() {
           _shortcuts = shortcutItems;
@@ -1430,16 +1444,22 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         return AllPage(
           desktopPath: _desktopPath,
           showHidden: effectiveShowHidden,
+          beautifyIcons: _beautifyDesktopIcons,
+          beautifyStyle: _beautifyStyle,
         );
       case 2:
         return FolderPage(
           desktopPath: _desktopPath,
           showHidden: effectiveShowHidden,
+          beautifyIcons: _beautifyDesktopIcons,
+          beautifyStyle: _beautifyStyle,
         );
       case 3:
         return FilePage(
           desktopPath: _desktopPath,
           showHidden: effectiveShowHidden,
+          beautifyIcons: _beautifyDesktopIcons,
+          beautifyStyle: _beautifyStyle,
         );
       case 4:
         return SettingsPage(
@@ -1452,6 +1472,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           hideDesktopItems: _hideDesktopItems,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
+          beautifyAppIcons: _beautifyAppIcons,
+          beautifyDesktopIcons: _beautifyDesktopIcons,
+          beautifyStyle: _beautifyStyle,
+          iconExtractMode: _iconExtractMode,
           onTransparencyChanged: (v) {
             setState(() => _backgroundOpacity = (1.0 - v).clamp(0.0, 1.0));
             AppPreferences.saveTransparency(v);
@@ -1507,6 +1531,32 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
               unawaited(FileImage(File(previous)).evict());
             }
             setState(() => _backgroundImagePath = saved);
+          },
+          onBeautifyAllChanged: (v) {
+            setState(() {
+              _beautifyAppIcons = v;
+              _beautifyDesktopIcons = v;
+            });
+            AppPreferences.saveBeautifyAppIcons(v);
+            AppPreferences.saveBeautifyDesktopIcons(v);
+          },
+          onBeautifyStyleChanged: (style) {
+            setState(() => _beautifyStyle = style);
+            AppPreferences.saveBeautifyStyle(style);
+          },
+          onBeautifyAppIconsChanged: (v) {
+            setState(() => _beautifyAppIcons = v);
+            AppPreferences.saveBeautifyAppIcons(v);
+          },
+          onBeautifyDesktopIconsChanged: (v) {
+            setState(() => _beautifyDesktopIcons = v);
+            AppPreferences.saveBeautifyDesktopIcons(v);
+          },
+          onIconExtractModeChanged: (mode) {
+            setState(() => _iconExtractMode = mode);
+            setIconExtractMode(mode);
+            AppPreferences.saveIconExtractMode(mode);
+            _loadShortcuts(showLoading: false, forceReloadIcons: true);
           },
         );
       default:
@@ -1923,6 +1973,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             scale: scale,
                             selected: _editingSelection.contains(shortcut.path),
                             onTap: () => _toggleInlineSelection(shortcut),
+                            beautifyIcon: _beautifyAppIcons,
+                            beautifyStyle: _beautifyStyle,
                           );
                         }
                         return ShortcutCard(
@@ -1933,6 +1985,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             _loadShortcuts(showLoading: false);
                           },
                           onCategoryMenuRequested: _showCategoryMenuForShortcut,
+                          beautifyIcon: _beautifyAppIcons,
+                          beautifyStyle: _beautifyStyle,
                         );
                       },
                     );

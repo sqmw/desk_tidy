@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../utils/desktop_helper.dart';
+import '../models/icon_beautify_style.dart';
 import '../widgets/entity_detail_bar.dart';
+import '../widgets/beautified_icon.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
 import '../widgets/middle_ellipsis_text.dart';
@@ -16,11 +18,15 @@ import '../widgets/middle_ellipsis_text.dart';
 class AllPage extends StatefulWidget {
   final String desktopPath;
   final bool showHidden;
+  final bool beautifyIcons;
+  final IconBeautifyStyle beautifyStyle;
 
   const AllPage({
     super.key,
     required this.desktopPath,
     this.showHidden = false,
+    this.beautifyIcons = false,
+    this.beautifyStyle = IconBeautifyStyle.cute,
   });
 
   @override
@@ -636,6 +642,8 @@ class _AllPageState extends State<AllPage> {
                             leading: _EntityIcon(
                               entity: entity,
                               getIconFuture: _getIconFuture,
+                              beautifyIcon: widget.beautifyIcons,
+                              beautifyStyle: widget.beautifyStyle,
                             ),
                             title: Tooltip(
                               message: displayName,
@@ -669,16 +677,26 @@ class _AllPageState extends State<AllPage> {
 class _EntityIcon extends StatelessWidget {
   final FileSystemEntity entity;
   final Future<Uint8List?> Function(String path) getIconFuture;
+  final bool beautifyIcon;
+  final IconBeautifyStyle beautifyStyle;
 
   const _EntityIcon({
     required this.entity,
     required this.getIconFuture,
+    required this.beautifyIcon,
+    required this.beautifyStyle,
   });
 
   @override
   Widget build(BuildContext context) {
     if (entity is Directory) {
-      return const Icon(Icons.folder, size: 32);
+      return BeautifiedIcon(
+        bytes: null,
+        fallback: Icons.folder,
+        size: 32,
+        enabled: beautifyIcon,
+        style: beautifyStyle,
+      );
     }
 
     return FutureBuilder<Uint8List?>(
@@ -687,18 +705,25 @@ class _EntityIcon extends StatelessWidget {
         if (snapshot.hasData &&
             snapshot.data != null &&
             snapshot.data!.isNotEmpty) {
-          return Image.memory(
-            snapshot.data!,
-            width: 32,
-            height: 32,
-            fit: BoxFit.contain,
+          return BeautifiedIcon(
+            bytes: snapshot.data,
+            fallback: Icons.apps,
+            size: 32,
+            enabled: beautifyIcon,
+            style: beautifyStyle,
           );
         }
         final ext = path.extension(entity.path).toLowerCase();
         final icon = ['.exe', '.lnk', '.url', '.appref-ms'].contains(ext)
             ? Icons.apps
             : Icons.insert_drive_file;
-        return Icon(icon, size: 32);
+        return BeautifiedIcon(
+          bytes: null,
+          fallback: icon,
+          size: 32,
+          enabled: beautifyIcon,
+          style: beautifyStyle,
+        );
       },
     );
   }
