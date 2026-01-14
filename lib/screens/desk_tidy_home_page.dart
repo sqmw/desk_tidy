@@ -10,7 +10,6 @@ import 'package:window_manager/window_manager.dart';
 import '../models/shortcut_item.dart';
 import '../models/app_category.dart';
 import '../models/icon_beautify_style.dart';
-import '../models/icon_extract_mode.dart';
 import '../setting/settings_page.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
@@ -73,7 +72,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _beautifyAppIcons = false;
   bool _beautifyDesktopIcons = false;
   IconBeautifyStyle _beautifyStyle = IconBeautifyStyle.cute;
-  IconExtractMode _iconExtractMode = IconExtractMode.bitmapMask;
 
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
@@ -196,9 +194,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _beautifyAppIcons = config.beautifyAppIcons;
       _beautifyDesktopIcons = config.beautifyDesktopIcons;
       _beautifyStyle = config.beautifyStyle;
-      _iconExtractMode = config.iconExtractMode;
     });
-    setIconExtractMode(_iconExtractMode);
     _handleThemeChange(_themeModeOption);
     await _loadCategories();
     await _loadShortcuts();
@@ -1475,7 +1471,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           beautifyAppIcons: _beautifyAppIcons,
           beautifyDesktopIcons: _beautifyDesktopIcons,
           beautifyStyle: _beautifyStyle,
-          iconExtractMode: _iconExtractMode,
           onTransparencyChanged: (v) {
             setState(() => _backgroundOpacity = (1.0 - v).clamp(0.0, 1.0));
             AppPreferences.saveTransparency(v);
@@ -1551,12 +1546,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           onBeautifyDesktopIconsChanged: (v) {
             setState(() => _beautifyDesktopIcons = v);
             AppPreferences.saveBeautifyDesktopIcons(v);
-          },
-          onIconExtractModeChanged: (mode) {
-            setState(() => _iconExtractMode = mode);
-            setIconExtractMode(mode);
-            AppPreferences.saveIconExtractMode(mode);
-            _loadShortcuts(showLoading: false, forceReloadIcons: true);
           },
         );
       default:

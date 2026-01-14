@@ -16,7 +16,6 @@
   - `ui.beautifyAppIcons`：应用列表图标美化开关
   - `ui.beautifyDesktopIcons`：桌面/文件列表图标美化开关
   - `ui.beautifyStyle`：图标美化风格（枚举）
-  - `ui.iconExtractMode`：图标提取方式（枚举）
   - 窗口位置大小：`window.x` / `window.y` / `window.w` / `window.h`
 - 背景图持久化：选择图片后，会复制一份到 `%AppData%/desk_tidy/background.*`（使用 `getApplicationSupportDirectory`），避免原图被移动/删除导致丢失。
 
@@ -38,9 +37,6 @@
   - 全局开关（默认同时启用应用列表与桌面列表）
   - 风格选择（可爱/卡通/霓虹）
   - 分别控制应用列表与桌面列表
-- 图标提取方式（高级，不建议修改）：
-  - 系统渲染
-  - 位图合成（默认，修复旧式透明图标）
 
 ## 相关代码入口
 - 设置界面：`lib/setting/settings_page.dart`

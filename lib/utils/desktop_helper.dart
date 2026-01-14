@@ -11,8 +11,6 @@ import 'package:path/path.dart' as path;
 import 'package:image/image.dart' as img;
 import 'package:process_run/shell.dart' as pr;
 
-import '../models/icon_extract_mode.dart';
-
 const int _invalidFileAttributes = 0xFFFFFFFF;
 const int _shilJumbo = 0x4;
 const int _ildTransparent = 0x00000001;
@@ -38,18 +36,10 @@ const int _dropEffectMove = 2;
 const String _clipboardDropEffectFormat = 'Preferred DropEffect';
 
 // Cache extracted icons by a stable key to avoid repeated FFI work.
-const int _iconCacheVersion = 8;
+const int _iconCacheVersion = 9;
 const int _iconCacheCapacity = 64;
 final LinkedHashMap<String, Uint8List?> _iconCache =
     LinkedHashMap<String, Uint8List?>();
-
-IconExtractMode _iconExtractMode = IconExtractMode.bitmapMask;
-
-void setIconExtractMode(IconExtractMode mode) {
-  _iconExtractMode = mode;
-}
-
-IconExtractMode getIconExtractMode() => _iconExtractMode;
 
 class _IconTask {
   final String path;
@@ -1227,13 +1217,7 @@ int _extractHiconFromLocation(String iconPath, int iconIndex, int size) {
 }
 
 Uint8List? _encodeHicon(int icon, {required int size}) {
-  switch (_iconExtractMode) {
-    case IconExtractMode.system:
-      return _hiconToPng(icon, size: size);
-    case IconExtractMode.bitmapMask:
-      return _hiconToPngBitmap(icon, size: size) ??
-          _hiconToPng(icon, size: size);
-  }
+  return _hiconToPngBitmap(icon, size: size) ?? _hiconToPng(icon, size: size);
 }
 
 Uint8List? _hiconToPng(int icon, {required int size}) {
@@ -1632,10 +1616,10 @@ void _writeIconCache(String key, Uint8List? value) {
 }
 
 String _cacheKeyForLocation(_IconLocation loc, int size) =>
-    'v$_iconCacheVersion|m${_iconExtractMode.index}|loc:${path.normalize(loc.path)}|${loc.index}|$size';
+    'v$_iconCacheVersion|loc:${path.normalize(loc.path)}|${loc.index}|$size';
 
 String _cacheKeyForSystemIndex(int index, int size) =>
-    'v$_iconCacheVersion|m${_iconExtractMode.index}|sys:$index|$size';
+    'v$_iconCacheVersion|sys:$index|$size';
 
 String _cacheKeyForFile(String filePath, int size) =>
-    'v$_iconCacheVersion|m${_iconExtractMode.index}|file:${path.normalize(filePath)}|$size';
+    'v$_iconCacheVersion|file:${path.normalize(filePath)}|$size';

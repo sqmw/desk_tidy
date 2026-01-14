@@ -12,7 +12,7 @@
 1) **显式资源**：`SHGetFileInfo(..., SHGFI_ICONLOCATION)` 拿到图标文件路径 + 索引，`PrivateExtractIconsW` 提取指定尺寸 HICON（16–256）。
 2) **系统大图标表**：`SHGetImageList(SHIL_JUMBO)` 取 256px 系统大图标（含 PNG-in-ICO）。
 3) **Shell 默认**：`SHGetFileInfo(..., SHGFI_ICON|SHGFI_LARGEICON)` 获取 HICON。
-4) **提取方式选择**：在设置页可选择“位图合成(默认)”或“系统渲染”，仅影响 HICON → PNG 的转换路径。
+4) **提取方式选择**：已自动采用“位图合成优先 + 系统渲染兜底”，无需用户切换。
 
 ## HICON 转 PNG
 - `_hiconToPng`：创建顶向下 32bpp DIB，`DrawIconEx` 绘制到内存 DC，转 `img.Image`，读取 AND mask 后将透明位的 alpha 设为 0，再按需做反预乘与缩放。

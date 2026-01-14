@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../setting/settings_page.dart';
 import '../models/icon_beautify_style.dart';
-import '../models/icon_extract_mode.dart';
 
 class AppPreferences {
   static const _kTransparency = 'ui.transparency';
@@ -21,7 +20,6 @@ class AppPreferences {
   static const _kBeautifyAppIcons = 'ui.beautify.appIcons';
   static const _kBeautifyDesktopIcons = 'ui.beautify.desktopIcons';
   static const _kBeautifyStyle = 'ui.beautify.style';
-  static const _kIconExtractMode = 'ui.iconExtractMode';
   static const _kWinX = 'window.x';
   static const _kWinY = 'window.y';
   static const _kWinW = 'window.w';
@@ -48,10 +46,6 @@ class AppPreferences {
         prefs.getInt(_kBeautifyStyle) ?? IconBeautifyStyle.cute.index;
     final beautifyStyle = IconBeautifyStyle
         .values[beautifyStyleIndex.clamp(0, IconBeautifyStyle.values.length - 1)];
-    final iconExtractModeIndex =
-        prefs.getInt(_kIconExtractMode) ?? IconExtractMode.bitmapMask.index;
-    final iconExtractMode = IconExtractMode.values[
-        iconExtractModeIndex.clamp(0, IconExtractMode.values.length - 1)];
 
     return DeskTidyConfig(
       transparency: transparency.clamp(0.0, 1.0),
@@ -66,7 +60,6 @@ class AppPreferences {
       beautifyAppIcons: beautifyAppIcons,
       beautifyDesktopIcons: beautifyDesktopIcons,
       beautifyStyle: beautifyStyle,
-      iconExtractMode: iconExtractMode,
     );
   }
 
@@ -123,11 +116,6 @@ class AppPreferences {
   static Future<void> saveBeautifyStyle(IconBeautifyStyle style) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kBeautifyStyle, style.index);
-  }
-
-  static Future<void> saveIconExtractMode(IconExtractMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kIconExtractMode, mode.index);
   }
 
   static Future<String?> backupAndSaveBackgroundPath(
@@ -230,7 +218,6 @@ class DeskTidyConfig {
   final bool beautifyAppIcons;
   final bool beautifyDesktopIcons;
   final IconBeautifyStyle beautifyStyle;
-  final IconExtractMode iconExtractMode;
 
   const DeskTidyConfig({
     required this.transparency,
@@ -245,7 +232,6 @@ class DeskTidyConfig {
     required this.beautifyAppIcons,
     required this.beautifyDesktopIcons,
     required this.beautifyStyle,
-    required this.iconExtractMode,
   });
 }
 

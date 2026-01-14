@@ -5,7 +5,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:desk_tidy/services/update_service.dart';
 
 import '../models/icon_beautify_style.dart';
-import '../models/icon_extract_mode.dart';
 import '../widgets/beautified_icon.dart';
 
 enum ThemeModeOption { system, light, dark }
@@ -26,7 +25,6 @@ class SettingsPage extends StatefulWidget {
   final bool beautifyAppIcons;
   final bool beautifyDesktopIcons;
   final IconBeautifyStyle beautifyStyle;
-  final IconExtractMode iconExtractMode;
 
   final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onFrostStrengthChanged;
@@ -41,7 +39,6 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onBeautifyDesktopIconsChanged;
   final ValueChanged<bool> onBeautifyAllChanged;
   final ValueChanged<IconBeautifyStyle> onBeautifyStyleChanged;
-  final ValueChanged<IconExtractMode> onIconExtractModeChanged;
 
   const SettingsPage({
     super.key,
@@ -57,7 +54,6 @@ class SettingsPage extends StatefulWidget {
     required this.beautifyAppIcons,
     required this.beautifyDesktopIcons,
     required this.beautifyStyle,
-    required this.iconExtractMode,
     required this.onTransparencyChanged,
     required this.onFrostStrengthChanged,
     required this.onIconSizeChanged,
@@ -71,7 +67,6 @@ class SettingsPage extends StatefulWidget {
     required this.onBeautifyDesktopIconsChanged,
     required this.onBeautifyAllChanged,
     required this.onBeautifyStyleChanged,
-    required this.onIconExtractModeChanged,
   });
 
   @override
@@ -175,15 +170,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
     }).toList();
-  }
-
-  String _iconExtractModeLabel(IconExtractMode mode) {
-    switch (mode) {
-      case IconExtractMode.system:
-        return '系统渲染';
-      case IconExtractMode.bitmapMask:
-        return '位图合成(默认)';
-    }
   }
 
   // 显示更新对话框
@@ -421,29 +407,6 @@ class _SettingsPageState extends State<SettingsPage> {
               initialValue: widget.beautifyDesktopIcons,
               leading: const Icon(Icons.desktop_windows),
               title: const Text('桌面列表'),
-            ),
-            SettingsTile(
-              leading: const Icon(Icons.tune),
-              title: const Text('图标提取方式(高级)'),
-              description: const Text('通常不建议修改，仅在透明图标异常时切换'),
-              trailing: DropdownButtonHideUnderline(
-                child: DropdownButton<IconExtractMode>(
-                  value: widget.iconExtractMode,
-                  isDense: true,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    widget.onIconExtractModeChanged(value);
-                  },
-                  items: IconExtractMode.values
-                      .map(
-                        (mode) => DropdownMenuItem(
-                          value: mode,
-                          child: Text(_iconExtractModeLabel(mode)),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
             ),
           ],
         ),
