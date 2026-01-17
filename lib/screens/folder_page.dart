@@ -10,7 +10,6 @@ import '../utils/desktop_helper.dart';
 import '../models/icon_beautify_style.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
-import '../widgets/middle_ellipsis_text.dart';
 import '../widgets/beautified_icon.dart';
 
 class FolderPage extends StatefulWidget {
@@ -79,22 +78,23 @@ class _FolderPageState extends State<FolderPage> {
 
       final allowFiles = !_isRootPath;
 
-      final items = dir.listSync().where((entity) {
-        if (!allowFiles && entity is! Directory) return false;
-        final name = path.basename(entity.path);
-        final lower = name.toLowerCase();
-        if (!widget.showHidden &&
-            (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
-          return false;
-        }
-        if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
-        return allowFiles ? true : entity is Directory;
-      }).toList()
-        ..sort((a, b) {
-          return path.basename(a.path).toLowerCase().compareTo(
-                path.basename(b.path).toLowerCase(),
-              );
-        });
+      final items =
+          dir.listSync().where((entity) {
+            if (!allowFiles && entity is! Directory) return false;
+            final name = path.basename(entity.path);
+            final lower = name.toLowerCase();
+            if (!widget.showHidden &&
+                (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
+              return false;
+            }
+            if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
+            return allowFiles ? true : entity is Directory;
+          }).toList()..sort((a, b) {
+            return path
+                .basename(a.path)
+                .toLowerCase()
+                .compareTo(path.basename(b.path).toLowerCase());
+          });
 
       setState(() {
         _entries = items;
@@ -132,10 +132,7 @@ class _FolderPageState extends State<FolderPage> {
     _showSnackBar('已复制$label');
   }
 
-  Future<void> _showEntityMenu(
-    FileSystemEntity entity,
-    Offset position,
-  ) async {
+  Future<void> _showEntityMenu(FileSystemEntity entity, Offset position) async {
     _entityMenuActive = true;
     final isDir = entity is Directory;
     final displayName = path.basename(entity.path);
@@ -165,10 +162,7 @@ class _FolderPageState extends State<FolderPage> {
           ),
         const PopupMenuItem(
           value: 'open_in_explorer',
-          child: ListTile(
-            leading: Icon(Icons.folder),
-            title: Text('在资源管理器打开'),
-          ),
+          child: ListTile(leading: Icon(Icons.folder), title: Text('在资源管理器打开')),
         ),
         const PopupMenuItem(
           value: 'move',
@@ -179,46 +173,28 @@ class _FolderPageState extends State<FolderPage> {
         ),
         const PopupMenuItem(
           value: 'copy',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制到...'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
         ),
         const PopupMenuItem(
           value: 'copy_clipboard',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制到剪贴板(系统)'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到剪贴板(系统)')),
         ),
         const PopupMenuItem(
           value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete),
-            title: Text('删除(回收站)'),
-          ),
+          child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
         ),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'copy_name',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制名称'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
         ),
         const PopupMenuItem(
           value: 'copy_path',
-          child: ListTile(
-            leading: Icon(Icons.link),
-            title: Text('复制路径'),
-          ),
+          child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
         ),
         const PopupMenuItem(
           value: 'copy_folder',
-          child: ListTile(
-            leading: Icon(Icons.folder),
-            title: Text('复制所在文件夹'),
-          ),
+          child: ListTile(leading: Icon(Icons.folder), title: Text('复制所在文件夹')),
         ),
       ],
     );
@@ -305,10 +281,7 @@ class _FolderPageState extends State<FolderPage> {
         ),
         PopupMenuItem(
           value: 'refresh',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('刷新'),
-          ),
+          child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
         ),
       ],
     );
@@ -335,9 +308,7 @@ class _FolderPageState extends State<FolderPage> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '名称',
-            ),
+            decoration: const InputDecoration(labelText: '名称'),
             onSubmitted: (_) => Navigator.of(context).pop(true),
           ),
           actions: [
@@ -429,9 +400,9 @@ class _FolderPageState extends State<FolderPage> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<Uint8List?> _getIconFuture(String path) {
@@ -461,16 +432,17 @@ class _FolderPageState extends State<FolderPage> {
             opacity: 0.14,
             blurSigma: 10,
             border: Border.all(
-              color:
-                  Theme.of(context).dividerColor.withValues(alpha: 0.16),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _currentPath == widget.desktopPath ? null : _goUp,
                 ),
@@ -483,8 +455,10 @@ class _FolderPageState extends State<FolderPage> {
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   icon: const Icon(Icons.refresh),
                   onPressed: _refresh,
                 ),
@@ -499,11 +473,20 @@ class _FolderPageState extends State<FolderPage> {
                 _showPageMenu(details.globalPosition),
             child: _entries.isEmpty
                 ? const Center(child: Text('未找到内容'))
-                : ListView.builder(
+                : GridView.builder(
+                    padding: const EdgeInsets.all(12),
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 100,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.8,
+                        ),
                     itemCount: _entries.length,
                     itemBuilder: (context, index) {
                       final entity = _entries[index];
                       final isDir = entity is Directory;
+                      final name = path.basename(entity.path);
                       return Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -518,38 +501,41 @@ class _FolderPageState extends State<FolderPage> {
                           onSecondaryTapDown: (details) {
                             _showEntityMenu(entity, details.globalPosition);
                           },
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(12),
                           hoverColor: Theme.of(context)
                               .colorScheme
                               .surfaceContainerHighest
-                              .withValues(alpha: 0.4),
-                          child: ListTile(
-                            dense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            leading: _EntityIcon(
-                              entity: entity,
-                              getIconFuture: _getIconFuture,
-                              beautifyIcon: widget.beautifyIcons,
-                              beautifyStyle: widget.beautifyStyle,
+                              .withValues(alpha: 0.3),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _EntityIcon(
+                                  entity: entity,
+                                  getIconFuture: _getIconFuture,
+                                  beautifyIcon: widget.beautifyIcons,
+                                  beautifyStyle: widget.beautifyStyle,
+                                  size: 48,
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: Tooltip(
+                                    message: name,
+                                    child: Text(
+                                      name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(height: 1.2, fontSize: 11),
+                                      maxLines: 2,
+                                      textAlign: TextAlign.center,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            title: Tooltip(
-                              message: path.basename(entity.path),
-                              child: Text(
-                                path.basename(entity.path),
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            subtitle: Tooltip(
-                              message: entity.path,
-                              child: MiddleEllipsisText(
-                                text: entity.path,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                            trailing: null,
                           ),
                         ),
                       );
@@ -567,12 +553,14 @@ class _EntityIcon extends StatelessWidget {
   final Future<Uint8List?> Function(String path) getIconFuture;
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
+  final double size;
 
   const _EntityIcon({
     required this.entity,
     required this.getIconFuture,
     required this.beautifyIcon,
     required this.beautifyStyle,
+    this.size = 28,
   });
 
   @override
@@ -581,7 +569,7 @@ class _EntityIcon extends StatelessWidget {
       return BeautifiedIcon(
         bytes: null,
         fallback: Icons.folder,
-        size: 28,
+        size: size,
         enabled: beautifyIcon,
         style: beautifyStyle,
       );
@@ -594,7 +582,7 @@ class _EntityIcon extends StatelessWidget {
           return BeautifiedIcon(
             bytes: data,
             fallback: Icons.apps,
-            size: 28,
+            size: size,
             enabled: beautifyIcon,
             style: beautifyStyle,
           );
@@ -606,7 +594,7 @@ class _EntityIcon extends StatelessWidget {
         return BeautifiedIcon(
           bytes: null,
           fallback: icon,
-          size: 28,
+          size: size,
           enabled: beautifyIcon,
           style: beautifyStyle,
         );

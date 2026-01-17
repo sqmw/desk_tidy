@@ -25,6 +25,7 @@ import 'file_page.dart';
 import 'folder_page.dart';
 import '../services/window_dock_logic.dart';
 import '../services/window_dock_manager.dart';
+import '../services/box_launcher.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -72,6 +73,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _beautifyAppIcons = false;
   bool _beautifyDesktopIcons = false;
   IconBeautifyStyle _beautifyStyle = IconBeautifyStyle.cute;
+  bool _enableDesktopBoxes = false;
 
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
@@ -194,12 +196,19 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _beautifyAppIcons = config.beautifyAppIcons;
       _beautifyDesktopIcons = config.beautifyDesktopIcons;
       _beautifyStyle = config.beautifyStyle;
+      _enableDesktopBoxes = config.enableDesktopBoxes;
     });
     _handleThemeChange(_themeModeOption);
     await _loadCategories();
     await _loadShortcuts();
     await _syncDesktopIconVisibility();
     _setupAutoRefresh();
+
+    // Launch boxes if enabled
+    await BoxLauncher.instance.updateBoxes(
+      enabled: _enableDesktopBoxes,
+      desktopPath: _desktopPath,
+    );
   }
 
   Future<void> _initTray() async {
@@ -428,8 +437,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (_isEditingCategory) {
       _cancelInlineCategoryEdit(save: false);
     }
-    final shouldClearSearch =
-        _appSearchQuery.trim().isNotEmpty && id != null;
+    final shouldClearSearch = _appSearchQuery.trim().isNotEmpty && id != null;
     if (shouldClearSearch) {
       _appSearchController.clear();
     }
@@ -811,9 +819,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         oldPathSet.containsAll(newPathSet);
   }
 
-  Map<String, AppSearchIndex> _buildSearchIndex(
-    List<ShortcutItem> shortcuts,
-  ) {
+  Map<String, AppSearchIndex> _buildSearchIndex(List<ShortcutItem> shortcuts) {
     final index = <String, AppSearchIndex>{};
     for (final shortcut in shortcuts) {
       index[shortcut.path] = AppSearchIndex.fromName(shortcut.name);
@@ -867,8 +873,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       return;
     }
 
-    final restore =
-        restoreCategory && !_isEditingCategory ? _categoryBeforeSearch : null;
+    final restore = restoreCategory && !_isEditingCategory
+        ? _categoryBeforeSearch
+        : null;
     setState(() {
       _appSearchQuery = '';
       _categoryBeforeSearch = null;
@@ -1466,6 +1473,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           autoRefresh: _autoRefresh,
           autoLaunch: _autoLaunch,
           hideDesktopItems: _hideDesktopItems,
+          enableDesktopBoxes: _enableDesktopBoxes,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
           beautifyAppIcons: _beautifyAppIcons,
@@ -1547,6 +1555,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             setState(() => _beautifyDesktopIcons = v);
             AppPreferences.saveBeautifyDesktopIcons(v);
           },
+          onEnableDesktopBoxesChanged: _handleEnableDesktopBoxesChanged,
         );
       default:
         return _buildApplicationContent();
@@ -1569,6 +1578,15 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       context,
     ).showSnackBar(SnackBar(content: Text(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标')));
     await _syncDesktopIconVisibility();
+  }
+
+  Future<void> _handleEnableDesktopBoxesChanged(bool enable) async {
+    setState(() => _enableDesktopBoxes = enable);
+    await AppPreferences.saveEnableDesktopBoxes(enable);
+    await BoxLauncher.instance.updateBoxes(
+      enabled: enable,
+      desktopPath: _desktopPath,
+    );
   }
 
   void _handleThemeChange(ThemeModeOption? option) {
@@ -1899,8 +1917,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                         searchActive
                             ? '没有匹配的应用'
                             : isFiltering
-                                ? '该分类暂无应用'
-                                : '未找到桌面快捷方式',
+                            ? '该分类暂无应用'
+                            : '未找到桌面快捷方式',
                         style: const TextStyle(
                           fontSize: 16,
                           color: Colors.grey,

@@ -25,6 +25,7 @@ class SettingsPage extends StatefulWidget {
   final bool beautifyAppIcons;
   final bool beautifyDesktopIcons;
   final IconBeautifyStyle beautifyStyle;
+  final bool enableDesktopBoxes;
 
   final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onFrostStrengthChanged;
@@ -39,6 +40,7 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onBeautifyDesktopIconsChanged;
   final ValueChanged<bool> onBeautifyAllChanged;
   final ValueChanged<IconBeautifyStyle> onBeautifyStyleChanged;
+  final ValueChanged<bool> onEnableDesktopBoxesChanged;
 
   const SettingsPage({
     super.key,
@@ -54,6 +56,7 @@ class SettingsPage extends StatefulWidget {
     required this.beautifyAppIcons,
     required this.beautifyDesktopIcons,
     required this.beautifyStyle,
+    required this.enableDesktopBoxes,
     required this.onTransparencyChanged,
     required this.onFrostStrengthChanged,
     required this.onIconSizeChanged,
@@ -67,6 +70,7 @@ class SettingsPage extends StatefulWidget {
     required this.onBeautifyDesktopIconsChanged,
     required this.onBeautifyAllChanged,
     required this.onBeautifyStyleChanged,
+    required this.onEnableDesktopBoxesChanged,
   });
 
   @override
@@ -185,8 +189,10 @@ class _SettingsPageState extends State<SettingsPage> {
             Text('新版本: v${updateInfo.latestVersion}'),
             const SizedBox(height: 8),
             if (updateInfo.releaseNotes.isNotEmpty) ...[
-              const Text('更新内容:',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                '更新内容:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text(updateInfo.releaseNotes),
             ],
           ],
@@ -217,30 +223,29 @@ class _SettingsPageState extends State<SettingsPage> {
     final dividerOpacity = (0.10 + 0.10 * (1.0 - widget.transparency))
         .clamp(0.10, 0.20)
         .toDouble();
-    final beautifyAny =
-        widget.beautifyAppIcons || widget.beautifyDesktopIcons;
+    final beautifyAny = widget.beautifyAppIcons || widget.beautifyDesktopIcons;
 
     SettingsThemeData buildTheme(Color base) => SettingsThemeData(
-          settingsListBackground: base.withValues(alpha: panelOpacity),
-          settingsSectionBackground: base.withValues(alpha: panelOpacity),
-          tileHighlightColor: base.withValues(
-            alpha: (panelOpacity + 0.10).clamp(0.0, 1.0),
-          ),
-          dividerColor: theme.dividerColor.withValues(alpha: dividerOpacity),
-          titleTextColor: theme.colorScheme.onSurface.withValues(alpha: 0.88),
-          settingsTileTextColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.88),
-          trailingTextColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.72),
-          leadingIconsColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.72),
-          tileDescriptionTextColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.72),
-          inactiveTitleColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.38),
-          inactiveSubtitleColor:
-              theme.colorScheme.onSurface.withValues(alpha: 0.38),
-        );
+      settingsListBackground: base.withValues(alpha: panelOpacity),
+      settingsSectionBackground: base.withValues(alpha: panelOpacity),
+      tileHighlightColor: base.withValues(
+        alpha: (panelOpacity + 0.10).clamp(0.0, 1.0),
+      ),
+      dividerColor: theme.dividerColor.withValues(alpha: dividerOpacity),
+      titleTextColor: theme.colorScheme.onSurface.withValues(alpha: 0.88),
+      settingsTileTextColor: theme.colorScheme.onSurface.withValues(
+        alpha: 0.88,
+      ),
+      trailingTextColor: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+      leadingIconsColor: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+      tileDescriptionTextColor: theme.colorScheme.onSurface.withValues(
+        alpha: 0.72,
+      ),
+      inactiveTitleColor: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+      inactiveSubtitleColor: theme.colorScheme.onSurface.withValues(
+        alpha: 0.38,
+      ),
+    );
 
     final status = _updateStatus;
 
@@ -374,6 +379,13 @@ class _SettingsPageState extends State<SettingsPage> {
               leading: const Icon(Icons.power_settings_new),
               title: const Text('开机自动启动(Windows)'),
             ),
+            SettingsTile.switchTile(
+              onToggle: widget.onEnableDesktopBoxesChanged,
+              initialValue: widget.enableDesktopBoxes,
+              leading: const Icon(Icons.inbox),
+              title: const Text('启用桌面收纳盒'),
+              description: const Text('将桌面的文件和文件夹分类显示在独立的浮动窗口中。'),
+            ),
           ],
         ),
 
@@ -426,8 +438,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         color: status.contains('最新')
                             ? Colors.green
                             : status.contains('发现')
-                                ? Colors.orange
-                                : Colors.red,
+                            ? Colors.orange
+                            : Colors.red,
                       ),
                     ),
               trailing: Row(
@@ -444,8 +456,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text(
                     _appVersion ?? 'v?',
                     style: TextStyle(
-                      color:
-                          theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.72,
+                      ),
                     ),
                   ),
                 ],

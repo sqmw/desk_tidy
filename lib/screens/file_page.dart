@@ -8,7 +8,6 @@ import 'package:path/path.dart' as path;
 import '../utils/desktop_helper.dart';
 import '../models/icon_beautify_style.dart';
 import '../widgets/folder_picker_dialog.dart';
-import '../widgets/middle_ellipsis_text.dart';
 import '../widgets/beautified_icon.dart';
 
 class FilePage extends StatelessWidget {
@@ -53,10 +52,18 @@ class FilePage extends StatelessWidget {
       return const Center(child: Text('未找到文件'));
     }
 
-    return ListView.builder(
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 100,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.8,
+      ),
       itemCount: files.length,
       itemBuilder: (context, index) {
         final file = files[index];
+        final name = path.basename(file.path);
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -67,35 +74,38 @@ class FilePage extends StatelessWidget {
             onSecondaryTapDown: (details) {
               _showFileMenu(context, file, details.globalPosition);
             },
-            borderRadius: BorderRadius.circular(8),
-            hoverColor:
-                Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.4),
-            child: ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              leading: _FileIcon(
-                filePath: file.path,
-                beautifyIcon: beautifyIcons,
-                beautifyStyle: beautifyStyle,
-              ),
-              title: Tooltip(
-                message: path.basename(file.path),
-                child: Text(
-                  path.basename(file.path),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              subtitle: Tooltip(
-                message: file.path,
-                child: MiddleEllipsisText(
-                  text: file.path,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+            borderRadius: BorderRadius.circular(12),
+            hoverColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _FileIcon(
+                    filePath: file.path,
+                    beautifyIcon: beautifyIcons,
+                    beautifyStyle: beautifyStyle,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Tooltip(
+                      message: name,
+                      child: Text(
+                        name,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          height: 1.2,
+                          fontSize: 11,
+                        ),
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -109,11 +119,13 @@ class _FileIcon extends StatelessWidget {
   final String filePath;
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
+  final double size;
 
   const _FileIcon({
     required this.filePath,
     required this.beautifyIcon,
     required this.beautifyStyle,
+    this.size = 28,
   });
 
   static final Map<String, Future<Uint8List?>> _iconFutures = {};
@@ -128,7 +140,7 @@ class _FileIcon extends StatelessWidget {
           return BeautifiedIcon(
             bytes: data,
             fallback: Icons.apps,
-            size: 28,
+            size: size,
             enabled: beautifyIcon,
             style: beautifyStyle,
           );
@@ -140,7 +152,7 @@ class _FileIcon extends StatelessWidget {
         return BeautifiedIcon(
           bytes: null,
           fallback: icon,
-          size: 28,
+          size: size,
           enabled: beautifyIcon,
           style: beautifyStyle,
         );
@@ -185,9 +197,9 @@ Future<void> _showFileMenu(
     final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Copied $label')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Copied $label')));
   }
 
   final displayName = path.basename(file.path);
@@ -202,10 +214,7 @@ Future<void> _showFileMenu(
     items: const [
       PopupMenuItem(
         value: 'open',
-        child: ListTile(
-          leading: Icon(Icons.open_in_new),
-          title: Text('打开'),
-        ),
+        child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
       ),
       PopupMenuItem(
         value: 'open_with',
@@ -223,46 +232,28 @@ Future<void> _showFileMenu(
       ),
       PopupMenuItem(
         value: 'copy',
-        child: ListTile(
-          leading: Icon(Icons.copy),
-          title: Text('复制到...'),
-        ),
+        child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
       ),
       PopupMenuItem(
         value: 'copy_clipboard',
-        child: ListTile(
-          leading: Icon(Icons.copy),
-          title: Text('复制到剪贴板(系统)'),
-        ),
+        child: ListTile(leading: Icon(Icons.copy), title: Text('复制到剪贴板(系统)')),
       ),
       PopupMenuItem(
         value: 'delete',
-        child: ListTile(
-          leading: Icon(Icons.delete),
-          title: Text('删除(回收站)'),
-        ),
+        child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
       ),
       PopupMenuDivider(),
       PopupMenuItem(
         value: 'copy_name',
-        child: ListTile(
-          leading: Icon(Icons.copy),
-          title: Text('复制名称'),
-        ),
+        child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
       ),
       PopupMenuItem(
         value: 'copy_path',
-        child: ListTile(
-          leading: Icon(Icons.link),
-          title: Text('复制路径'),
-        ),
+        child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
       ),
       PopupMenuItem(
         value: 'copy_folder',
-        child: ListTile(
-          leading: Icon(Icons.folder),
-          title: Text('复制所在文件夹'),
-        ),
+        child: ListTile(leading: Icon(Icons.folder), title: Text('复制所在文件夹')),
       ),
     ],
   );
@@ -283,17 +274,17 @@ Future<void> _showFileMenu(
     case 'copy_clipboard':
       final ok = copyEntityPathsToClipboard([file.path]);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ok ? '已复制到剪贴板' : '复制到剪贴板失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ok ? '已复制到剪贴板' : '复制到剪贴板失败')));
       }
       break;
     case 'delete':
       final ok = moveToRecycleBin(file.path);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')));
       }
       break;
     case 'copy_name':
@@ -325,23 +316,23 @@ Future<void> _promptMoveFile(BuildContext context, File file) async {
   try {
     if (File(dest).existsSync()) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('目标已存在同名文件')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('目标已存在同名文件')));
       }
       return;
     }
     await file.rename(dest);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已移动到 $dest')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已移动到 $dest')));
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('移动失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('移动失败: $e')));
     }
   }
 }
@@ -357,9 +348,9 @@ Future<void> _promptCopyFile(BuildContext context, File file) async {
   final result = await copyEntityToDirectory(file.path, targetDir);
   if (context.mounted) {
     if (result.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已复制到 ${result.destPath}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已复制到 ${result.destPath}')));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('复制失败: ${result.message ?? 'unknown'}')),

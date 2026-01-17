@@ -13,6 +13,7 @@ class AppPreferences {
   static const _kIconSize = 'ui.iconSize';
   static const _kShowHidden = 'behavior.showHidden';
   static const _kHideDesktopItems = 'behavior.hideDesktopItems';
+  static const _kEnableDesktopBoxes = 'behavior.enableDesktopBoxes';
   static const _kAutoRefresh = 'behavior.autoRefresh';
   static const _kAutoLaunch = 'behavior.autoLaunch';
   static const _kThemeMode = 'ui.themeMode';
@@ -33,6 +34,7 @@ class AppPreferences {
     final iconSize = prefs.getDouble(_kIconSize) ?? 32;
     final showHidden = prefs.getBool(_kShowHidden) ?? false;
     final hideDesktopItems = prefs.getBool(_kHideDesktopItems) ?? false;
+    final enableDesktopBoxes = prefs.getBool(_kEnableDesktopBoxes) ?? false;
     final autoRefresh = prefs.getBool(_kAutoRefresh) ?? false;
     final autoLaunch = prefs.getBool(_kAutoLaunch) ?? true;
     final themeModeIndex =
@@ -44,8 +46,11 @@ class AppPreferences {
     final beautifyDesktopIcons = prefs.getBool(_kBeautifyDesktopIcons) ?? false;
     final beautifyStyleIndex =
         prefs.getInt(_kBeautifyStyle) ?? IconBeautifyStyle.cute.index;
-    final beautifyStyle = IconBeautifyStyle
-        .values[beautifyStyleIndex.clamp(0, IconBeautifyStyle.values.length - 1)];
+    final beautifyStyle =
+        IconBeautifyStyle.values[beautifyStyleIndex.clamp(
+          0,
+          IconBeautifyStyle.values.length - 1,
+        )];
 
     return DeskTidyConfig(
       transparency: transparency.clamp(0.0, 1.0),
@@ -53,6 +58,7 @@ class AppPreferences {
       iconSize: iconSize.clamp(24.0, 96.0),
       showHidden: showHidden,
       hideDesktopItems: hideDesktopItems,
+      enableDesktopBoxes: enableDesktopBoxes,
       autoRefresh: autoRefresh,
       autoLaunch: autoLaunch,
       themeModeOption: themeMode,
@@ -88,6 +94,11 @@ class AppPreferences {
     await prefs.setBool(_kHideDesktopItems, v);
   }
 
+  static Future<void> saveEnableDesktopBoxes(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kEnableDesktopBoxes, v);
+  }
+
   static Future<void> saveAutoRefresh(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAutoRefresh, v);
@@ -119,7 +130,8 @@ class AppPreferences {
   }
 
   static Future<String?> backupAndSaveBackgroundPath(
-      String? originalPath) async {
+    String? originalPath,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     if (originalPath == null || originalPath.trim().isEmpty) {
       await prefs.remove(_kBackgroundPath);
@@ -162,8 +174,9 @@ class AppPreferences {
       if (!src.existsSync()) return null;
 
       final support = await getApplicationSupportDirectory();
-      final dir =
-          Directory('${support.path}${Platform.pathSeparator}desk_tidy');
+      final dir = Directory(
+        '${support.path}${Platform.pathSeparator}desk_tidy',
+      );
       await dir.create(recursive: true);
 
       final ext = _extension(originalPath);
@@ -211,6 +224,7 @@ class DeskTidyConfig {
   final double iconSize;
   final bool showHidden;
   final bool hideDesktopItems;
+  final bool enableDesktopBoxes;
   final bool autoRefresh;
   final bool autoLaunch;
   final ThemeModeOption themeModeOption;
@@ -225,6 +239,7 @@ class DeskTidyConfig {
     required this.iconSize,
     required this.showHidden,
     required this.hideDesktopItems,
+    required this.enableDesktopBoxes,
     required this.autoRefresh,
     required this.autoLaunch,
     required this.themeModeOption,
@@ -270,10 +285,6 @@ class StoredCategory {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'paths': shortcutPaths,
-    };
+    return {'id': id, 'name': name, 'paths': shortcutPaths};
   }
 }
