@@ -65,13 +65,19 @@ void _initHotkey() {
 }
 
 Future<void> _presentFromHotkey() async {
+  // 先准备内容，避免白屏闪烁
+  if (mounted) setState(() => _panelVisible = true);
+
   // 唤醒窗口
   await windowManager.setAlwaysOnTop(true);
   await windowManager.setSkipTaskbar(true);  // 不显示任务栏图标
-  await windowManager.show();
-  await windowManager.restore();
+  await windowManager.restore();  // 先恢复窗口状态
+  await windowManager.show();     // 再显示窗口
   await windowManager.focus();
   
+  _dockManager.onPresentFromTray();
+  await _syncDesktopIconVisibility();
+
   // 聚焦搜索框
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_selectedIndex != 0) {
@@ -139,6 +145,34 @@ Timer.periodic(const Duration(milliseconds: 100), (_) => _pollHotkeys());
 **现象**: 热键唤醒时显示任务栏图标  
 **原因**: `setSkipTaskbar(false)`  
 **解决**: 改为 `setSkipTaskbar(true)`
+
+### 问题 4：窗口唤醒时白屏闪烁
+
+**现象**:
+窗口显示之前会先显示一个白色的空白窗口，持续一瞬间，然后才正常显示内容。
+
+**原因**:
+1. `windowManager.show()` 在 `windowManager.restore()` 之前调用，导致窗口可能在最小化或未完全恢复状态时就显示。
+2. Flutter 渲染延迟，窗口显示时 `_panelVisible` 仍为 false 或 UI 正在构建中。
+
+**解决**:
+调整了唤醒方法的执行顺序，确保**内容就绪**且**状态恢复**后再显示窗口：
+
+```dart
+// 1. 先准备内容，设置 UI 可见
+if (mounted) setState(() => _panelVisible = true);
+
+await windowManager.setAlwaysOnTop(true);
+await windowManager.setSkipTaskbar(true);
+
+// 2. 先恢复窗口状态（restore）
+await windowManager.restore();
+
+// 3. 最后才显示窗口（show）
+await windowManager.show();
+```
+
+通过这种"UI就绪 -> 状态恢复 -> 显示窗口"的顺序，彻底消除了闪烁问题。此修复也同时应用到了热区唤醒和托盘唤醒逻辑中。
 
 ## 优势
 

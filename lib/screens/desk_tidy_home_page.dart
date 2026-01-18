@@ -204,12 +204,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _presentFromHotkey() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
-    if (mounted) setState(() => _panelVisible = false);
+
+    // 先准备内容，避免白屏闪烁
+    if (mounted) setState(() => _panelVisible = true);
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
-    await windowManager.show();
-    await windowManager.restore();
+    await windowManager.restore(); // 先恢复窗口状态
+    await windowManager.show(); // 再显示窗口
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
@@ -223,7 +225,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _panelVisible = true);
       // 切换到应用页面并聚焦搜索框
       if (_selectedIndex != 0) {
         setState(() => _selectedIndex = 0);
@@ -1113,13 +1114,15 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _presentFromHotCorner() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
-    if (mounted) setState(() => _panelVisible = false);
+
+    // 先准备内容，避免白屏闪烁
+    if (mounted) setState(() => _panelVisible = true);
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
-    await windowManager.show();
-    await windowManager.restore();
+    await windowManager.restore(); // 先恢复窗口状态
     await windowManager.setPosition(Offset.zero, animate: false);
+    await windowManager.show(); // 再显示窗口
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
@@ -1129,24 +1132,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         windowManager.setAlwaysOnTop(false);
       }),
     );
-
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _panelVisible = true);
-    });
   }
 
   // 从托盘唤起窗口
   Future<void> _presentFromTrayPopup() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
-    if (mounted) setState(() => _panelVisible = false);
+
+    // 先准备内容，避免白屏闪烁
+    if (mounted) setState(() => _panelVisible = true);
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
-    await windowManager.show();
-    await windowManager.restore();
+    await windowManager.restore(); // 先恢复窗口状态
+    await windowManager.show(); // 再显示窗口
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
@@ -1155,12 +1154,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         windowManager.setAlwaysOnTop(false);
       }),
     );
-
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _panelVisible = true);
-    });
   }
 
   Future<void> _dismissToTray({required bool fromHotCorner}) async {
