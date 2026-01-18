@@ -8,9 +8,12 @@ class WindowDockLogic {
   static double clampSize(double value, double min, double max) =>
       value.clamp(min, max).toDouble();
 
+  /// 窗口吸附区域（左上角）
+  /// 当窗口左上角在此区域内松开鼠标时，会自动吸附到左上角
   static Rect snapZone(Size screenSize) {
-    final left = clampSize(screenSize.width / 6, 32, 800);
-    final top = clampSize(screenSize.height / 3, 32, 600);
+    // 缩小吸附区域，避免误触发
+    final left = clampSize(screenSize.width / 12, 32, 200);
+    final top = clampSize(screenSize.height / 8, 32, 150);
     return Rect.fromLTWH(0, 0, left, top);
   }
 
