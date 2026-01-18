@@ -27,6 +27,7 @@ import 'folder_page.dart';
 import '../services/window_dock_logic.dart';
 import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
+import '../services/hotkey_service.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -176,9 +177,58 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     windowManager.addListener(this);
     _initTray();
+    _initHotkey();
     _appSearchFocus.addListener(() {
       if (!mounted) return;
       setState(() => _searchHasFocus = _appSearchFocus.hasFocus);
+    });
+  }
+
+  /// 初始化全局热键
+  void _initHotkey() {
+    final service = HotkeyService.instance;
+    // 注册 Ctrl + Shift + Space
+    service.register(
+      HotkeyConfig.showWindow,
+      callback: (_) => _presentFromHotkey(),
+    );
+    // 同时注册备选 Alt + Shift + Space
+    service.register(
+      HotkeyConfig.showWindowAlt,
+      callback: (_) => _presentFromHotkey(),
+    );
+    service.startPolling();
+  }
+
+  /// 从热键唤起窗口并聚焦搜索框
+  Future<void> _presentFromHotkey() async {
+    _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
+    _trayMode = false;
+    if (mounted) setState(() => _panelVisible = false);
+
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setSkipTaskbar(true);
+    await windowManager.show();
+    await windowManager.restore();
+    _dockManager.onPresentFromTray();
+    await windowManager.focus();
+    await _syncDesktopIconVisibility();
+
+    unawaited(
+      Future.delayed(const Duration(milliseconds: 800), () {
+        windowManager.setAlwaysOnTop(false);
+      }),
+    );
+
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _panelVisible = true);
+      // 切换到应用页面并聚焦搜索框
+      if (_selectedIndex != 0) {
+        setState(() => _selectedIndex = 0);
+      }
+      _appSearchFocus.requestFocus();
     });
   }
 
@@ -985,6 +1035,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dragEndTimer?.cancel();
     _autoRefreshTimer?.cancel();
     _dockManager.dispose();
+    HotkeyService.instance.dispose();
     windowManager.removeListener(this);
     _windowFocusNotifier.dispose();
     _appSearchController.dispose();
