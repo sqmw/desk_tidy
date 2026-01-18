@@ -35,6 +35,9 @@ bool _autoRefresh = false;
 bool _autoLaunch = true;
 double _iconSize = 32;
 
+/// 窗口唤醒模式
+enum _ActivationMode { hotkey, hotCorner, tray }
+
 class DeskTidyHomePage extends StatefulWidget {
   const DeskTidyHomePage({super.key});
 
@@ -82,6 +85,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Timer? _hotCornerTimer;
   bool? _lastDesktopIconsVisible;
   int _windowHandle = 0;
+  _ActivationMode? _lastActivationMode;
 
   int _selectedIndex = 0;
   final TextEditingController _appSearchController = TextEditingController();
@@ -204,15 +208,27 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _presentFromHotkey() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
+    _lastActivationMode = _ActivationMode.hotkey;
 
     // 先准备内容，避免白屏闪烁
     if (mounted) setState(() => _panelVisible = true);
+
+    // 加载快捷键专属窗口布局并应用
+    final layout = await AppPreferences.loadHotkeyWindowLayout();
+    final screen = getPrimaryScreenSize();
+    final bounds = layout.toBounds(screen.x, screen.y);
+    await windowManager.setSize(
+      Size(bounds.width.toDouble(), bounds.height.toDouble()),
+    );
+    await windowManager.setPosition(
+      Offset(bounds.x.toDouble(), bounds.y.toDouble()),
+    );
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
-    _dockManager.onPresentFromTray();
+    _dockManager.onPresentFromHotkey();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
 
@@ -1114,14 +1130,25 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Future<void> _presentFromHotCorner() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
+    _lastActivationMode = _ActivationMode.hotCorner;
 
     // 先准备内容，避免白屏闪烁
     if (mounted) setState(() => _panelVisible = true);
 
+    // 加载热区专属窗口布局并应用
+    final layout = await AppPreferences.loadHotCornerWindowLayout();
+    final screen = getPrimaryScreenSize();
+    final bounds = layout.toBounds(screen.x, screen.y);
+    await windowManager.setSize(
+      Size(bounds.width.toDouble(), bounds.height.toDouble()),
+    );
+    await windowManager.setPosition(
+      Offset(bounds.x.toDouble(), bounds.y.toDouble()),
+    );
+
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
-    await windowManager.setPosition(Offset.zero, animate: false);
     await windowManager.show(); // 再显示窗口
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
@@ -1227,12 +1254,34 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
         final pos = await windowManager.getPosition();
         final size = await windowManager.getSize();
-        await AppPreferences.saveWindowBounds(
-          x: pos.dx.round(),
-          y: pos.dy.round(),
-          width: size.width.round(),
-          height: size.height.round(),
-        );
+
+        // 快捷键模式：保存到专属配置（使用屏幕比例）
+        if (_lastActivationMode == _ActivationMode.hotkey) {
+          final screen = getPrimaryScreenSize();
+          await AppPreferences.saveHotkeyWindowLayout(
+            xRatio: pos.dx / screen.x,
+            yRatio: pos.dy / screen.y,
+            wRatio: size.width / screen.x,
+            hRatio: size.height / screen.y,
+          );
+        } else if (_lastActivationMode == _ActivationMode.hotCorner) {
+          // 热区模式：保存到热区专属配置（使用屏幕比例）
+          final screen = getPrimaryScreenSize();
+          await AppPreferences.saveHotCornerWindowLayout(
+            xRatio: pos.dx / screen.x,
+            yRatio: pos.dy / screen.y,
+            wRatio: size.width / screen.x,
+            hRatio: size.height / screen.y,
+          );
+        } else {
+          // 其他模式（托盘等）：保存到通用配置
+          await AppPreferences.saveWindowBounds(
+            x: pos.dx.round(),
+            y: pos.dy.round(),
+            width: size.width.round(),
+            height: size.height.round(),
+          );
+        }
       } catch (_) {}
     });
   }
@@ -2045,6 +2094,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                           onCategoryMenuRequested: _showCategoryMenuForShortcut,
                           beautifyIcon: _beautifyAppIcons,
                           beautifyStyle: _beautifyStyle,
+                          onLaunched:
+                              _lastActivationMode == _ActivationMode.hotkey
+                              ? () => _dismissToTray(fromHotCorner: false)
+                              : null,
                         );
                       },
                     );

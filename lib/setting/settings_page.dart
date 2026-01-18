@@ -349,16 +349,75 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
 
-        /// 行为设置：隐藏文件 / 自动刷新
+        /// 行为设置：快捷键 / 隐藏文件 / 自动刷新
         SettingsSection(
           title: const Text(''),
           tiles: [
+            SettingsTile(
+              leading: const Icon(Icons.keyboard),
+              title: const Text('全局快捷键'),
+              description: const Text(
+                'Ctrl + Shift + Space 或 Alt + Shift + Space',
+              ),
+              trailing: const Icon(Icons.info_outline, size: 18),
+              onPressed: (_) {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('全局快捷键'),
+                    content: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('唤醒窗口并聚焦搜索框：'),
+                        SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.keyboard, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              'Ctrl + Shift + Space',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.keyboard, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              'Alt + Shift + Space',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          '窗口显示后：',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        SizedBox(height: 4),
+                        Text('• 双击图标打开后自动隐藏'),
+                        Text('• 点击窗口外部自动隐藏'),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('确定'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
             SettingsTile.switchTile(
               onToggle: widget.onHideDesktopItemsChanged,
               initialValue: widget.hideDesktopItems,
               leading: const Icon(Icons.visibility_off),
               title: const Text('隐藏桌面图标(Windows)'),
-              description: const Text('调用系统“显示桌面图标”，不会修改文件属性。'),
+              description: const Text('调用系统"显示桌面图标"，不会修改文件属性。'),
             ),
             SettingsTile.switchTile(
               onToggle: widget.onShowHiddenChanged,

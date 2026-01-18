@@ -27,6 +27,18 @@ class AppPreferences {
   static const _kWinH = 'window.h';
   static const _kCategories = 'categories.v1';
 
+  // 快捷键唤醒窗口布局（使用屏幕比例）
+  static const _kHotkeyXRatio = 'window.hotkey.xRatio';
+  static const _kHotkeyYRatio = 'window.hotkey.yRatio';
+  static const _kHotkeyWRatio = 'window.hotkey.wRatio';
+  static const _kHotkeyHRatio = 'window.hotkey.hRatio';
+
+  // 热区唤醒窗口布局（使用屏幕比例）
+  static const _kHotCornerXRatio = 'window.hotCorner.xRatio';
+  static const _kHotCornerYRatio = 'window.hotCorner.yRatio';
+  static const _kHotCornerWRatio = 'window.hotCorner.wRatio';
+  static const _kHotCornerHRatio = 'window.hotCorner.hRatio';
+
   static Future<DeskTidyConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
     final transparency = prefs.getDouble(_kTransparency) ?? 0.2;
@@ -168,6 +180,70 @@ class AppPreferences {
     return WindowBounds(x: x, y: y, width: w, height: h);
   }
 
+  /// 保存快捷键唤醒窗口布局（使用屏幕比例）
+  static Future<void> saveHotkeyWindowLayout({
+    required double xRatio,
+    required double yRatio,
+    required double wRatio,
+    required double hRatio,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kHotkeyXRatio, xRatio.clamp(0.0, 1.0));
+    await prefs.setDouble(_kHotkeyYRatio, yRatio.clamp(0.0, 1.0));
+    await prefs.setDouble(_kHotkeyWRatio, wRatio.clamp(0.1, 1.0));
+    await prefs.setDouble(_kHotkeyHRatio, hRatio.clamp(0.1, 1.0));
+  }
+
+  /// 加载快捷键唤醒窗口布局（使用屏幕比例）
+  /// 如果未保存过，返回默认居中布局
+  static Future<HotkeyWindowLayout> loadHotkeyWindowLayout() async {
+    final prefs = await SharedPreferences.getInstance();
+    // 默认值：居中显示，宽 65%，高 75%
+    const defaultWRatio = 0.65;
+    const defaultHRatio = 0.75;
+    const defaultXRatio = (1.0 - defaultWRatio) / 2; // 0.175
+    const defaultYRatio = (1.0 - defaultHRatio) / 2; // 0.125
+
+    return HotkeyWindowLayout(
+      xRatio: prefs.getDouble(_kHotkeyXRatio) ?? defaultXRatio,
+      yRatio: prefs.getDouble(_kHotkeyYRatio) ?? defaultYRatio,
+      wRatio: prefs.getDouble(_kHotkeyWRatio) ?? defaultWRatio,
+      hRatio: prefs.getDouble(_kHotkeyHRatio) ?? defaultHRatio,
+    );
+  }
+
+  /// 保存热区唤醒窗口布局（使用屏幕比例）
+  static Future<void> saveHotCornerWindowLayout({
+    required double xRatio,
+    required double yRatio,
+    required double wRatio,
+    required double hRatio,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kHotCornerXRatio, xRatio.clamp(0.0, 1.0));
+    await prefs.setDouble(_kHotCornerYRatio, yRatio.clamp(0.0, 1.0));
+    await prefs.setDouble(_kHotCornerWRatio, wRatio.clamp(0.1, 1.0));
+    await prefs.setDouble(_kHotCornerHRatio, hRatio.clamp(0.1, 1.0));
+  }
+
+  /// 加载热区唤醒窗口布局（使用屏幕比例）
+  /// 默认：左上角，宽 25%，高 85%（竖屏形态）
+  static Future<HotkeyWindowLayout> loadHotCornerWindowLayout() async {
+    final prefs = await SharedPreferences.getInstance();
+    // 默认值：左上角，宽 18%，高 85%（竖屏窄高形态）
+    const defaultXRatio = 0.0;
+    const defaultYRatio = 0.0;
+    const defaultWRatio = 0.18;
+    const defaultHRatio = 0.85;
+
+    return HotkeyWindowLayout(
+      xRatio: prefs.getDouble(_kHotCornerXRatio) ?? defaultXRatio,
+      yRatio: prefs.getDouble(_kHotCornerYRatio) ?? defaultYRatio,
+      wRatio: prefs.getDouble(_kHotCornerWRatio) ?? defaultWRatio,
+      hRatio: prefs.getDouble(_kHotCornerHRatio) ?? defaultHRatio,
+    );
+  }
+
   static Future<String?> _backupBackgroundFile(String originalPath) async {
     try {
       final src = File(originalPath);
@@ -262,6 +338,45 @@ class WindowBounds {
     required this.width,
     required this.height,
   });
+}
+
+/// 快捷键唤醒窗口布局（使用屏幕比例存储，适配不同分辨率）
+class HotkeyWindowLayout {
+  final double xRatio;
+  final double yRatio;
+  final double wRatio;
+  final double hRatio;
+
+  const HotkeyWindowLayout({
+    required this.xRatio,
+    required this.yRatio,
+    required this.wRatio,
+    required this.hRatio,
+  });
+
+  /// 根据屏幕尺寸计算实际窗口边界
+  WindowBounds toBounds(int screenWidth, int screenHeight) {
+    return WindowBounds(
+      x: (screenWidth * xRatio).round(),
+      y: (screenHeight * yRatio).round(),
+      width: (screenWidth * wRatio).round(),
+      height: (screenHeight * hRatio).round(),
+    );
+  }
+
+  /// 从实际像素边界转换为屏幕比例
+  factory HotkeyWindowLayout.fromBounds(
+    WindowBounds bounds,
+    int screenWidth,
+    int screenHeight,
+  ) {
+    return HotkeyWindowLayout(
+      xRatio: bounds.x / screenWidth,
+      yRatio: bounds.y / screenHeight,
+      wRatio: bounds.width / screenWidth,
+      hRatio: bounds.height / screenHeight,
+    );
+  }
 }
 
 class StoredCategory {

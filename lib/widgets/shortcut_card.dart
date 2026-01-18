@@ -15,9 +15,10 @@ class ShortcutCard extends StatefulWidget {
   final ValueListenable<bool>? windowFocusNotifier;
   final VoidCallback? onDeleted;
   final Future<void> Function(ShortcutItem shortcut, Offset position)?
-      onCategoryMenuRequested;
+  onCategoryMenuRequested;
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
+  final VoidCallback? onLaunched;
 
   const ShortcutCard({
     super.key,
@@ -28,6 +29,7 @@ class ShortcutCard extends StatefulWidget {
     this.onCategoryMenuRequested,
     this.beautifyIcon = false,
     this.beautifyStyle = IconBeautifyStyle.cute,
+    this.onLaunched,
   });
 
   @override
@@ -102,17 +104,18 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final value = quoted ? _quote(raw) : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Copied $label')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Copied $label')));
   }
 
   String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
 
   Future<void> _showShortcutMenu(Offset globalPosition) async {
     final shortcut = widget.shortcut;
-    final resolvedPath =
-        shortcut.targetPath.isNotEmpty ? shortcut.targetPath : shortcut.path;
+    final resolvedPath = shortcut.targetPath.isNotEmpty
+        ? shortcut.targetPath
+        : shortcut.path;
 
     final result = await showMenu<String>(
       context: context,
@@ -139,25 +142,16 @@ class _ShortcutCardState extends State<ShortcutCard> {
         ),
         PopupMenuItem(
           value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete),
-            title: Text('删除(回收站)'),
-          ),
+          child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'copy_name',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('Copy name'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('Copy name')),
         ),
         PopupMenuItem(
           value: 'copy_path',
-          child: ListTile(
-            leading: Icon(Icons.link),
-            title: Text('Copy path'),
-          ),
+          child: ListTile(leading: Icon(Icons.link), title: Text('Copy path')),
         ),
         PopupMenuItem(
           value: 'copy_folder',
@@ -172,6 +166,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
     switch (result) {
       case 'open':
         openWithDefault(resolvedPath);
+        widget.onLaunched?.call();
         break;
       case 'categorize':
         await widget.onCategoryMenuRequested?.call(shortcut, globalPosition);
@@ -179,9 +174,9 @@ class _ShortcutCardState extends State<ShortcutCard> {
       case 'delete':
         final ok = moveToRecycleBin(shortcut.path);
         if (!mounted) break;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ok ? '已移动到回收站' : '删除失败')));
         if (ok) {
           widget.onDeleted?.call();
         }
@@ -245,27 +240,26 @@ class _ShortcutCardState extends State<ShortcutCard> {
 
     final name = widget.shortcut.name;
     final theme = Theme.of(context);
-    final spec =
-        iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
+    final spec = iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
     final labelColor = widget.beautifyIcon && spec.labelColor != null
         ? spec.labelColor!
         : theme.textTheme.bodyMedium?.color ??
-            theme.colorScheme.onSurface.withValues(alpha: 0.86);
+              theme.colorScheme.onSurface.withValues(alpha: 0.86);
     final labelShadowColor =
         widget.beautifyIcon && spec.labelShadowColor != null
-            ? spec.labelShadowColor!
-            : const Color(0xD6000000);
+        ? spec.labelShadowColor!
+        : const Color(0xD6000000);
 
     _labelOverlay = OverlayEntry(
       builder: (context) {
         return Stack(
           children: [
             Positioned.fill(
-                child: Listener(
-                  behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => _clearSelection(),
-                  onPointerSignal: (_) => _clearSelection(),
-                ),
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (_) => _clearSelection(),
+                onPointerSignal: (_) => _clearSelection(),
+              ),
             ),
             Positioned(
               left: topLeft.dx,
@@ -321,16 +315,15 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final iconSize = widget.iconSize;
     final shortcut = widget.shortcut;
     final theme = Theme.of(context);
-    final spec =
-        iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
+    final spec = iconBeautifyStyleSpec(widget.beautifyStyle, theme.brightness);
     final labelColor = widget.beautifyIcon && spec.labelColor != null
         ? spec.labelColor!
         : theme.textTheme.bodyMedium?.color ??
-            theme.colorScheme.onSurface.withValues(alpha: 0.86);
+              theme.colorScheme.onSurface.withValues(alpha: 0.86);
     final labelShadowColor =
         widget.beautifyIcon && spec.labelShadowColor != null
-            ? spec.labelShadowColor!
-            : const Color(0xD6000000);
+        ? spec.labelShadowColor!
+        : const Color(0xD6000000);
 
     final padding = math.max(8.0, iconSize * 0.28);
     final iconContainerSize = math.max(28.0, iconSize * 1.65);
@@ -340,12 +333,11 @@ class _ShortcutCardState extends State<ShortcutCard> {
     final baseBg = theme.brightness == Brightness.dark
         ? const Color(0x10FFFFFF)
         : const Color(0x0A000000);
-    final hoverBg = theme.colorScheme.surfaceContainerHighest
-        .withValues(alpha: 0.14);
-    final selectedBg =
-        theme.colorScheme.primary.withValues(alpha: 0.08);
-    final borderColor =
-        theme.colorScheme.primary.withValues(alpha: 0.30);
+    final hoverBg = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.14,
+    );
+    final selectedBg = theme.colorScheme.primary.withValues(alpha: 0.08);
+    final borderColor = theme.colorScheme.primary.withValues(alpha: 0.30);
 
     return Focus(
       focusNode: _focusNode,
@@ -371,6 +363,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
             } else {
               openWithDefault(shortcut.path);
             }
+            widget.onLaunched?.call();
           },
           onTap: () {
             _focusNode.requestFocus();
@@ -401,8 +394,9 @@ class _ShortcutCardState extends State<ShortcutCard> {
                     child: widget.beautifyIcon
                         ? _buildIcon(context, visualIconSize.toDouble())
                         : ClipRRect(
-                            borderRadius:
-                                BorderRadius.circular(iconContainerSize * 0.22),
+                            borderRadius: BorderRadius.circular(
+                              iconContainerSize * 0.22,
+                            ),
                             child: _buildIcon(
                               context,
                               visualIconSize.toDouble(),
@@ -466,8 +460,10 @@ class _ShortcutCardState extends State<ShortcutCard> {
       const requestSize = 256;
       return FutureBuilder<Uint8List?>(
         future: () async {
-          final primary =
-              await extractIconAsync(shortcut.path, size: requestSize);
+          final primary = await extractIconAsync(
+            shortcut.path,
+            size: requestSize,
+          );
           if (primary != null && primary.isNotEmpty) return primary;
           return extractIconAsync(shortcut.targetPath, size: requestSize);
         }(),

@@ -24,6 +24,7 @@ class WindowDockManager {
   bool _isDocked = false; // 窗口是否在吸附区
   bool _isDragging = false; // 是否正在拖动
   bool _isTrayTrigger = false; // 是否从托盘触发打开
+  bool _isHotkeyTrigger = false; // 是否从快捷键触发打开
   bool _isInTray = true; // 窗口是否在托盘中
 
   // 定时器
@@ -33,7 +34,9 @@ class WindowDockManager {
   // 配置
   static const Duration _autoHideCheckInterval = Duration(milliseconds: 400);
   static const Duration _hideDelay = Duration(milliseconds: 200);
-  static const Duration _trayTriggerHideDelay = Duration(milliseconds: 260); // tray触发后离开的隐藏延迟
+  static const Duration _trayTriggerHideDelay = Duration(
+    milliseconds: 260,
+  ); // tray触发后离开的隐藏延迟
   static const Duration _suppressMoveDuration = Duration(milliseconds: 360);
 
   DateTime _suppressMoveUntil = DateTime.fromMillisecondsSinceEpoch(0);
@@ -61,7 +64,7 @@ class WindowDockManager {
   /// 鼠标松开时检查是否需要吸附
   Future<void> onMouseUp() async {
     _isDragging = false;
-    
+
     try {
       final pos = await windowManager.getPosition();
       final screen = getPrimaryScreenSize();
@@ -99,13 +102,23 @@ class WindowDockManager {
   void onPresentFromHotCorner() {
     _isInTray = false;
     _isTrayTrigger = false;
+    _isHotkeyTrigger = false;
     _isDocked = true;
+  }
+
+  /// 从快捷键触发打开窗口
+  void onPresentFromHotkey() {
+    _isInTray = false;
+    _isTrayTrigger = false;
+    _isHotkeyTrigger = true;
+    _isDocked = false;
   }
 
   /// 窗口移动到托盘
   void onDismissToTray() {
     _isInTray = true;
     _isTrayTrigger = false;
+    _isHotkeyTrigger = false;
     _hideDelayTimer?.cancel();
   }
 
@@ -125,10 +138,11 @@ class WindowDockManager {
     _hideDelayTimer?.cancel();
   }
 
-  /// 鼠标点击在app外部（仅当从托盘触发时）
+  /// 鼠标点击在app外部（托盘触发或快捷键触发时）
   Future<void> onMouseClickOutside() async {
-    if (_isTrayTrigger && !_isInTray) {
-      // 从托盘触发时，点击外部直接隐藏
+    if (_isInTray) return;
+    // 托盘触发或快捷键触发时，点击外部直接隐藏
+    if (_isTrayTrigger || _isHotkeyTrigger) {
       await dismissToTray(fromHotCorner: false);
     }
   }
@@ -137,16 +151,16 @@ class WindowDockManager {
   Future<void> onMouseExit() async {
     // 如果窗口在托盘中，不处理
     if (_isInTray) return;
-    
+
     // 如果是从托盘触发且还未进入过app（isTrayTrigger仍为true），不处理（由点击外部处理）
     if (_isTrayTrigger) return;
-    
+
     // 如果正在拖动，不处理
     if (_isDragging) return;
-    
+
     // 如果窗口不在吸附区，不处理
     if (!_isDocked) return;
-    
+
     // 检查窗口是否真的在吸附区
     final pos = await windowManager.getPosition();
     final screen = getPrimaryScreenSize();
@@ -157,18 +171,18 @@ class WindowDockManager {
       _isDocked = false;
       return;
     }
-    
+
     // 检查鼠标是否在窗口内（可能鼠标又回来了）
     if (await isCursorInsideWindow()) return;
-    
+
     // 取消之前的隐藏定时器
     _hideDelayTimer?.cancel();
-    
+
     // 立即开始260ms倒计时隐藏（这是从tray触发进入app后离开的情况）
     _hideDelayTimer = Timer(_trayTriggerHideDelay, () async {
       // 再次确认条件
       if (_isInTray || _isTrayTrigger || _isDragging) return;
-      
+
       final currentPos = await windowManager.getPosition();
       final currentScreen = getPrimaryScreenSize();
       final currentSnapZone = WindowDockLogic.snapZone(
@@ -178,9 +192,9 @@ class WindowDockManager {
         _isDocked = false;
         return;
       }
-      
+
       if (await isCursorInsideWindow()) return;
-      
+
       await dismissToTray(fromHotCorner: true);
     });
   }
@@ -191,16 +205,16 @@ class WindowDockManager {
     _autoHideTimer = Timer.periodic(_autoHideCheckInterval, (_) async {
       // 如果窗口在托盘中，不检测
       if (_isInTray) return;
-      
+
       // 如果是从托盘触发，由点击外部事件处理，这里不处理
       if (_isTrayTrigger) return;
-      
+
       // 如果正在拖动，不检测
       if (_isDragging) return;
-      
+
       // 如果窗口不在吸附区，不检测
       if (!_isDocked) return;
-      
+
       // 检查鼠标是否在窗口内
       final cursorInside = await isCursorInsideWindow();
       if (cursorInside) {
@@ -208,7 +222,7 @@ class WindowDockManager {
         _hideDelayTimer?.cancel();
         return;
       }
-      
+
       // 鼠标在窗口外，检查窗口是否真的在吸附区
       final pos = await windowManager.getPosition();
       final screen = getPrimaryScreenSize();
@@ -220,15 +234,15 @@ class WindowDockManager {
         _isDocked = false;
         return;
       }
-      
+
       // 如果已经有待执行的隐藏操作，不再重复设置
       if (_hideDelayTimer?.isActive ?? false) return;
-      
+
       // 设置200ms延迟后隐藏，期间不再做判断
       _hideDelayTimer = Timer(_hideDelay, () async {
         // 再次确认窗口仍在吸附区且鼠标仍在窗口外
         if (_isInTray || _isTrayTrigger || _isDragging) return;
-        
+
         final currentPos = await windowManager.getPosition();
         final currentScreen = getPrimaryScreenSize();
         final currentSnapZone = WindowDockLogic.snapZone(
@@ -238,9 +252,9 @@ class WindowDockManager {
           _isDocked = false;
           return;
         }
-        
+
         if (await isCursorInsideWindow()) return;
-        
+
         await dismissToTray(fromHotCorner: true);
       });
     });

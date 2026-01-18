@@ -40,9 +40,12 @@ Future<void> main() async {
         center: bounds == null,
       ),
       () async {
+        // Prevent Windows Aero Snap when dragging
+        await windowManager.setMaximizable(false);
         if (bounds != null) {
-          await windowManager
-              .setPosition(Offset(bounds.x.toDouble(), bounds.y.toDouble()));
+          await windowManager.setPosition(
+            Offset(bounds.x.toDouble(), bounds.y.toDouble()),
+          );
         }
         await windowManager.hide();
       },
