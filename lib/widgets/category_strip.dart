@@ -1,10 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../models/app_category.dart';
 
 enum CategoryTabMenuAction { rename, delete, edit }
 
-class CategoryStrip extends StatelessWidget {
+class CategoryStrip extends StatefulWidget {
   final List<AppCategory> categories;
   final String? activeCategoryId;
   final int totalCount;
@@ -31,61 +32,92 @@ class CategoryStrip extends StatelessWidget {
   });
 
   @override
+  State<CategoryStrip> createState() => _CategoryStripState();
+}
+
+class _CategoryStripState extends State<CategoryStrip> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 处理滚轮事件，将垂直滚动转换为水平滚动
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      final delta = event.scrollDelta.dy;
+      final newOffset = (_scrollController.offset + delta).clamp(
+        0.0,
+        _scrollController.position.maxScrollExtent,
+      );
+      _scrollController.jumpTo(newOffset);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final visible = categories.where((c) => c.paths.isNotEmpty).toList();
-    final spacing = 8.0 * scale;
+    final visible = widget.categories.where((c) => c.paths.isNotEmpty).toList();
+    final spacing = 8.0 * widget.scale;
     return SizedBox(
-      height: 44 * scale,
+      height: 44 * widget.scale,
       child: Row(
         children: [
           _buildChip(
             context,
             name: '全部',
-            count: totalCount,
-            selected: activeCategoryId == null,
-            onPressed: onAllSelected,
+            count: widget.totalCount,
+            selected: widget.activeCategoryId == null,
+            onPressed: widget.onAllSelected,
           ),
           if (visible.isNotEmpty) SizedBox(width: spacing),
           if (visible.isNotEmpty)
             Expanded(
-              child: ReorderableListView.builder(
-                scrollDirection: Axis.horizontal,
-                shrinkWrap: true,
-                buildDefaultDragHandles: false,
-                padding: EdgeInsets.zero,
-                onReorder: onReorder,
-                itemCount: visible.length,
-                itemBuilder: (context, index) {
-                  final cat = visible[index];
-                  final selected = activeCategoryId == cat.id;
-                  final chip = _buildChip(
-                    context,
-                    name: cat.name,
-                    count: cat.paths.length,
-                    selected: selected,
-                    onPressed: () => onCategorySelected(cat.id),
-                  );
-                  return Padding(
-                    key: ValueKey(cat.id),
-                    padding: EdgeInsets.only(right: spacing),
-                    child: GestureDetector(
-                      onSecondaryTapDown: _hasMenu
-                          ? (details) async {
-                              if (!selected) onCategorySelected(cat.id);
-                              await _showCategoryTabMenu(
-                                context,
-                                category: cat,
-                                position: details.globalPosition,
-                              );
-                            }
-                          : null,
-                      child: ReorderableDragStartListener(
-                        index: index,
-                        child: chip,
+              child: Listener(
+                onPointerSignal: _handlePointerSignal,
+                child: ReorderableListView.builder(
+                  scrollController: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  shrinkWrap: true,
+                  buildDefaultDragHandles: false,
+                  padding: EdgeInsets.zero,
+                  onReorder: widget.onReorder,
+                  itemCount: visible.length,
+                  itemBuilder: (context, index) {
+                    final cat = visible[index];
+                    final selected = widget.activeCategoryId == cat.id;
+                    final chip = _buildChip(
+                      context,
+                      name: cat.name,
+                      count: cat.paths.length,
+                      selected: selected,
+                      onPressed: () => widget.onCategorySelected(cat.id),
+                    );
+                    return Padding(
+                      key: ValueKey(cat.id),
+                      padding: EdgeInsets.only(right: spacing),
+                      child: GestureDetector(
+                        onSecondaryTapDown: _hasMenu
+                            ? (details) async {
+                                if (!selected) {
+                                  widget.onCategorySelected(cat.id);
+                                }
+                                await _showCategoryTabMenu(
+                                  context,
+                                  category: cat,
+                                  position: details.globalPosition,
+                                );
+                              }
+                            : null,
+                        child: ReorderableDragStartListener(
+                          index: index,
+                          child: chip,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             )
           else
@@ -96,9 +128,9 @@ class CategoryStrip extends StatelessWidget {
   }
 
   bool get _hasMenu =>
-      onRenameRequested != null ||
-      onDeleteRequested != null ||
-      onEditRequested != null;
+      widget.onRenameRequested != null ||
+      widget.onDeleteRequested != null ||
+      widget.onEditRequested != null;
 
   Future<void> _showCategoryTabMenu(
     BuildContext context, {
@@ -145,13 +177,13 @@ class CategoryStrip extends StatelessWidget {
 
     switch (action) {
       case CategoryTabMenuAction.rename:
-        onRenameRequested?.call(category);
+        widget.onRenameRequested?.call(category);
         break;
       case CategoryTabMenuAction.delete:
-        onDeleteRequested?.call(category);
+        widget.onDeleteRequested?.call(category);
         break;
       case CategoryTabMenuAction.edit:
-        onEditRequested?.call(category);
+        widget.onEditRequested?.call(category);
         break;
       case null:
         break;
@@ -161,8 +193,8 @@ class CategoryStrip extends StatelessWidget {
   double _chipLabelWidth(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final desired = width * 0.22;
-    final min = 90.0 * scale;
-    final max = 150.0 * scale;
+    final min = 90.0 * widget.scale;
+    final max = 150.0 * widget.scale;
     return desired.clamp(min, max);
   }
 
@@ -177,7 +209,7 @@ class CategoryStrip extends StatelessWidget {
     final labelWidth = _chipLabelWidth(context);
     final baseColor = theme.colorScheme.surface.withValues(alpha: 0.10);
     final selectedColor = theme.colorScheme.primary.withValues(
-      alpha: 0.12 + 0.05 * scale,
+      alpha: 0.12 + 0.05 * widget.scale,
     );
     final borderColor = theme.colorScheme.onSurface.withValues(
       alpha: selected ? 0.12 : 0.08,
@@ -206,8 +238,8 @@ class CategoryStrip extends StatelessWidget {
       ),
       labelStyle: labelStyle,
       padding: EdgeInsets.symmetric(
-        horizontal: 12 * scale,
-        vertical: 6 * scale,
+        horizontal: 12 * widget.scale,
+        vertical: 6 * widget.scale,
       ),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
@@ -240,7 +272,7 @@ class CategoryStrip extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        SizedBox(width: 4 * scale),
+        SizedBox(width: 4 * widget.scale),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(countText, style: style, maxLines: 1, softWrap: false),
