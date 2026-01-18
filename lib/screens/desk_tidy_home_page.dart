@@ -14,6 +14,7 @@ import '../setting/settings_page.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
 import '../utils/app_search_index.dart';
+import '../utils/fuzzy_matcher.dart';
 import '../utils/desktop_helper.dart';
 import '../utils/tray_helper.dart';
 import '../widgets/glass.dart';
@@ -113,7 +114,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _categories.where((c) => c.paths.isNotEmpty).toList();
 
   List<ShortcutItem> get _filteredShortcuts {
-    Iterable<ShortcutItem> results = _shortcuts;
+    List<ShortcutItem> results = _shortcuts.toList();
+
+    // 分类过滤
     if (!_isEditingCategory && _activeCategoryId != null) {
       final category = _categories.firstWhere(
         (c) => c.id == _activeCategoryId,
@@ -121,18 +124,21 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       );
       if (category.id.isNotEmpty && category.paths.isNotEmpty) {
         final allowed = category.paths;
-        results = results.where((s) => allowed.contains(s.path));
+        results = results.where((s) => allowed.contains(s.path)).toList();
       }
     }
 
+    // 搜索过滤（使用模糊匹配器，按分数排序）
     final normalizedQuery = normalizeSearchText(_appSearchQuery);
     if (normalizedQuery.isNotEmpty) {
-      results = results.where(
-        (shortcut) => _matchesSearch(shortcut, normalizedQuery),
+      results = FuzzyMatcher.filter<ShortcutItem>(
+        _appSearchQuery,
+        results,
+        (shortcut) => _getSearchIndex(shortcut),
       );
     }
 
-    return results.toList();
+    return results;
   }
 
   double _uiScale(BuildContext context) {
@@ -827,13 +833,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     return index;
   }
 
-  bool _matchesSearch(ShortcutItem shortcut, String normalizedQuery) {
+  /// 获取快捷方式的搜索索引（带缓存）
+  AppSearchIndex _getSearchIndex(ShortcutItem shortcut) {
     final cached = _searchIndexByPath[shortcut.path];
-    final index = cached ?? AppSearchIndex.fromName(shortcut.name);
-    if (cached == null) {
-      _searchIndexByPath[shortcut.path] = index;
-    }
-    return index.matchesPrefix(normalizedQuery);
+    if (cached != null) return cached;
+
+    final index = AppSearchIndex.fromName(shortcut.name);
+    _searchIndexByPath[shortcut.path] = index;
+    return index;
   }
 
   bool _isCategoryAvailable(String id) {

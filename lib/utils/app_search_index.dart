@@ -1,5 +1,7 @@
 import 'package:lpinyin/lpinyin.dart';
 
+import 'fuzzy_matcher.dart';
+
 final RegExp _searchSplit = RegExp(
   r'[^a-z0-9\u4e00-\u9fff]+',
   caseSensitive: false,
@@ -91,23 +93,21 @@ class AppSearchIndex {
     );
   }
 
-  bool matchesPrefix(String normalizedQuery) {
-    if (normalizedQuery.isEmpty) return true;
-    if (normalizedName.startsWith(normalizedQuery)) return true;
-    if (pinyin.startsWith(normalizedQuery)) return true;
-    if (pinyinInitials.startsWith(normalizedQuery)) return true;
-    if (latinInitials.startsWith(normalizedQuery)) return true;
-    for (final token in tokens) {
-      if (token.startsWith(normalizedQuery)) return true;
-    }
-    for (final tokenPinyin in tokenPinyins) {
-      if (tokenPinyin.startsWith(normalizedQuery)) return true;
-    }
-    for (final tokenInitials in tokenPinyinInitials) {
-      if (tokenInitials.startsWith(normalizedQuery)) return true;
-    }
-    return false;
+  /// 使用模糊匹配器进行匹配
+  /// 返回是否匹配（不返回详细结果）
+  bool matchesQuery(String normalizedQuery) {
+    return matchWithScore(normalizedQuery).matched;
   }
+
+  /// 使用模糊匹配器进行匹配
+  /// 返回完整匹配结果（包含分数和匹配位置）
+  MatchResult matchWithScore(String query) {
+    return FuzzyMatcher.match(query, this);
+  }
+
+  /// 保留旧方法名以兼容，但标记为废弃
+  @Deprecated('Use matchesQuery instead')
+  bool matchesPrefix(String normalizedQuery) => matchesQuery(normalizedQuery);
 }
 
 String _buildLatinInitials(List<String> tokens) {
