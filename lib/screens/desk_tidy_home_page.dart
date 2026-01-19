@@ -213,6 +213,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     _lastActivationMode = _ActivationMode.hotkey;
+    // 设置600ms的“忽略失去焦点”宽限期，防止唤醒时的焦点抢夺导致误触自动隐藏
+    _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
 
     // 先准备内容，避免白屏闪烁
     if (mounted) setState(() => _panelVisible = true);
@@ -925,7 +927,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final shortcuts = _filteredShortcuts;
-    if (shortcuts.isEmpty) return KeyEventResult.ignored;
+    if (shortcuts.isEmpty) {
+      // 即使没有结果，ESC 也应该能关闭窗口
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _dismissToTray(fromHotCorner: false);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // 全局 ESC 处理 (无论是否有选中项)
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      _dismissToTray(fromHotCorner: false);
+      return KeyEventResult.handled;
+    }
 
     // 如果还没有选中项，且按下了方向键/Tab，则初始化选中
     if (_searchSelectedIndex == -1) {
@@ -1080,10 +1095,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   // 添加 _currentScale 成员变量来存储 scale
   double _currentScale = 1.0;
-
-  /// 移动搜索结果选中项
-  // 废弃，逻辑已移至 _handleSearchNavigation
-  void _moveSearchSelection(int delta) {}
 
   /// 打开当前选中的搜索结果
   void _openSelectedSearchResult() {
@@ -1281,8 +1292,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     });
   }
 
+  DateTime _ignoreBlurUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void onWindowBlur() {
+    if (DateTime.now().isBefore(_ignoreBlurUntil)) {
+      // 刚唤醒时忽略失去焦点事件（防止焦点抢夺导致的误触自动隐藏）
+      // 保持视觉上的焦点状态，虽然实际上可能失去了系统焦点
+      return;
+    }
+
     _windowFocusNotifier.value = false;
     // 窗口失去焦点时，可能是点击了外部，检查是否需要隐藏
     unawaited(_dockManager.onMouseClickOutside());
