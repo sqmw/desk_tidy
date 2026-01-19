@@ -182,20 +182,22 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('发现新版本'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('新版本: v${updateInfo.latestVersion}'),
-            const SizedBox(height: 8),
-            if (updateInfo.releaseNotes.isNotEmpty) ...[
-              const Text(
-                '更新内容:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(updateInfo.releaseNotes),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('新版本: v${updateInfo.latestVersion}'),
+              const SizedBox(height: 8),
+              if (updateInfo.releaseNotes.isNotEmpty) ...[
+                const Text(
+                  '更新内容:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(updateInfo.releaseNotes),
+              ],
             ],
-          ],
+          ),
         ),
         actions: [
           TextButton(
