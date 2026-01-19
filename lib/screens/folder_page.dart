@@ -36,7 +36,12 @@ class _FolderPageState extends State<FolderPage> {
   String? _error;
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
+  String? _selectedPath;
   final Map<String, Future<Uint8List?>> _iconFutures = {};
+
+  // Custom double-tap state
+  int _lastTapTime = 0;
+  String _lastTappedPath = '';
 
   bool get _isRootPath {
     final current = path.normalize(_currentPath).toLowerCase();
@@ -111,13 +116,16 @@ class _FolderPageState extends State<FolderPage> {
 
   void _openFolder(String folderPath) {
     _currentPath = folderPath;
+    _selectedPath = null;
     _refresh();
   }
 
   void _goUp() {
     final parent = path.dirname(_currentPath);
     if (parent == _currentPath) return;
+    if (parent == _currentPath) return;
     _currentPath = parent;
+    _selectedPath = null;
     _refresh();
   }
 
@@ -487,15 +495,31 @@ class _FolderPageState extends State<FolderPage> {
                       final entity = _entries[index];
                       final isDir = entity is Directory;
                       final name = path.basename(entity.path);
+                      final isSelected = entity.path == _selectedPath;
+
                       return Material(
-                        color: Colors.transparent,
+                        color: isSelected
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.1)
+                            : Colors.transparent,
                         child: InkWell(
-                          onTap: isDir ? () => _openFolder(entity.path) : null,
-                          onDoubleTap: () async {
-                            if (isDir) {
-                              _openFolder(entity.path);
+                          onTapDown: (_) =>
+                              setState(() => _selectedPath = entity.path),
+                          onTap: () {
+                            final now = DateTime.now().millisecondsSinceEpoch;
+                            if (now - _lastTapTime < 300 &&
+                                _lastTappedPath == entity.path) {
+                              // Double tap
+                              if (isDir) {
+                                _openFolder(entity.path);
+                              } else {
+                                openWithDefault(entity.path);
+                              }
+                              _lastTapTime = 0;
                             } else {
-                              await openWithDefault(entity.path);
+                              _lastTapTime = now;
+                              _lastTappedPath = entity.path;
                             }
                           },
                           onSecondaryTapDown: (details) {

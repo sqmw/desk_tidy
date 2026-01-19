@@ -10,23 +10,38 @@ import '../models/icon_beautify_style.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/beautified_icon.dart';
 
-class FilePage extends StatelessWidget {
+class FilePage extends StatefulWidget {
   final String desktopPath;
   final bool showHidden;
   final bool beautifyIcons;
   final IconBeautifyStyle beautifyStyle;
 
   const FilePage({
-    Key? key,
+    super.key,
     required this.desktopPath,
     this.showHidden = false,
     this.beautifyIcons = false,
     this.beautifyStyle = IconBeautifyStyle.cute,
-  }) : super(key: key);
+  });
+
+  @override
+  State<FilePage> createState() => _FilePageState();
+}
+
+class _FilePageState extends State<FilePage> {
+  String? _selectedPath;
+
+  // Custom double-tap state
+  int _lastTapTime = 0;
+  String _lastTappedPath = '';
 
   @override
   Widget build(BuildContext context) {
-    final desktopDir = Directory(desktopPath);
+    final desktopDir = Directory(widget.desktopPath);
+    if (!desktopDir.existsSync()) {
+      return const Center(child: Text('路径不存在'));
+    }
+
     final files = desktopDir
         .listSync()
         .where((entity) {
@@ -34,7 +49,7 @@ class FilePage extends StatelessWidget {
           final name = path.basename(entity.path);
           final lower = name.toLowerCase();
 
-          if (!showHidden &&
+          if (!widget.showHidden &&
               (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
             return false;
           }
@@ -64,14 +79,26 @@ class FilePage extends StatelessWidget {
       itemBuilder: (context, index) {
         final file = files[index];
         final name = path.basename(file.path);
+        final isSelected = file.path == _selectedPath;
+
         return Material(
-          color: Colors.transparent,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
           child: InkWell(
-            onTap: () {},
-            onDoubleTap: () async {
-              await openWithDefault(file.path);
+            onTapDown: (_) => setState(() => _selectedPath = file.path),
+            onTap: () {
+              final now = DateTime.now().millisecondsSinceEpoch;
+              if (now - _lastTapTime < 300 && _lastTappedPath == file.path) {
+                openWithDefault(file.path);
+                _lastTapTime = 0;
+              } else {
+                _lastTapTime = now;
+                _lastTappedPath = file.path;
+              }
             },
             onSecondaryTapDown: (details) {
+              setState(() => _selectedPath = file.path);
               _showFileMenu(context, file, details.globalPosition);
             },
             borderRadius: BorderRadius.circular(12),
@@ -85,8 +112,8 @@ class FilePage extends StatelessWidget {
                 children: [
                   _FileIcon(
                     filePath: file.path,
-                    beautifyIcon: beautifyIcons,
-                    beautifyStyle: beautifyStyle,
+                    beautifyIcon: widget.beautifyIcons,
+                    beautifyStyle: widget.beautifyStyle,
                     size: 48,
                   ),
                   const SizedBox(height: 8),
@@ -143,6 +170,7 @@ class _FileIcon extends StatelessWidget {
             size: size,
             enabled: beautifyIcon,
             style: beautifyStyle,
+            fit: BoxFit.contain, // best guess used
           );
         }
         final ext = path.extension(filePath).toLowerCase();

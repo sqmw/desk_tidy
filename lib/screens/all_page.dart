@@ -54,6 +54,10 @@ class _AllPageState extends State<AllPage> {
   _EntitySelectionInfo? _selected;
   final Map<String, Future<Uint8List?>> _iconFutures = {};
 
+  // Custom double-tap state
+  int _lastTapTime = 0;
+  String _lastTappedPath = '';
+
   @override
   void initState() {
     super.initState();
@@ -91,25 +95,26 @@ class _AllPageState extends State<AllPage> {
           });
           return;
         }
-        final entries = dir.listSync().where((entity) {
-          final name = path.basename(entity.path);
-          final lower = name.toLowerCase();
-          if (!widget.showHidden &&
-              (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
-            return false;
-          }
-          if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
-          return true;
-        }).toList()
-          ..sort((a, b) {
-            final aIsDir = a is Directory;
-            final bIsDir = b is Directory;
-            if (aIsDir && !bIsDir) return -1;
-            if (!aIsDir && bIsDir) return 1;
-            return path.basename(a.path).toLowerCase().compareTo(
-                  path.basename(b.path).toLowerCase(),
-                );
-          });
+        final entries =
+            dir.listSync().where((entity) {
+              final name = path.basename(entity.path);
+              final lower = name.toLowerCase();
+              if (!widget.showHidden &&
+                  (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
+                return false;
+              }
+              if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
+              return true;
+            }).toList()..sort((a, b) {
+              final aIsDir = a is Directory;
+              final bIsDir = b is Directory;
+              if (aIsDir && !bIsDir) return -1;
+              if (!aIsDir && bIsDir) return 1;
+              return path
+                  .basename(a.path)
+                  .toLowerCase()
+                  .compareTo(path.basename(b.path).toLowerCase());
+            });
         setState(() {
           _entries = entries;
           _loading = false;
@@ -159,10 +164,12 @@ class _AllPageState extends State<AllPage> {
       }
     }
 
-    entries.sort((a, b) => path
-        .basename(a.path)
-        .toLowerCase()
-        .compareTo(path.basename(b.path).toLowerCase()));
+    entries.sort(
+      (a, b) => path
+          .basename(a.path)
+          .toLowerCase()
+          .compareTo(path.basename(b.path).toLowerCase()),
+    );
     return entries;
   }
 
@@ -205,10 +212,7 @@ class _AllPageState extends State<AllPage> {
       items: const [
         PopupMenuItem(
           value: 'open',
-          child: ListTile(
-            leading: Icon(Icons.open_in_new),
-            title: Text('打开'),
-          ),
+          child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
         ),
         PopupMenuItem(
           value: 'open_with',
@@ -226,46 +230,28 @@ class _AllPageState extends State<AllPage> {
         ),
         PopupMenuItem(
           value: 'copy',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制到...'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
         ),
         PopupMenuItem(
           value: 'copy_clipboard',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制到剪贴板(系统)'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到剪贴板(系统)')),
         ),
         PopupMenuItem(
           value: 'delete',
-          child: ListTile(
-            leading: Icon(Icons.delete),
-            title: Text('删除(回收站)'),
-          ),
+          child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'copy_name',
-          child: ListTile(
-            leading: Icon(Icons.copy),
-            title: Text('复制名称'),
-          ),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
         ),
         PopupMenuItem(
           value: 'copy_path',
-          child: ListTile(
-            leading: Icon(Icons.link),
-            title: Text('复制路径'),
-          ),
+          child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
         ),
         PopupMenuItem(
           value: 'copy_folder',
-          child: ListTile(
-            leading: Icon(Icons.folder),
-            title: Text('复制所在文件夹'),
-          ),
+          child: ListTile(leading: Icon(Icons.folder), title: Text('复制所在文件夹')),
         ),
       ],
     );
@@ -333,9 +319,9 @@ class _AllPageState extends State<AllPage> {
     final value = quoted ? _quote(raw) : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Copied $label')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Copied $label')));
   }
 
   String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
@@ -349,16 +335,10 @@ class _AllPageState extends State<AllPage> {
         name: selected.name,
         path: selected.fullPath,
         folderPath: selected.folderPath,
-        onCopyName: () => _copyToClipboard(
-          selected.name,
-          label: 'name',
-          quoted: false,
-        ),
-        onCopyPath: () => _copyToClipboard(
-          selected.fullPath,
-          label: 'path',
-          quoted: true,
-        ),
+        onCopyName: () =>
+            _copyToClipboard(selected.name, label: 'name', quoted: false),
+        onCopyPath: () =>
+            _copyToClipboard(selected.fullPath, label: 'path', quoted: true),
         onCopyFolder: () => _copyToClipboard(
           selected.folderPath,
           label: 'folder',
@@ -388,10 +368,7 @@ class _AllPageState extends State<AllPage> {
         ),
         PopupMenuItem(
           value: 'refresh',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('刷新'),
-          ),
+          child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
         ),
       ],
     );
@@ -418,9 +395,7 @@ class _AllPageState extends State<AllPage> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '名称',
-            ),
+            decoration: const InputDecoration(labelText: '名称'),
             onSubmitted: (_) => Navigator.of(context).pop(true),
           ),
           actions: [
@@ -526,9 +501,9 @@ class _AllPageState extends State<AllPage> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -549,24 +524,26 @@ class _AllPageState extends State<AllPage> {
             opacity: 0.14,
             blurSigma: 10,
             border: Border.all(
-                      color: Theme.of(context)
-                          .dividerColor
-                          .withValues(alpha: 0.16),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.16),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             child: Row(
               children: [
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   icon: const Icon(Icons.home),
                   onPressed: _currentPath == null ? null : _goHome,
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: _currentPath == null ? null : _goUp,
                 ),
@@ -579,8 +556,10 @@ class _AllPageState extends State<AllPage> {
                 ),
                 IconButton(
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   icon: const Icon(Icons.refresh),
                   onPressed: _refresh,
                 ),
@@ -605,21 +584,32 @@ class _AllPageState extends State<AllPage> {
                       final displayName = rawName.toLowerCase().endsWith('.lnk')
                           ? rawName.substring(0, rawName.length - 4)
                           : rawName;
+                      final isSelected = _selected?.fullPath == entity.path;
                       return Material(
-                        color: Colors.transparent,
+                        color: isSelected
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.1)
+                            : Colors.transparent,
                         child: InkWell(
-                          onTap: () {
+                          onTapDown: (_) {
                             _selectEntity(entity, displayName);
-                            if (isDir) {
-                              _openFolder(entity.path);
-                            }
                           },
-                          onDoubleTap: () async {
-                            _selectEntity(entity, displayName);
-                            if (isDir) {
-                              _openFolder(entity.path);
+                          onTap: () {
+                            final now = DateTime.now().millisecondsSinceEpoch;
+                            if (now - _lastTapTime < 300 &&
+                                _lastTappedPath == entity.path) {
+                              // Double tap confirmed
+                              if (isDir) {
+                                _openFolder(entity.path);
+                              } else {
+                                openWithDefault(entity.path);
+                              }
+                              _lastTapTime = 0;
                             } else {
-                              await openWithDefault(entity.path);
+                              // Single tap
+                              _lastTapTime = now;
+                              _lastTappedPath = entity.path;
                             }
                           },
                           onSecondaryTapDown: (details) {
@@ -637,8 +627,9 @@ class _AllPageState extends State<AllPage> {
                               .withValues(alpha: 0.4),
                           child: ListTile(
                             dense: true,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                            ),
                             leading: _EntityIcon(
                               entity: entity,
                               getIconFuture: _getIconFuture,
