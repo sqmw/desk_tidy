@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/desk_tidy_home_page.dart';
 import 'providers/theme_notifier.dart';
 import 'utils/single_instance.dart';
@@ -79,13 +80,23 @@ class _MyAppState extends State<MyApp> {
             primarySwatch: Colors.blue,
             visualDensity: VisualDensity.adaptivePlatformDensity,
             fontFamily: 'Segoe UI',
+            fontFamilyFallback: const ['Microsoft YaHei'],
+            useMaterial3: true,
           ),
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             primarySwatch: Colors.blue,
             visualDensity: VisualDensity.adaptivePlatformDensity,
             fontFamily: 'Segoe UI',
+            fontFamilyFallback: const ['Microsoft YaHei'],
+            useMaterial3: true,
           ),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           themeMode: themeMode,
           home: const DeskTidyHomePage(),
         );
