@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../models/shortcut_item.dart';
@@ -94,6 +95,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   String? _categoryBeforeSearch;
   bool _searchHasFocus = false;
   Map<String, AppSearchIndex> _searchIndexByPath = {};
+  int _searchSelectedIndex = -1; // 搜索结果选中索引，-1 表示未选中
+  int _gridCrossAxisCount = 1; // 网格布局列数，用于键盘导航
+  final ScrollController _gridScrollController = ScrollController(); // 网格滚动控制器
 
   double get _chromeOpacity =>
       (0.12 + 0.28 * _backgroundOpacity).clamp(0.12, 0.42);
@@ -916,6 +920,193 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     return index;
   }
 
+  /// 处理搜索框的键盘导航
+  KeyEventResult _handleSearchNavigation(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final shortcuts = _filteredShortcuts;
+    if (shortcuts.isEmpty) return KeyEventResult.ignored;
+
+    // 如果还没有选中项，且按下了方向键/Tab，则初始化选中
+    if (_searchSelectedIndex == -1) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+          event.logicalKey == LogicalKeyboardKey.tab) {
+        setState(() => _searchSelectedIndex = 0);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored; // 其他键交给输入框移动光标
+    }
+
+    // 已有选中项，进行网格/列表导航
+    int nextIndex = _searchSelectedIndex;
+    final int total = shortcuts.length;
+    final int cols = _gridCrossAxisCount;
+    // 向上取整计算行数
+    final int rows = (total + cols - 1) ~/ cols;
+
+    // 当前坐标
+    final int currentCol = _searchSelectedIndex % cols;
+    final int currentRow = _searchSelectedIndex ~/ cols;
+
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      final isShift = HardwareKeyboard.instance.isShiftPressed;
+      // Tab 线性循环
+      if (isShift) {
+        nextIndex = (nextIndex - 1 + total) % total;
+      } else {
+        nextIndex = (nextIndex + 1) % total;
+      }
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      // 右键线性循环
+      nextIndex = (nextIndex + 1) % total;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      // 左键线性循环
+      nextIndex = (nextIndex - 1 + total) % total;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      // 下键：列内循环
+      // 逻辑：尝试去下一行的同一列。如果该位置为空（最后一行没填满），则回到第一行。
+      int targetRow = currentRow + 1;
+      if (targetRow >= rows) {
+        targetRow = 0; // Wrap to top
+      }
+
+      int targetIndex = targetRow * cols + currentCol;
+
+      // 如果目标索引超出了总数（发生在最后一行），说明这一列在最后一行没有元素
+      // 此时应该跳到第一行（Wrap to top）
+      if (targetIndex >= total) {
+        targetIndex = currentCol; // First row, current col
+      }
+      nextIndex = targetIndex;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      // 上键：列内循环
+      int targetRow = currentRow - 1;
+      if (targetRow < 0) {
+        // Wrap to bottom
+        targetRow = rows - 1;
+      }
+
+      int targetIndex = targetRow * cols + currentCol;
+
+      // 如果目标索引超出总数（发生在最后一行空缺），说明这一列在最后一行没有元素
+      // 此时应该去倒数第二行（即 targetRow - 1）
+      // 特殊情况：如果总共只有1行，targetRow=0, targetIndex ok.
+      if (targetIndex >= total) {
+        targetRow = math.max(0, targetRow - 1);
+        targetIndex = targetRow * cols + currentCol;
+      }
+      nextIndex = targetIndex;
+    } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+      _openSelectedSearchResult();
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+      // ESC 键：隐藏窗口
+      _dismissToTray(fromHotCorner: false);
+      return KeyEventResult.handled;
+    } else {
+      return KeyEventResult.ignored;
+    }
+
+    if (nextIndex != _searchSelectedIndex) {
+      setState(() => _searchSelectedIndex = nextIndex);
+      _ensureSearchSelectionVisible(nextIndex);
+    }
+    return KeyEventResult.handled;
+  }
+
+  // ...
+
+  // 提取 LayoutMetrics 类或方法来统一计算
+  _LayoutMetrics _calculateLayoutMetrics(double scale) {
+    final padding = math.max(8.0, _iconSize * 0.28);
+    final iconContainerSize = math.max(28.0, _iconSize * 1.65);
+    final estimatedTextHeight = _estimateTextHeight();
+    final cardHeight =
+        padding * 0.6 * 2 +
+        iconContainerSize +
+        padding * 0.6 +
+        estimatedTextHeight;
+    final mainAxisSpacing = 12.0 * scale;
+    return _LayoutMetrics(
+      cardHeight: cardHeight,
+      mainAxisSpacing: mainAxisSpacing,
+      horizontalPadding: 28.0 * scale,
+    );
+  }
+
+  /// 确保选中的搜索结果可见（自动滚动）
+  void _ensureSearchSelectionVisible(int index) {
+    if (!_gridScrollController.hasClients) return;
+
+    // 获取当前的 scale (假设从 MediaQuery 或 stored state 获取，这里简化为一个getter)
+    // 注意：_buildApplicationContent 中有个 local scale，
+    // 我们需要确保 _ensureSearchSelectionVisible 能访问到或者近似计算。
+    // 由于 scale 并不经常变，我们可以存储一个成员变量 _currentScale
+    final scale = _currentScale;
+
+    final metrics = _calculateLayoutMetrics(scale);
+
+    // 计算目标行的偏移量
+    final int row = index ~/ _gridCrossAxisCount;
+    final double itemExtent = metrics.cardHeight + metrics.mainAxisSpacing;
+    final double targetOffset = row * itemExtent;
+
+    // 获取当前滚动位置
+    final double currentScroll = _gridScrollController.offset;
+    final double viewportHeight =
+        _gridScrollController.position.viewportDimension;
+
+    // 如果目标在视口上方，滚上去
+    if (targetOffset < currentScroll) {
+      _gridScrollController.animateTo(
+        targetOffset - metrics.mainAxisSpacing, // 留一点余量
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+    // 如果目标在视口下方，滚下去（注意这里要减去视口高度）
+    else if (targetOffset + metrics.cardHeight >
+        currentScroll + viewportHeight) {
+      _gridScrollController.animateTo(
+        targetOffset +
+            metrics.cardHeight -
+            viewportHeight +
+            metrics.mainAxisSpacing,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  // 添加 _currentScale 成员变量来存储 scale
+  double _currentScale = 1.0;
+
+  /// 移动搜索结果选中项
+  // 废弃，逻辑已移至 _handleSearchNavigation
+  void _moveSearchSelection(int delta) {}
+
+  /// 打开当前选中的搜索结果
+  void _openSelectedSearchResult() {
+    final shortcuts = _filteredShortcuts;
+    if (shortcuts.isEmpty) return;
+
+    // 如果没有选中项，默认打开第一个
+    final index = _searchSelectedIndex < 0 ? 0 : _searchSelectedIndex;
+    if (index >= shortcuts.length) return;
+
+    final shortcut = shortcuts[index];
+    final resolvedPath = shortcut.targetPath.isNotEmpty
+        ? shortcut.targetPath
+        : shortcut.path;
+
+    openWithDefault(resolvedPath);
+
+    // 如果是快捷键模式，打开后隐藏窗口
+    if (_lastActivationMode == _ActivationMode.hotkey) {
+      _dismissToTray(fromHotCorner: false);
+    }
+  }
+
   bool _isCategoryAvailable(String id) {
     return _categories.any((c) => c.id == id && c.paths.isNotEmpty);
   }
@@ -926,6 +1117,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     setState(() {
       _appSearchQuery = value;
+      _searchSelectedIndex = -1; // 搜索内容变化时重置选中索引
 
       if (!_isEditingCategory) {
         if (!hadQuery && hasQuery) {
@@ -1739,23 +1931,27 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           Icon(Icons.search, size: iconSize, color: iconColor),
           SizedBox(width: 6 * scale),
           Expanded(
-            child: TextField(
-              controller: _appSearchController,
-              focusNode: _appSearchFocus,
-              onChanged: _updateSearchQuery,
-              autocorrect: false,
-              enableSuggestions: false,
-              maxLines: 1,
-              textInputAction: TextInputAction.search,
-              cursorColor: theme.colorScheme.primary,
-              style: theme.textTheme.bodyMedium,
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: '搜索应用（支持拼音前缀）',
-                hintStyle: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            child: Focus(
+              onKeyEvent: _handleSearchNavigation,
+              child: TextField(
+                controller: _appSearchController,
+                focusNode: _appSearchFocus,
+                onChanged: _updateSearchQuery,
+                // onSubmitted 已不再需要，因为 Enter 键已在 _handleSearchNavigation 中处理
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLines: 1,
+                textInputAction: TextInputAction.search,
+                cursorColor: theme.colorScheme.primary,
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '搜索应用（支持拼音前缀）',
+                  hintStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  border: InputBorder.none,
                 ),
-                border: InputBorder.none,
               ),
             ),
           ),
@@ -2045,36 +2241,43 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                 )
               : LayoutBuilder(
                   builder: (context, constraints) {
-                    final crossAxisSpacing = 12.0 * scale;
-                    final mainAxisSpacing = 12.0 * scale;
-                    final estimatedTextHeight = _estimateTextHeight();
-                    final padding = math.max(8.0, _iconSize * 0.28);
-                    final iconContainerSize = math.max(28.0, _iconSize * 1.65);
-                    final tileMaxExtent = math.max(
-                      120.0,
-                      iconContainerSize + padding * 2,
-                    );
-                    final cardHeight =
-                        padding * 0.6 * 2 +
-                        iconContainerSize +
-                        padding * 0.6 +
-                        estimatedTextHeight;
-                    final aspectRatio = cardHeight <= 0
-                        ? 1
-                        : tileMaxExtent / cardHeight;
+                    final metrics = _calculateLayoutMetrics(scale);
 
-                    final grid = GridView.builder(
+                    final crossAxisCount =
+                        ((metrics.horizontalPadding * 2 +
+                                    constraints.maxWidth -
+                                    metrics.horizontalPadding * 2 +
+                                    metrics.mainAxisSpacing) /
+                                (120.0 + metrics.mainAxisSpacing))
+                            .ceil();
+
+                    final effectiveCrossAxisCount = math.max(1, crossAxisCount);
+
+                    if (_gridCrossAxisCount != effectiveCrossAxisCount) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(
+                            () => _gridCrossAxisCount = effectiveCrossAxisCount,
+                          );
+                        }
+                      });
+                    }
+
+                    return GridView.builder(
+                      controller: _gridScrollController,
                       padding: EdgeInsets.fromLTRB(
-                        14 * scale,
+                        metrics.horizontalPadding / 2,
                         0,
-                        14 * scale,
-                        14 * scale,
+                        metrics.horizontalPadding / 2,
+                        metrics.horizontalPadding / 2,
                       ),
                       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: tileMaxExtent,
-                        crossAxisSpacing: crossAxisSpacing,
-                        mainAxisSpacing: mainAxisSpacing,
-                        childAspectRatio: aspectRatio.toDouble(),
+                        maxCrossAxisExtent: 120.0,
+                        crossAxisSpacing: metrics.mainAxisSpacing,
+                        mainAxisSpacing: metrics.mainAxisSpacing,
+                        childAspectRatio: metrics.cardHeight > 0
+                            ? (120.0 / metrics.cardHeight)
+                            : 1.0,
                       ),
                       itemCount: shortcuts.length,
                       itemBuilder: (context, index) {
@@ -2094,6 +2297,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                           shortcut: shortcut,
                           iconSize: _iconSize,
                           windowFocusNotifier: _windowFocusNotifier,
+                          isHighlighted: index == _searchSelectedIndex,
                           onDeleted: () {
                             _loadShortcuts(showLoading: false);
                           },
@@ -2107,8 +2311,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                         );
                       },
                     );
-
-                    return grid;
                   },
                 ),
         ),
@@ -2121,4 +2323,16 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     // allow up to 2 lines with some spacing
     return size * 2.9 + 6;
   }
+}
+
+class _LayoutMetrics {
+  final double cardHeight;
+  final double mainAxisSpacing;
+  final double horizontalPadding;
+
+  const _LayoutMetrics({
+    required this.cardHeight,
+    required this.mainAxisSpacing,
+    required this.horizontalPadding,
+  });
 }

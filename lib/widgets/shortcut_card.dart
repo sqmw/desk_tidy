@@ -19,6 +19,7 @@ class ShortcutCard extends StatefulWidget {
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
   final VoidCallback? onLaunched;
+  final bool isHighlighted; // 键盘导航高亮
 
   const ShortcutCard({
     super.key,
@@ -30,6 +31,7 @@ class ShortcutCard extends StatefulWidget {
     this.beautifyIcon = false,
     this.beautifyStyle = IconBeautifyStyle.cute,
     this.onLaunched,
+    this.isHighlighted = false,
   });
 
   @override
@@ -374,10 +376,14 @@ class _ShortcutCardState extends State<ShortcutCard> {
             curve: Curves.easeOut,
             decoration: BoxDecoration(
               borderRadius: radius,
-              color: _selected ? selectedBg : (_hovered ? hoverBg : baseBg),
+              color: (_selected || widget.isHighlighted)
+                  ? selectedBg
+                  : (_hovered ? hoverBg : baseBg),
               border: Border.all(
-                color: _selected ? borderColor : Colors.transparent,
-                width: 1,
+                color: (_selected || widget.isHighlighted)
+                    ? borderColor
+                    : Colors.transparent,
+                width: widget.isHighlighted ? 2 : 1,
               ),
             ),
             child: Padding(
