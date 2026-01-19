@@ -207,48 +207,49 @@ class _CategoryStripState extends State<CategoryStrip> {
   }) {
     final theme = Theme.of(context);
     final labelWidth = _chipLabelWidth(context);
-    final baseColor = theme.colorScheme.surface.withValues(alpha: 0.10);
-    final selectedColor = theme.colorScheme.primary.withValues(
-      alpha: 0.12 + 0.05 * widget.scale,
-    );
-    final borderColor = theme.colorScheme.onSurface.withValues(
-      alpha: selected ? 0.12 : 0.08,
-    );
+    // Unselected: transparent background, subtle border
+    // Selected: translucent primary color background, primary border
+    final borderColor = selected
+        ? theme.colorScheme.primary.withValues(alpha: 0.35)
+        : theme.colorScheme.onSurface.withValues(alpha: 0.12);
+
     final textColor = selected
         ? theme.colorScheme.primary
-        : theme.colorScheme.onSurface.withValues(alpha: 0.86);
+        : theme.colorScheme.onSurface.withValues(alpha: 0.85);
+
+    // Selected text slightly bolder
     final labelStyle = theme.textTheme.labelLarge?.copyWith(
       color: textColor,
-      fontWeight: FontWeight.w600,
+      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
     );
-    return RawChip(
-      showCheckmark: false,
-      label: SizedBox(
-        width: labelWidth,
-        child: Tooltip(
-          message: '$name ($count)',
-          waitDuration: const Duration(milliseconds: 350),
-          child: _buildChipLabel(
-            context,
-            name: name,
-            count: count,
-            style: labelStyle,
+    // Use Material + InkWell for custom chip look with full control over background
+    return Material(
+      color: selected
+          ? theme.colorScheme.primary.withValues(alpha: 0.15)
+          : Colors.transparent,
+      shape: StadiumBorder(side: BorderSide(color: borderColor, width: 1)),
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const StadiumBorder(),
+        hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+        child: Container(
+          width: labelWidth,
+          padding: EdgeInsets.symmetric(
+            horizontal: 12 * widget.scale,
+            vertical: 6 * widget.scale,
+          ),
+          child: Tooltip(
+            message: '$name ($count)',
+            waitDuration: const Duration(milliseconds: 350),
+            child: _buildChipLabel(
+              context,
+              name: name,
+              count: count,
+              style: labelStyle,
+            ),
           ),
         ),
       ),
-      labelStyle: labelStyle,
-      padding: EdgeInsets.symmetric(
-        horizontal: 12 * widget.scale,
-        vertical: 6 * widget.scale,
-      ),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      shape: StadiumBorder(side: BorderSide(color: borderColor, width: 1)),
-      side: BorderSide.none,
-      backgroundColor: baseColor,
-      selectedColor: selectedColor,
-      selected: selected,
-      onPressed: onPressed,
     );
   }
 
