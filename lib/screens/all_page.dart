@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:isolate';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -57,11 +58,30 @@ class _AllPageState extends State<AllPage> {
   // Custom double-tap state
   int _lastTapTime = 0;
   String _lastTappedPath = '';
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _refresh();
+    // Add global keyboard listener to debug Delete key
+    HardwareKeyboard.instance.addHandler(_globalKeyHandler);
+  }
+
+  bool _globalKeyHandler(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      debugPrint(
+        '[Global] Key: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId}) physical: ${event.physicalKey.debugName}',
+      );
+    }
+    return false; // Don't consume the event
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_globalKeyHandler);
+    _focusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -84,7 +104,7 @@ class _AllPageState extends State<AllPage> {
         setState(() {
           _entries = entries;
           _loading = false;
-          if (_entries.isNotEmpty) {
+          if (_entries.isNotEmpty && _selected == null) {
             final first = _entries.first;
             final rawName = path.basename(first.path);
             final displayName = rawName.toLowerCase().endsWith('.lnk')
@@ -95,7 +115,7 @@ class _AllPageState extends State<AllPage> {
               fullPath: first.path,
               folderPath: path.dirname(first.path),
             );
-          } else {
+          } else if (_entries.isEmpty) {
             _selected = null;
           }
         });
@@ -109,11 +129,13 @@ class _AllPageState extends State<AllPage> {
           });
           return;
         }
+
+        final showHidden = widget.showHidden;
         final entries =
             dir.listSync().where((entity) {
               final name = path.basename(entity.path);
               final lower = name.toLowerCase();
-              if (!widget.showHidden &&
+              if (!showHidden &&
                   (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
                 return false;
               }
@@ -129,10 +151,11 @@ class _AllPageState extends State<AllPage> {
                   .toLowerCase()
                   .compareTo(path.basename(b.path).toLowerCase());
             });
+
         setState(() {
           _entries = entries;
           _loading = false;
-          if (_entries.isNotEmpty) {
+          if (_entries.isNotEmpty && _selected == null) {
             final first = _entries.first;
             final rawName = path.basename(first.path);
             final displayName = rawName.toLowerCase().endsWith('.lnk')
@@ -143,7 +166,7 @@ class _AllPageState extends State<AllPage> {
               fullPath: first.path,
               folderPath: path.dirname(first.path),
             );
-          } else {
+          } else if (_entries.isEmpty) {
             _selected = null;
           }
         });
@@ -237,7 +260,7 @@ class _AllPageState extends State<AllPage> {
         position.dx + 1,
         position.dy + 1,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'open',
           child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
@@ -249,6 +272,7 @@ class _AllPageState extends State<AllPage> {
             title: Text('使用其他应用打开'),
           ),
         ),
+        PopupMenuDivider(),
         PopupMenuItem(
           value: 'move',
           child: ListTile(
@@ -262,11 +286,31 @@ class _AllPageState extends State<AllPage> {
         ),
         PopupMenuItem(
           value: 'copy_clipboard',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到剪贴板(系统)')),
+          child: ListTile(
+            leading: const Icon(Icons.copy),
+            title: const Text('复制到剪贴板(系统)'),
+            trailing: Text(
+              'Ctrl+C',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'rename',
+          child: ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text('重命名'),
+            trailing: Text('F2', style: Theme.of(context).textTheme.bodySmall),
+          ),
         ),
         PopupMenuItem(
           value: 'delete',
-          child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
+          child: ListTile(
+            leading: const Icon(Icons.delete),
+            title: const Text('删除(回收站)'),
+            trailing: Text('Del', style: Theme.of(context).textTheme.bodySmall),
+          ),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
@@ -323,6 +367,9 @@ class _AllPageState extends State<AllPage> {
           quoted: true,
         );
         break;
+      case 'rename':
+        _promptRename(entity);
+        break;
       default:
         break;
     }
@@ -353,6 +400,43 @@ class _AllPageState extends State<AllPage> {
   }
 
   String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
+
+  Future<void> _promptRename(FileSystemEntity entity) async {
+    final currentName = path.basename(entity.path);
+    final controller = TextEditingController(text: currentName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入新名称'),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (newName == null || newName.isEmpty || newName == currentName) return;
+    final parentDir = path.dirname(entity.path);
+    final newPath = path.join(parentDir, newName);
+    try {
+      await entity.rename(newPath);
+      _showSnackBar('已重命名为 $newName');
+      _refresh();
+    } catch (e) {
+      _showSnackBar('重命名失败: $e');
+    }
+  }
 
   Widget _buildSelectionDetail() {
     final selected = _selected;
@@ -386,7 +470,7 @@ class _AllPageState extends State<AllPage> {
         position.dx + 1,
         position.dy + 1,
       ),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'new_folder',
           child: ListTile(
@@ -400,7 +484,14 @@ class _AllPageState extends State<AllPage> {
         ),
         PopupMenuItem(
           value: 'paste',
-          child: ListTile(leading: Icon(Icons.paste), title: Text('粘贴')),
+          child: ListTile(
+            leading: const Icon(Icons.paste),
+            title: const Text('粘贴'),
+            trailing: Text(
+              'Ctrl+V',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         ),
       ],
     );
@@ -503,7 +594,7 @@ class _AllPageState extends State<AllPage> {
   }
 
   Future<void> _deleteEntity(FileSystemEntity entity) async {
-    final success = moveToRecycleBin(entity.path);
+    final success = await Isolate.run(() => moveToRecycleBin(entity.path));
     if (!mounted) return;
     if (success) {
       _showSnackBar('已移动到回收站');
@@ -643,117 +734,170 @@ class _AllPageState extends State<AllPage> {
 
         // Split View: List | Details
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left: File List
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onSecondaryTapDown: (details) =>
-                      _showPageMenu(details.globalPosition),
-                  child: _entries.isEmpty
-                      ? const Center(child: Text('未找到文件或快捷方式'))
-                      : ListView.builder(
-                          itemCount: _entries.length,
-                          itemBuilder: (context, index) {
-                            final entity = _entries[index];
-                            final isDir = entity is Directory;
-                            final rawName = path.basename(entity.path);
-                            final displayName =
-                                rawName.toLowerCase().endsWith('.lnk')
-                                ? rawName.substring(0, rawName.length - 4)
-                                : rawName;
-                            final isSelected =
-                                _selected?.fullPath == entity.path;
-                            return Material(
-                              color: isSelected
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withValues(alpha: 0.1)
-                                  : Colors.transparent,
-                              child: InkWell(
-                                onTapDown: (_) {
-                                  _selectEntity(entity, displayName);
-                                },
-                                onTap: () {
-                                  final now =
-                                      DateTime.now().millisecondsSinceEpoch;
-                                  if (now - _lastTapTime < 300 &&
-                                      _lastTappedPath == entity.path) {
-                                    // Double tap confirmed
-                                    if (isDir) {
-                                      _openFolder(entity.path);
-                                    } else {
-                                      openWithDefault(entity.path);
-                                    }
-                                    _lastTapTime = 0;
-                                  } else {
-                                    // Single tap
-                                    _lastTapTime = now;
-                                    _lastTappedPath = entity.path;
-                                  }
-                                },
-                                onSecondaryTapDown: (details) {
-                                  _selectEntity(entity, displayName);
-                                  _showEntityMenu(
-                                    entity,
-                                    displayName,
-                                    details.globalPosition,
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                hoverColor: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.4),
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  leading: _EntityIcon(
-                                    entity: entity,
-                                    getIconFuture: _getIconFuture,
-                                    beautifyIcon: widget.beautifyIcons,
-                                    beautifyStyle: widget.beautifyStyle,
-                                  ),
-                                  title: Tooltip(
-                                    message: displayName,
-                                    child: Text(
-                                      displayName,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  subtitle: Tooltip(
-                                    message: entity.path,
-                                    child: MiddleEllipsisText(
-                                      text: entity.path,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                  trailing: null,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ),
+          child: Focus(
+            focusNode: _focusNode,
+            autofocus: true,
+            onKeyEvent: (node, event) {
+              if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-              // Right: Details Panel
-              if (_selected != null)
-                SizedBox(
-                  width: 320,
-                  child: SingleChildScrollView(child: _buildSelectionDetail()),
+              // Debug: log all key presses
+              debugPrint(
+                'Key pressed: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId})',
+              );
+
+              final isCtrl = HardwareKeyboard.instance.isControlPressed;
+
+              if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyC) {
+                final s = _selected;
+                if (s != null) {
+                  copyEntityPathsToClipboard([s.fullPath]);
+                  _showSnackBar('已复制到剪贴板');
+                  return KeyEventResult.handled;
+                }
+              }
+              if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyV) {
+                _handlePaste();
+                return KeyEventResult.handled;
+              }
+              if (event.logicalKey == LogicalKeyboardKey.delete ||
+                  event.logicalKey == LogicalKeyboardKey.backspace ||
+                  event.logicalKey == LogicalKeyboardKey.numpadDecimal) {
+                debugPrint(
+                  'Delete/Backspace key pressed, selected: ${_selected?.fullPath}',
+                );
+                final s = _selected;
+                if (s != null) {
+                  _deleteEntity(File(s.fullPath));
+                  return KeyEventResult.handled;
+                }
+              }
+              if (event.logicalKey == LogicalKeyboardKey.f2) {
+                final s = _selected;
+                if (s != null) {
+                  final entity = File(s.fullPath).existsSync()
+                      ? File(s.fullPath) as FileSystemEntity
+                      : Directory(s.fullPath);
+                  _promptRename(entity);
+                  return KeyEventResult.handled;
+                }
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left: File List
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onSecondaryTapDown: (details) =>
+                        _showPageMenu(details.globalPosition),
+                    child: _entries.isEmpty
+                        ? const Center(child: Text('未找到文件或快捷方式'))
+                        : ListView.builder(
+                            itemCount: _entries.length,
+                            itemBuilder: (context, index) {
+                              final entity = _entries[index];
+                              final isDir = entity is Directory;
+                              final rawName = path.basename(entity.path);
+                              final displayName =
+                                  rawName.toLowerCase().endsWith('.lnk')
+                                  ? rawName.substring(0, rawName.length - 4)
+                                  : rawName;
+                              final isSelected =
+                                  _selected?.fullPath == entity.path;
+                              return Material(
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.1)
+                                    : Colors.transparent,
+                                child: InkWell(
+                                  onTapDown: (_) {
+                                    _selectEntity(entity, displayName);
+                                    _focusNode.requestFocus();
+                                  },
+                                  onTap: () {
+                                    final now =
+                                        DateTime.now().millisecondsSinceEpoch;
+                                    if (now - _lastTapTime < 300 &&
+                                        _lastTappedPath == entity.path) {
+                                      // Double tap confirmed
+                                      if (isDir) {
+                                        _openFolder(entity.path);
+                                      } else {
+                                        openWithDefault(entity.path);
+                                      }
+                                      _lastTapTime = 0;
+                                    } else {
+                                      // Single tap
+                                      _lastTapTime = now;
+                                      _lastTappedPath = entity.path;
+                                    }
+                                  },
+                                  onSecondaryTapDown: (details) {
+                                    _selectEntity(entity, displayName);
+                                    _focusNode.requestFocus();
+                                    _showEntityMenu(
+                                      entity,
+                                      displayName,
+                                      details.globalPosition,
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  hoverColor: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.4),
+                                  child: ListTile(
+                                    dense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    leading: _EntityIcon(
+                                      entity: entity,
+                                      getIconFuture: _getIconFuture,
+                                      beautifyIcon: widget.beautifyIcons,
+                                      beautifyStyle: widget.beautifyStyle,
+                                    ),
+                                    title: Tooltip(
+                                      message: displayName,
+                                      child: Text(
+                                        displayName,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodyMedium,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    subtitle: Tooltip(
+                                      message: entity.path,
+                                      child: MiddleEllipsisText(
+                                        text: entity.path,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
+                                      ),
+                                    ),
+                                    trailing: null,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ),
-            ],
+
+                // Right: Details Panel
+                if (_selected != null)
+                  SizedBox(
+                    width: 320,
+                    child: SingleChildScrollView(
+                      child: _buildSelectionDetail(),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],

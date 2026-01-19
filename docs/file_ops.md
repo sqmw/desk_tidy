@@ -10,14 +10,19 @@
 
 ## 复制实现
 - 选择目标目录后，调用 `copyEntityToDirectory(source, targetDir)`：
-  - 若目标存在同名项或目标与源相同，直接失败提示。
+  - **同名处理**：若目标路径已存在同名项，自动生成 `(1)`, `(2)` 形式的唯一名称（类似 OS 行为）。
   - 文件夹复制为递归深拷贝；文件直接 `copy`。
   - 阻止“目标在源内部”的情况，避免无限递归。
   - 成功/失败均弹出 Snackbar 提示。
-- 链接：实现位于 `lib/utils/desktop_helper.dart`，菜单触发位于
-  - `lib/screens/all_page.dart`
-  - `lib/screens/folder_page.dart`
-  - `lib/screens/file_page.dart`
+
+## 快捷键与重命名 (New)
+- **快捷键支持**：
+  - `Ctrl + C`: 复制到剪贴板。
+  - `Ctrl + V`: 粘贴剪贴板内容到当前目录。
+  - `Delete` / `Backspace` / `Numpad Decimal`: 移动到回收站。
+  - `F2`: 触发重命名。
+- **重命名**：支持右键菜单或 `F2` 弹出对话框修改名称。
+- 详情参考：[shortcuts_and_rename.md](./shortcuts_and_rename.md)
 
 ## 其他操作
 - 移动：右键“移动到…”使用目录选择器后执行 `rename`。
