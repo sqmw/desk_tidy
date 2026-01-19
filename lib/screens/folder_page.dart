@@ -291,6 +291,10 @@ class _FolderPageState extends State<FolderPage> {
           value: 'refresh',
           child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
         ),
+        PopupMenuItem(
+          value: 'paste',
+          child: ListTile(leading: Icon(Icons.paste), title: Text('粘贴')),
+        ),
       ],
     );
 
@@ -301,8 +305,35 @@ class _FolderPageState extends State<FolderPage> {
       case 'refresh':
         _refresh();
         break;
+      case 'paste':
+        await _handlePaste();
+        break;
       default:
         break;
+    }
+  }
+
+  Future<void> _handlePaste() async {
+    final files = getClipboardFilePaths();
+    if (files.isEmpty) {
+      _showSnackBar('剪贴板中没有文件');
+      return;
+    }
+
+    final targetDir = _currentPath;
+    int successCount = 0;
+    for (final srcPath in files) {
+      final result = await copyEntityToDirectory(srcPath, targetDir);
+      if (result.success) {
+        successCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      _showSnackBar('已粘贴 $successCount 个项目');
+      _refresh();
+    } else {
+      _showSnackBar('粘贴失败 (可能目标已存在或文件不可读)');
     }
   }
 

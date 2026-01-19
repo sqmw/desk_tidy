@@ -455,7 +455,30 @@ class _SettingsPageState extends State<SettingsPage> {
               onToggle: widget.onBeautifyAllChanged,
               initialValue: beautifyAny,
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('图标主题（图标+文字）'),
+              title: Row(
+                children: [
+                  const Text('图标主题（图标+文字）'),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Beta',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               description: const Text('开启后默认同时替换桌面与应用列表的图标与文字色调'),
             ),
             SettingsTile(

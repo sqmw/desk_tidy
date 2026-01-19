@@ -84,6 +84,20 @@ class _AllPageState extends State<AllPage> {
         setState(() {
           _entries = entries;
           _loading = false;
+          if (_entries.isNotEmpty) {
+            final first = _entries.first;
+            final rawName = path.basename(first.path);
+            final displayName = rawName.toLowerCase().endsWith('.lnk')
+                ? rawName.substring(0, rawName.length - 4)
+                : rawName;
+            _selected = _EntitySelectionInfo(
+              name: displayName,
+              fullPath: first.path,
+              folderPath: path.dirname(first.path),
+            );
+          } else {
+            _selected = null;
+          }
         });
       } else {
         final dir = Directory(_currentPath!);
@@ -118,6 +132,20 @@ class _AllPageState extends State<AllPage> {
         setState(() {
           _entries = entries;
           _loading = false;
+          if (_entries.isNotEmpty) {
+            final first = _entries.first;
+            final rawName = path.basename(first.path);
+            final displayName = rawName.toLowerCase().endsWith('.lnk')
+                ? rawName.substring(0, rawName.length - 4)
+                : rawName;
+            _selected = _EntitySelectionInfo(
+              name: displayName,
+              fullPath: first.path,
+              folderPath: path.dirname(first.path),
+            );
+          } else {
+            _selected = null;
+          }
         });
       }
     } catch (e) {
@@ -370,6 +398,10 @@ class _AllPageState extends State<AllPage> {
           value: 'refresh',
           child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
         ),
+        PopupMenuItem(
+          value: 'paste',
+          child: ListTile(leading: Icon(Icons.paste), title: Text('粘贴')),
+        ),
       ],
     );
 
@@ -380,8 +412,48 @@ class _AllPageState extends State<AllPage> {
       case 'refresh':
         _refresh();
         break;
+      case 'paste':
+        await _handlePaste();
+        break;
       default:
         break;
+    }
+  }
+
+  Future<void> _handlePaste() async {
+    final files = getClipboardFilePaths();
+    if (files.isEmpty) {
+      _showSnackBar('剪贴板中没有文件');
+      return;
+    }
+
+    final targetDir =
+        _currentPath ??
+        widget
+            .desktopPath; // Paste to root desktop if _currentPath is null (All view)
+    // Wait, _currentPath null means "Aggregate desktop roots".
+    // If I paste, where should it go?
+    // User says "All's first layer belongs to desktop folder is also a folder".
+    // So pasting to widget.desktopPath (primary desktop) is a reasonable default.
+
+    int successCount = 0;
+    for (final srcPath in files) {
+      // Auto-rename logic? Or just fail if exists?
+      // User didn't specify. Standard explorer behavior is to copy.
+      // copyEntityToDirectory handles overwrite checks (returns success: false).
+      // Let's rely on copyEntityToDirectory's checks.
+
+      final result = await copyEntityToDirectory(srcPath, targetDir);
+      if (result.success) {
+        successCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      _showSnackBar('已粘贴 $successCount 个项目');
+      _refresh();
+    } else {
+      _showSnackBar('粘贴失败 (可能目标已存在或文件不可读)');
     }
   }
 
@@ -516,6 +588,7 @@ class _AllPageState extends State<AllPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
           child: GlassContainer(
@@ -567,97 +640,120 @@ class _AllPageState extends State<AllPage> {
             ),
           ),
         ),
-        _buildSelectionDetail(),
+
+        // Split View: List | Details
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onSecondaryTapDown: (details) =>
-                _showPageMenu(details.globalPosition),
-            child: _entries.isEmpty
-                ? const Center(child: Text('未找到文件或快捷方式'))
-                : ListView.builder(
-                    itemCount: _entries.length,
-                    itemBuilder: (context, index) {
-                      final entity = _entries[index];
-                      final isDir = entity is Directory;
-                      final rawName = path.basename(entity.path);
-                      final displayName = rawName.toLowerCase().endsWith('.lnk')
-                          ? rawName.substring(0, rawName.length - 4)
-                          : rawName;
-                      final isSelected = _selected?.fullPath == entity.path;
-                      return Material(
-                        color: isSelected
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.1)
-                            : Colors.transparent,
-                        child: InkWell(
-                          onTapDown: (_) {
-                            _selectEntity(entity, displayName);
-                          },
-                          onTap: () {
-                            final now = DateTime.now().millisecondsSinceEpoch;
-                            if (now - _lastTapTime < 300 &&
-                                _lastTappedPath == entity.path) {
-                              // Double tap confirmed
-                              if (isDir) {
-                                _openFolder(entity.path);
-                              } else {
-                                openWithDefault(entity.path);
-                              }
-                              _lastTapTime = 0;
-                            } else {
-                              // Single tap
-                              _lastTapTime = now;
-                              _lastTappedPath = entity.path;
-                            }
-                          },
-                          onSecondaryTapDown: (details) {
-                            _selectEntity(entity, displayName);
-                            _showEntityMenu(
-                              entity,
-                              displayName,
-                              details.globalPosition,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left: File List
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onSecondaryTapDown: (details) =>
+                      _showPageMenu(details.globalPosition),
+                  child: _entries.isEmpty
+                      ? const Center(child: Text('未找到文件或快捷方式'))
+                      : ListView.builder(
+                          itemCount: _entries.length,
+                          itemBuilder: (context, index) {
+                            final entity = _entries[index];
+                            final isDir = entity is Directory;
+                            final rawName = path.basename(entity.path);
+                            final displayName =
+                                rawName.toLowerCase().endsWith('.lnk')
+                                ? rawName.substring(0, rawName.length - 4)
+                                : rawName;
+                            final isSelected =
+                                _selected?.fullPath == entity.path;
+                            return Material(
+                              color: isSelected
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withValues(alpha: 0.1)
+                                  : Colors.transparent,
+                              child: InkWell(
+                                onTapDown: (_) {
+                                  _selectEntity(entity, displayName);
+                                },
+                                onTap: () {
+                                  final now =
+                                      DateTime.now().millisecondsSinceEpoch;
+                                  if (now - _lastTapTime < 300 &&
+                                      _lastTappedPath == entity.path) {
+                                    // Double tap confirmed
+                                    if (isDir) {
+                                      _openFolder(entity.path);
+                                    } else {
+                                      openWithDefault(entity.path);
+                                    }
+                                    _lastTapTime = 0;
+                                  } else {
+                                    // Single tap
+                                    _lastTapTime = now;
+                                    _lastTappedPath = entity.path;
+                                  }
+                                },
+                                onSecondaryTapDown: (details) {
+                                  _selectEntity(entity, displayName);
+                                  _showEntityMenu(
+                                    entity,
+                                    displayName,
+                                    details.globalPosition,
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                hoverColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.4),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  leading: _EntityIcon(
+                                    entity: entity,
+                                    getIconFuture: _getIconFuture,
+                                    beautifyIcon: widget.beautifyIcons,
+                                    beautifyStyle: widget.beautifyStyle,
+                                  ),
+                                  title: Tooltip(
+                                    message: displayName,
+                                    child: Text(
+                                      displayName,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  subtitle: Tooltip(
+                                    message: entity.path,
+                                    child: MiddleEllipsisText(
+                                      text: entity.path,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  trailing: null,
+                                ),
+                              ),
                             );
                           },
-                          borderRadius: BorderRadius.circular(8),
-                          hoverColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.4),
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                            ),
-                            leading: _EntityIcon(
-                              entity: entity,
-                              getIconFuture: _getIconFuture,
-                              beautifyIcon: widget.beautifyIcons,
-                              beautifyStyle: widget.beautifyStyle,
-                            ),
-                            title: Tooltip(
-                              message: displayName,
-                              child: Text(
-                                displayName,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            subtitle: Tooltip(
-                              message: entity.path,
-                              child: MiddleEllipsisText(
-                                text: entity.path,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                            trailing: null,
-                          ),
                         ),
-                      );
-                    },
-                  ),
+                ),
+              ),
+
+              // Right: Details Panel
+              if (_selected != null)
+                SizedBox(
+                  width: 320,
+                  child: SingleChildScrollView(child: _buildSelectionDetail()),
+                ),
+            ],
           ),
         ),
       ],

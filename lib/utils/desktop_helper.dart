@@ -1658,3 +1658,31 @@ String _cacheKeyForSystemIndex(int index, int size) =>
 
 String _cacheKeyForFile(String filePath, int size) =>
     'v$_iconCacheVersion|file:${path.normalize(filePath)}|$size';
+
+List<String> getClipboardFilePaths() {
+  if (!Platform.isWindows) return [];
+  if (OpenClipboard(NULL) == 0) return [];
+
+  final paths = <String>[];
+  try {
+    final hDrop = GetClipboardData(CF_HDROP);
+    if (hDrop != 0) {
+      final count = DragQueryFile(hDrop, 0xFFFFFFFF, nullptr, 0);
+      for (var i = 0; i < count; i++) {
+        final len = DragQueryFile(hDrop, i, nullptr, 0);
+        if (len > 0) {
+          final buffer = calloc<Uint16>(len + 1);
+          try {
+            DragQueryFile(hDrop, i, buffer.cast<Utf16>(), len + 1);
+            paths.add(buffer.cast<Utf16>().toDartString());
+          } finally {
+            calloc.free(buffer);
+          }
+        }
+      }
+    }
+  } finally {
+    CloseClipboard();
+  }
+  return paths;
+}
