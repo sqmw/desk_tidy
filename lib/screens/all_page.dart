@@ -594,10 +594,12 @@ class _AllPageState extends State<AllPage> {
   }
 
   Future<void> _deleteEntity(FileSystemEntity entity) async {
+    final fileName = path.basename(entity.path);
     final success = await Isolate.run(() => moveToRecycleBin(entity.path));
     if (!mounted) return;
     if (success) {
-      _showSnackBar('已移动到回收站');
+      _showSnackBar('已移动至回收站: $fileName');
+      setState(() => _selected = null); // Clear selection
       _refresh();
     } else {
       _showSnackBar('删除失败');
@@ -618,6 +620,7 @@ class _AllPageState extends State<AllPage> {
       final dir = Directory(targetDir);
       if (!dir.existsSync()) {
         _showSnackBar('目标路径不存在');
+
         return;
       }
       if (File(dest).existsSync() || Directory(dest).existsSync()) {

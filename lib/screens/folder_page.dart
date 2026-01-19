@@ -468,10 +468,12 @@ class _FolderPageState extends State<FolderPage> {
   }
 
   Future<void> _deleteEntity(FileSystemEntity entity) async {
+    final fileName = path.basename(entity.path);
     final success = await Isolate.run(() => moveToRecycleBin(entity.path));
     if (!mounted) return;
     if (success) {
-      _showSnackBar('已移动到回收站');
+      _showSnackBar('已移动至回收站: $fileName');
+      setState(() => _selectedPath = null); // Clear selection
       _refresh();
     } else {
       _showSnackBar('删除失败');
@@ -596,6 +598,11 @@ class _FolderPageState extends State<FolderPage> {
             autofocus: true,
             onKeyEvent: (node, event) {
               if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+              // Verbose debug log
+              debugPrint(
+                '[FolderPage] Key: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId})',
+              );
 
               final isCtrl = HardwareKeyboard.instance.isControlPressed;
 

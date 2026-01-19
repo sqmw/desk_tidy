@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -127,10 +128,13 @@ class _FilePageState extends State<FilePage> {
   }
 
   Future<void> _deleteFile(String filePath) async {
-    final success = moveToRecycleBin(filePath);
+    // Show loading or immediate feedback
+    final fileName = path.basename(filePath);
+    final success = await Isolate.run(() => moveToRecycleBin(filePath));
     if (!mounted) return;
     if (success) {
-      _showSnackBar('已移动到回收站');
+      _showSnackBar('已移动至回收站: $fileName');
+      setState(() => _selectedPath = null); // Clear selection
       _refresh();
     } else {
       _showSnackBar('删除失败');
@@ -185,6 +189,11 @@ class _FilePageState extends State<FilePage> {
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+        // Verbose debug log
+        debugPrint(
+          '[FilePage] Key: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId})',
+        );
 
         final isCtrl = HardwareKeyboard.instance.isControlPressed;
 
