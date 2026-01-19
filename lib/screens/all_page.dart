@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:isolate';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import '../widgets/beautified_icon.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
 import '../widgets/middle_ellipsis_text.dart';
+import '../widgets/operation_progress_bar.dart';
 
 class AllPage extends StatefulWidget {
   final String desktopPath;
@@ -394,9 +394,7 @@ class _AllPageState extends State<AllPage> {
     final value = quoted ? _quote(raw) : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Copied $label')));
+    _showSnackBar('已复制 $label');
   }
 
   String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
@@ -595,14 +593,14 @@ class _AllPageState extends State<AllPage> {
 
   Future<void> _deleteEntity(FileSystemEntity entity) async {
     final fileName = path.basename(entity.path);
-    final success = await Isolate.run(() => moveToRecycleBin(entity.path));
+    final success = moveToRecycleBin(entity.path);
     if (!mounted) return;
     if (success) {
       _showSnackBar('已移动至回收站: $fileName');
-      setState(() => _selected = null); // Clear selection
+      setState(() => _selected = null);
       _refresh();
     } else {
-      _showSnackBar('删除失败');
+      _showSnackBar('删除失败', success: false);
     }
   }
 
@@ -666,10 +664,8 @@ class _AllPageState extends State<AllPage> {
     await openWithApp(appPath, targetPath);
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _showSnackBar(String message, {bool success = true}) {
+    OperationManager.instance.quickTask(message, success: success);
   }
 
   @override

@@ -7,6 +7,7 @@ import 'screens/desk_tidy_home_page.dart';
 import 'providers/theme_notifier.dart';
 import 'utils/single_instance.dart';
 import 'utils/app_preferences.dart';
+import 'widgets/operation_progress_bar.dart';
 
 Future<void> main() async {
   // Guard as early as possible to prevent extra processes from fully spinning up.
@@ -98,7 +99,9 @@ class _MyAppState extends State<MyApp> {
           ],
           supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
           themeMode: themeMode,
-          home: const DeskTidyHomePage(),
+          home: const Stack(
+            children: [DeskTidyHomePage(), OperationProgressBar()],
+          ),
         );
       },
     );

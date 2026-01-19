@@ -28,6 +28,7 @@ import 'folder_page.dart';
 import '../services/window_dock_logic.dart';
 import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
+import '../widgets/operation_progress_bar.dart';
 import '../services/hotkey_service.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
@@ -599,9 +600,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     );
     if (exists) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('分类已存在')));
+        OperationManager.instance.quickTask('分类已存在', success: false);
       }
       return;
     }
@@ -656,9 +655,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await _saveCategories();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已删除分类')));
+    OperationManager.instance.quickTask('已删除分类');
   }
 
   void _toggleInlineSelection(ShortcutItem shortcut) {
@@ -728,9 +725,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     );
     if (exists) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('分类已存在')));
+        OperationManager.instance.quickTask('分类已存在', success: false);
       }
       return null;
     }
@@ -778,9 +773,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await _saveCategories();
     if (!mounted) return;
     final text = alreadyIn ? '已从分类移除' : '已添加到分类';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$text：${category.name}')));
+    OperationManager.instance.quickTask('$text：${category.name}');
   }
 
   Future<String?> _promptCategoryName() async {
@@ -857,9 +850,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       if (name == null) return;
       final created = await _createCategory(name, initialShortcut: shortcut);
       if (!mounted || created == null) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已添加到分类：${created.name}')));
+      OperationManager.instance.quickTask('已添加到分类：${created.name}');
       return;
     }
 
@@ -1886,14 +1877,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     if (!mounted) return;
     if (!ok) {
       setState(() => _hideDesktopItems = !hide);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('切换失败，请重试')));
+      OperationManager.instance.quickTask('切换失败，请重试', success: false);
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标')));
+    OperationManager.instance.quickTask(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标');
     await _syncDesktopIconVisibility();
   }
 
