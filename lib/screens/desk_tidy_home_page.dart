@@ -229,7 +229,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
     _dockManager.onPresentFromHotkey();
-    await windowManager.focus();
+
+    // 使用强制前台窗口方法获取真正的键盘焦点
+    forceSetForegroundWindow(_windowHandle);
+    await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
     await _syncDesktopIconVisibility();
 
     unawaited(
@@ -245,7 +248,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       if (_selectedIndex != 0) {
         setState(() => _selectedIndex = 0);
       }
-      _appSearchFocus.requestFocus();
+      // 延迟一小段时间确保原生焦点已完全切换
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) _appSearchFocus.requestFocus();
+      });
     });
   }
 

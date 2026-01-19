@@ -219,3 +219,6 @@ await windowManager.show();
 
 点击窗口内部不会隐藏，与热区唤醒行为一致。
 
+### 键盘焦点
+
+为确保快捷键唤醒后能够立即键入，使用了 `forceSetForegroundWindow` 函数（位于 `desktop_helper.dart`）。该函数通过 `AttachThreadInput` 技术绕过 Windows 对后台窗口的焦点限制，确保应用获得系统级键盘焦点。

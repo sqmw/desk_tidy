@@ -148,6 +148,44 @@ int? findMainFlutterWindowHandle() {
   return _enumFoundHwnd == 0 ? null : _enumFoundHwnd;
 }
 
+/// 强制将窗口设置为前台并获取键盘焦点。
+/// 使用 AttachThreadInput 技巧绕过 Windows 对后台窗口的焦点限制。
+/// 返回 true 如果成功获取焦点。
+bool forceSetForegroundWindow(int hwnd) {
+  if (hwnd == 0) return false;
+
+  final foregroundHwnd = GetForegroundWindow();
+  if (foregroundHwnd == hwnd) return true; // 已经是前台窗口
+
+  final currentThreadId = GetCurrentThreadId();
+  final pidPtr = calloc<Uint32>();
+  int foregroundThreadId;
+  try {
+    foregroundThreadId = GetWindowThreadProcessId(foregroundHwnd, pidPtr);
+  } finally {
+    calloc.free(pidPtr);
+  }
+
+  bool attached = false;
+  if (foregroundThreadId != 0 && foregroundThreadId != currentThreadId) {
+    attached =
+        AttachThreadInput(currentThreadId, foregroundThreadId, TRUE) != 0;
+  }
+
+  try {
+    // 尝试多种方法确保获得焦点
+    SetForegroundWindow(hwnd);
+    BringWindowToTop(hwnd);
+    SetFocus(hwnd);
+  } finally {
+    if (attached) {
+      AttachThreadInput(currentThreadId, foregroundThreadId, FALSE);
+    }
+  }
+
+  return GetForegroundWindow() == hwnd;
+}
+
 int _findDesktopListView() {
   Pointer<Utf16> cn(String s) => s.toNativeUtf16();
 
@@ -195,87 +233,77 @@ int _findDesktopListView() {
   }
 }
 
-typedef _SHGetImageListNative = Int32 Function(
-  Int32 iImageList,
-  Pointer<GUID> riid,
-  Pointer<Pointer> ppv,
-);
-typedef _SHGetImageListDart = int Function(
-  int iImageList,
-  Pointer<GUID> riid,
-  Pointer<Pointer> ppv,
-);
+typedef _SHGetImageListNative =
+    Int32 Function(Int32 iImageList, Pointer<GUID> riid, Pointer<Pointer> ppv);
+typedef _SHGetImageListDart =
+    int Function(int iImageList, Pointer<GUID> riid, Pointer<Pointer> ppv);
 
-final _SHGetImageListDart _shGetImageList =
-    _shell32.lookupFunction<_SHGetImageListNative, _SHGetImageListDart>('#727');
+final _SHGetImageListDart _shGetImageList = _shell32
+    .lookupFunction<_SHGetImageListNative, _SHGetImageListDart>('#727');
 
-typedef _DrawIconExNative = Int32 Function(
-  IntPtr hdc,
-  Int32 xLeft,
-  Int32 yTop,
-  IntPtr hIcon,
-  Int32 cxWidth,
-  Int32 cyWidth,
-  Uint32 istepIfAniCur,
-  IntPtr hbrFlickerFreeDraw,
-  Uint32 diFlags,
-);
-typedef _DrawIconExDart = int Function(
-  int hdc,
-  int xLeft,
-  int yTop,
-  int hIcon,
-  int cxWidth,
-  int cyWidth,
-  int istepIfAniCur,
-  int hbrFlickerFreeDraw,
-  int diFlags,
-);
+typedef _DrawIconExNative =
+    Int32 Function(
+      IntPtr hdc,
+      Int32 xLeft,
+      Int32 yTop,
+      IntPtr hIcon,
+      Int32 cxWidth,
+      Int32 cyWidth,
+      Uint32 istepIfAniCur,
+      IntPtr hbrFlickerFreeDraw,
+      Uint32 diFlags,
+    );
+typedef _DrawIconExDart =
+    int Function(
+      int hdc,
+      int xLeft,
+      int yTop,
+      int hIcon,
+      int cxWidth,
+      int cyWidth,
+      int istepIfAniCur,
+      int hbrFlickerFreeDraw,
+      int diFlags,
+    );
 
-final _DrawIconExDart _drawIconEx =
-    _user32.lookupFunction<_DrawIconExNative, _DrawIconExDart>('DrawIconEx');
+final _DrawIconExDart _drawIconEx = _user32
+    .lookupFunction<_DrawIconExNative, _DrawIconExDart>('DrawIconEx');
 
-typedef _SHChangeNotifyNative = Void Function(
-  Uint32 wEventId,
-  Uint32 uFlags,
-  Pointer pv,
-  Pointer pv2,
-);
-typedef _SHChangeNotifyDart = void Function(
-  int wEventId,
-  int uFlags,
-  Pointer pv,
-  Pointer pv2,
-);
+typedef _SHChangeNotifyNative =
+    Void Function(Uint32 wEventId, Uint32 uFlags, Pointer pv, Pointer pv2);
+typedef _SHChangeNotifyDart =
+    void Function(int wEventId, int uFlags, Pointer pv, Pointer pv2);
 
-final _SHChangeNotifyDart _shChangeNotify =
-    _shell32.lookupFunction<_SHChangeNotifyNative, _SHChangeNotifyDart>(
-  'SHChangeNotify',
-);
+final _SHChangeNotifyDart _shChangeNotify = _shell32
+    .lookupFunction<_SHChangeNotifyNative, _SHChangeNotifyDart>(
+      'SHChangeNotify',
+    );
 
-typedef _SendMessageTimeoutNative = IntPtr Function(
-  IntPtr hWnd,
-  Uint32 msg,
-  IntPtr wParam,
-  IntPtr lParam,
-  Uint32 fuFlags,
-  Uint32 uTimeout,
-  Pointer<UintPtr> lpdwResult,
-);
-typedef _SendMessageTimeoutDart = int Function(
-  int hWnd,
-  int msg,
-  int wParam,
-  int lParam,
-  int flags,
-  int timeout,
-  Pointer<UintPtr> result,
-);
+typedef _SendMessageTimeoutNative =
+    IntPtr Function(
+      IntPtr hWnd,
+      Uint32 msg,
+      IntPtr wParam,
+      IntPtr lParam,
+      Uint32 fuFlags,
+      Uint32 uTimeout,
+      Pointer<UintPtr> lpdwResult,
+    );
+typedef _SendMessageTimeoutDart =
+    int Function(
+      int hWnd,
+      int msg,
+      int wParam,
+      int lParam,
+      int flags,
+      int timeout,
+      Pointer<UintPtr> result,
+    );
 
-final _SendMessageTimeoutDart _sendMessageTimeout =
-    _user32.lookupFunction<_SendMessageTimeoutNative, _SendMessageTimeoutDart>(
-  'SendMessageTimeoutW',
-);
+final _SendMessageTimeoutDart _sendMessageTimeout = _user32
+    .lookupFunction<_SendMessageTimeoutNative, _SendMessageTimeoutDart>(
+      'SendMessageTimeoutW',
+    );
 
 void _shellNotifyDesktopChanged() {
   _shChangeNotify(_shcneAssocChanged, _shcnfIdList, nullptr, nullptr);
@@ -468,8 +496,13 @@ bool _setRegistryRunValue({
 }) {
   final subKeyPtr = _registryRunKeyPath.toNativeUtf16();
   final hKeyOut = calloc<HKEY>();
-  final openResult =
-      RegOpenKeyEx(HKEY_CURRENT_USER, subKeyPtr, 0, KEY_SET_VALUE, hKeyOut);
+  final openResult = RegOpenKeyEx(
+    HKEY_CURRENT_USER,
+    subKeyPtr,
+    0,
+    KEY_SET_VALUE,
+    hKeyOut,
+  );
   calloc.free(subKeyPtr);
   if (openResult != ERROR_SUCCESS) {
     calloc.free(hKeyOut);
@@ -502,8 +535,13 @@ bool _setRegistryRunValue({
 bool _deleteRegistryRunValue({required String appName}) {
   final subKeyPtr = _registryRunKeyPath.toNativeUtf16();
   final hKeyOut = calloc<HKEY>();
-  final openResult =
-      RegOpenKeyEx(HKEY_CURRENT_USER, subKeyPtr, 0, KEY_SET_VALUE, hKeyOut);
+  final openResult = RegOpenKeyEx(
+    HKEY_CURRENT_USER,
+    subKeyPtr,
+    0,
+    KEY_SET_VALUE,
+    hKeyOut,
+  );
   calloc.free(subKeyPtr);
   if (openResult != ERROR_SUCCESS) {
     calloc.free(hKeyOut);
@@ -527,8 +565,13 @@ bool _deleteRegistryRunValue({required String appName}) {
 bool _hasRegistryRunValue({required String appName}) {
   final subKeyPtr = _registryRunKeyPath.toNativeUtf16();
   final hKeyOut = calloc<HKEY>();
-  final openResult =
-      RegOpenKeyEx(HKEY_CURRENT_USER, subKeyPtr, 0, KEY_QUERY_VALUE, hKeyOut);
+  final openResult = RegOpenKeyEx(
+    HKEY_CURRENT_USER,
+    subKeyPtr,
+    0,
+    KEY_QUERY_VALUE,
+    hKeyOut,
+  );
   calloc.free(subKeyPtr);
   if (openResult != ERROR_SUCCESS) {
     calloc.free(hKeyOut);
@@ -542,8 +585,14 @@ bool _hasRegistryRunValue({required String appName}) {
   final typePtr = calloc<DWORD>();
   final sizePtr = calloc<DWORD>();
   try {
-    final querySizeResult =
-        RegQueryValueEx(hKey, valueNamePtr, nullptr, typePtr, nullptr, sizePtr);
+    final querySizeResult = RegQueryValueEx(
+      hKey,
+      valueNamePtr,
+      nullptr,
+      typePtr,
+      nullptr,
+      sizePtr,
+    );
     if (querySizeResult == ERROR_FILE_NOT_FOUND) return false;
     if (querySizeResult != ERROR_SUCCESS) return false;
     if (sizePtr.value == 0) return false;
@@ -578,18 +627,15 @@ class IImageList extends IUnknown {
   IImageList(super.ptr);
 
   int getIcon(int i, int flags, Pointer<IntPtr> icon) => (ptr.ref.vtable + 10)
-          .cast<
-              Pointer<
-                  NativeFunction<
-                      Int32 Function(
-                          Pointer, Int32, Int32, Pointer<IntPtr>)>>>()
-          .value
-          .asFunction<int Function(Pointer, int, int, Pointer<IntPtr>)>()(
-        ptr.ref.lpVtbl,
-        i,
-        flags,
-        icon,
-      );
+      .cast<
+        Pointer<
+          NativeFunction<Int32 Function(Pointer, Int32, Int32, Pointer<IntPtr>)>
+        >
+      >()
+      .value
+      .asFunction<
+        int Function(Pointer, int, int, Pointer<IntPtr>)
+      >()(ptr.ref.lpVtbl, i, flags, icon);
 }
 
 class _IconLocation {
@@ -635,8 +681,10 @@ Future<String> getDesktopPath() async {
   return 'C:\\Users\\Public\\Desktop';
 }
 
-List<String> _desktopLocations(String primaryPath,
-    {bool includePublic = true}) {
+List<String> _desktopLocations(
+  String primaryPath, {
+  bool includePublic = true,
+}) {
   final destinations = <String>{primaryPath};
   if (includePublic) {
     final publicDesktop = _getKnownFolderPath(FOLDERID_PublicDesktop);
@@ -647,9 +695,10 @@ List<String> _desktopLocations(String primaryPath,
   return destinations.toList();
 }
 
-List<String> desktopLocations(String primaryPath,
-        {bool includePublic = true}) =>
-    _desktopLocations(primaryPath, includePublic: includePublic);
+List<String> desktopLocations(
+  String primaryPath, {
+  bool includePublic = true,
+}) => _desktopLocations(primaryPath, includePublic: includePublic);
 
 bool isHiddenOrSystem(String fullPath) {
   try {
@@ -706,10 +755,7 @@ Future<bool> openWithDefault(String fullPath) async {
 ///
 /// - If [select] is true, attempts to select the file/folder in its parent.
 /// - If [select] is false, opens the folder (or selects the file by default).
-Future<bool> openInExplorer(
-  String fullPath, {
-  bool? select,
-}) async {
+Future<bool> openInExplorer(String fullPath, {bool? select}) async {
   try {
     if (!Platform.isWindows) return false;
     final shouldSelect = select ?? !isDirectory(fullPath);
@@ -762,10 +808,7 @@ bool showTrayBalloon({
   }
 }
 
-bool copyEntityPathsToClipboard(
-  List<String> paths, {
-  bool cut = false,
-}) {
+bool copyEntityPathsToClipboard(List<String> paths, {bool cut = false}) {
   if (!Platform.isWindows) return false;
   final filtered = paths.where((p) => p.trim().isNotEmpty).toList();
   if (filtered.isEmpty) return false;
@@ -799,8 +842,7 @@ bool copyEntityPathsToClipboard(
       ..x = 0
       ..y = 0;
 
-    final dataPtr =
-        (locked.cast<Uint8>() + sizeOf<DROPFILES>()).cast<Uint16>();
+    final dataPtr = (locked.cast<Uint8>() + sizeOf<DROPFILES>()).cast<Uint16>();
     dataPtr.asTypedList(units.length).setAll(0, units);
   } finally {
     GlobalUnlock(hGlobal);
@@ -860,11 +902,7 @@ class CopyResult {
   final String? message;
   final String? destPath;
 
-  const CopyResult({
-    required this.success,
-    this.message,
-    this.destPath,
-  });
+  const CopyResult({required this.success, this.message, this.destPath});
 }
 
 Future<CopyResult> copyEntityToDirectory(
@@ -894,13 +932,9 @@ Future<CopyResult> copyEntityToDirectory(
       return const CopyResult(success: false, message: '目标已存在同名项');
     }
 
-    final type =
-        FileSystemEntity.typeSync(sourcePath, followLinks: false);
+    final type = FileSystemEntity.typeSync(sourcePath, followLinks: false);
     if (type == FileSystemEntityType.directory) {
-      await _copyDirectoryRecursive(
-        Directory(sourcePath),
-        Directory(destPath),
-      );
+      await _copyDirectoryRecursive(Directory(sourcePath), Directory(destPath));
     } else if (type == FileSystemEntityType.file) {
       await File(sourcePath).copy(destPath);
     } else {
@@ -976,12 +1010,7 @@ Future<List<String>> scanDesktopShortcuts(
 }) async {
   final directories = _desktopLocations(desktopPath);
   final shortcuts = <String>{};
-  const allowedExtensions = {
-    '.exe',
-    '.lnk',
-    '.url',
-    '.appref-ms',
-  };
+  const allowedExtensions = {'.exe', '.lnk', '.url', '.appref-ms'};
 
   for (final dirPath in directories) {
     try {
@@ -1034,8 +1063,11 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
     final existing = _readIconCache(cacheKey);
     if (existing.found) return existing.value;
 
-    final hicon =
-        _extractHiconFromLocation(location.path, location.index, desiredSize);
+    final hicon = _extractHiconFromLocation(
+      location.path,
+      location.index,
+      desiredSize,
+    );
     if (hicon != 0) {
       final png = _encodeHicon(hicon, size: desiredSize);
       DestroyIcon(hicon);
@@ -1111,8 +1143,11 @@ Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
     final imageList = IImageList(imageListPtr);
     final hiconPtr = calloc<IntPtr>();
     try {
-      final hr2 =
-          imageList.getIcon(iconIndex, _ildTransparent | _ildImage, hiconPtr);
+      final hr2 = imageList.getIcon(
+        iconIndex,
+        _ildTransparent | _ildImage,
+        hiconPtr,
+      );
       if (FAILED(hr2) || hiconPtr.value == 0) return null;
       final png = _encodeHicon(hiconPtr.value, size: desiredSize);
       DestroyIcon(hiconPtr.value);
@@ -1246,8 +1281,7 @@ Uint8List? _hiconToPng(int icon, {required int size}) {
 
     oldBmp = SelectObject(memDC, dib);
     final pixelCount = size * size * 4;
-    final pixelsView =
-        ppBits.value.cast<Uint8>().asTypedList(pixelCount);
+    final pixelsView = ppBits.value.cast<Uint8>().asTypedList(pixelCount);
     pixelsView.fillRange(0, pixelsView.length, 0);
 
     _drawIconEx(memDC, 0, 0, icon, size, size, 0, NULL, _diNormal);
@@ -1337,8 +1371,7 @@ Uint8List? _hiconToPngBitmap(int icon, {required int size}) {
         );
         if (lines == 0) return null;
 
-        final pixels =
-            Uint8List.fromList(buffer.asTypedList(stride * height));
+        final pixels = Uint8List.fromList(buffer.asTypedList(stride * height));
         final image = img.Image.fromBytes(
           width: width,
           height: height,
@@ -1348,8 +1381,9 @@ Uint8List? _hiconToPngBitmap(int icon, {required int size}) {
           rowStride: stride,
         );
 
-        final mask =
-            hbmMask != 0 ? _readMaskBits(hbmMask, width, height, hasColor: true) : null;
+        final mask = hbmMask != 0
+            ? _readMaskBits(hbmMask, width, height, hasColor: true)
+            : null;
         final alphaMeaningful = _alphaHasMeaning(image);
         if (mask != null) {
           _applyMaskToAlpha(image, mask, alphaMeaningful: alphaMeaningful);
@@ -1574,29 +1608,30 @@ Future<Uint8List?> extractIconAsync(String filePath, {int size = 64}) {
 }
 
 void _drainIconTasks() {
-  while (_activeIconIsolates < _maxIconIsolates &&
-      _iconTaskQueue.isNotEmpty) {
+  while (_activeIconIsolates < _maxIconIsolates && _iconTaskQueue.isNotEmpty) {
     final task = _iconTaskQueue.removeFirst();
     _activeIconIsolates++;
 
     Isolate.run<Uint8List?>(() => extractIcon(task.path, size: task.size))
         .then((data) {
-      // Fallback: if isolate extraction fails/returns empty, retry in main
-      // isolate to avoid missing icons (may block briefly but recovers).
-      Uint8List? result = data;
-      if (result == null || result.isEmpty) {
-        result = extractIcon(task.path, size: task.size);
-      }
-      _writeIconCache(task.cacheKey, result);
-      task.completer.complete(result);
-    }).catchError((_, __) {
-      final result = extractIcon(task.path, size: task.size);
-      _writeIconCache(task.cacheKey, result);
-      task.completer.complete(result);
-    }).whenComplete(() {
-      _activeIconIsolates--;
-      _drainIconTasks();
-    });
+          // Fallback: if isolate extraction fails/returns empty, retry in main
+          // isolate to avoid missing icons (may block briefly but recovers).
+          Uint8List? result = data;
+          if (result == null || result.isEmpty) {
+            result = extractIcon(task.path, size: task.size);
+          }
+          _writeIconCache(task.cacheKey, result);
+          task.completer.complete(result);
+        })
+        .catchError((_, __) {
+          final result = extractIcon(task.path, size: task.size);
+          _writeIconCache(task.cacheKey, result);
+          task.completer.complete(result);
+        })
+        .whenComplete(() {
+          _activeIconIsolates--;
+          _drainIconTasks();
+        });
   }
 }
 
