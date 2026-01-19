@@ -1293,6 +1293,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       return;
     }
 
+    // 如果当前在设置页面（Index 4），不自动隐藏
+    // 允许用户在设置页面进行各种操作（如选择文件、复制文本）而不受自动隐藏干扰
+    if (_selectedIndex == 4) return;
+
     _windowFocusNotifier.value = false;
     // 窗口失去焦点时，可能是点击了外部，检查是否需要隐藏
     unawaited(_dockManager.onMouseClickOutside());
