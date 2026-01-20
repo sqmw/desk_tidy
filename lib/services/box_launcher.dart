@@ -91,7 +91,7 @@ class BoxLauncher {
     // 1. Production: Same directory as current exe
     final mainExe = Platform.resolvedExecutable;
     final mainDir = p.dirname(mainExe);
-    final prodPath = p.join(mainDir, 'desk_tidy_box.exe');
+    final prodPath = p.join(mainDir, 'box', 'desk_tidy_box.exe');
     if (await File(prodPath).exists()) return prodPath;
 
     // 2. Development: Sibling project directory

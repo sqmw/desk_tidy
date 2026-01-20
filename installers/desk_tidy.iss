@@ -12,6 +12,10 @@
   #define MyBuildDir "..\\build\\windows\\x64\\runner\\Release"
 #endif
 
+#ifndef MyBoxBuildDir
+  #define MyBoxBuildDir "f:\\language\\dart\\code\\desk_tidy_box\\build\\windows\\x64\\runner\\Release"
+#endif
+
 #ifndef MyOutputDir
   #define MyOutputDir "build\\installer"
 #endif
@@ -41,12 +45,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; Build output (ensure flutter build windows --release ran first)
-Source: "{#MyBuildDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: "*.pdb,*.msix"
+; Main App (Desk Tidy) - Standard Install
+Source: "{#MyBuildDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: "*.pdb,*.msix,*.lib,*.exp"
+
+; Box App (Desk Tidy Box) - Isolated Install
+; Install to 'box' subdirectory to prevent DLL/Asset conflicts
+Source: "{#MyBoxBuildDir}\*"; DestDir: "{app}\box"; Flags: recursesubdirs ignoreversion; Excludes: "*.pdb,*.msix,*.lib,*.exp"
 
 [Icons]
-Name: "{group}\\{#MyAppName}"; Filename: "{app}\\desk_tidy.exe"
-Name: "{commondesktop}\\{#MyAppName}"; Filename: "{app}\\desk_tidy.exe"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\desk_tidy.exe"
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\desk_tidy.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\\desk_tidy.exe"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\desk_tidy.exe"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
