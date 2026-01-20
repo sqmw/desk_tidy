@@ -11,6 +11,7 @@ import '../utils/desktop_helper.dart';
 import '../models/icon_beautify_style.dart';
 import '../widgets/entity_detail_bar.dart';
 import '../widgets/beautified_icon.dart';
+import '../widgets/floating_rename_overlay.dart';
 import '../widgets/folder_picker_dialog.dart';
 import '../widgets/glass.dart';
 import '../widgets/middle_ellipsis_text.dart';
@@ -92,6 +93,7 @@ class _AllPageState extends State<AllPage> {
   int _lastTapTime = 0;
   String _lastTappedPath = '';
   final FocusNode _focusNode = FocusNode();
+  final FloatingRenameOverlay _renameOverlay = FloatingRenameOverlay();
 
   @override
   void initState() {
@@ -126,6 +128,7 @@ class _AllPageState extends State<AllPage> {
   }
 
   Future<void> _refresh() async {
+    if (_renameOverlay.isActive) _renameOverlay.hide();
     setState(() {
       _loading = true;
       _error = null;
@@ -403,7 +406,13 @@ class _AllPageState extends State<AllPage> {
         );
         break;
       case 'rename':
-        _promptRename(entity);
+        // 使用点击位置作为锚点
+        final anchor = Rect.fromCenter(
+          center: position,
+          width: 200,
+          height: 40,
+        );
+        _promptRename(entity, null, anchor);
         break;
       default:
         break;
@@ -412,6 +421,7 @@ class _AllPageState extends State<AllPage> {
   }
 
   void _selectEntity(FileSystemEntity entity, String displayName) {
+    if (_renameOverlay.isActive) _renameOverlay.hide();
     setState(() {
       _selected = _EntitySelectionInfo(
         name: displayName,
@@ -435,41 +445,64 @@ class _AllPageState extends State<AllPage> {
 
   String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
 
-  Future<void> _promptRename(FileSystemEntity entity) async {
+  void _promptRename(
+    FileSystemEntity entity, [
+    BuildContext? anchorContext,
+    Rect? overrideAnchorRect,
+  ]) {
     final currentName = path.basename(entity.path);
-    final controller = TextEditingController(text: currentName);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重命名'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入新名称'),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-    if (newName == null || newName.isEmpty || newName == currentName) return;
-    final parentDir = path.dirname(entity.path);
-    final newPath = path.join(parentDir, newName);
-    try {
-      await entity.rename(newPath);
-      _showSnackBar('已重命名为 $newName');
-      _refresh();
-    } catch (e) {
-      _showSnackBar('重命名失败: $e');
+
+    // 计算锚点位置
+    Rect? anchorRect;
+
+    // 1. 优先尝试通过 GlobalObjectKey 获取对应 Item 的 context（确保指向文件本身）
+    final key = GlobalObjectKey(entity.path);
+    final itemContext = key.currentContext;
+    if (itemContext != null) {
+      final renderBox = itemContext.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final topLeft = renderBox.localToGlobal(Offset.zero);
+        anchorRect = Rect.fromLTWH(
+          topLeft.dx,
+          topLeft.dy,
+          renderBox.size.width,
+          renderBox.size.height,
+        );
+      }
     }
+
+    // 2. 如果找不到 Item (例如未渲染)，尝试使用显式传入的锚点 (例如右键点击位置)
+    if (anchorRect == null && overrideAnchorRect != null) {
+      anchorRect = overrideAnchorRect;
+    }
+
+    // 3. 如果还是找不到，回退到屏幕中心
+    if (anchorRect == null) {
+      final size = MediaQuery.of(context).size;
+      anchorRect = Rect.fromCenter(
+        center: Offset(size.width / 2, size.height / 3),
+        width: 300,
+        height: 40,
+      );
+    }
+
+    _renameOverlay.show(
+      context: context,
+      anchorRect: anchorRect!,
+      currentName: currentName,
+      onRename: (newName) async {
+        if (newName == currentName) return;
+        final parentDir = path.dirname(entity.path);
+        final newPath = path.join(parentDir, newName);
+        try {
+          await entity.rename(newPath);
+          _showSnackBar('已重命名为 $newName');
+          _refresh();
+        } catch (e) {
+          _showSnackBar('重命名失败: $e');
+        }
+      },
+    );
   }
 
   Future<void> _renameEntity(FileSystemEntity entity, String newName) async {
@@ -881,7 +914,11 @@ class _AllPageState extends State<AllPage> {
                   final entity = File(s.fullPath).existsSync()
                       ? File(s.fullPath) as FileSystemEntity
                       : Directory(s.fullPath);
-                  _promptRename(entity);
+
+                  // 尝试通过 GlobalObjectKey 获取对应 Item 的 context
+                  final key = GlobalObjectKey(s.fullPath);
+                  final itemContext = key.currentContext;
+                  _promptRename(entity, itemContext);
                   return KeyEventResult.handled;
                 }
               }
@@ -911,6 +948,7 @@ class _AllPageState extends State<AllPage> {
                               final isSelected =
                                   _selected?.fullPath == entity.path;
                               return Material(
+                                key: GlobalObjectKey(entity.path),
                                 color: isSelected
                                     ? Theme.of(context).colorScheme.primary
                                           .withValues(alpha: 0.1)
