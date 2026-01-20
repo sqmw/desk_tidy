@@ -53,6 +53,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     std::optional<LRESULT> result =
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
                                                       lparam);
+    
+    // [Fix] Even if Flutter handled the message, for sizing/visibility messages we 
+    // must ensure our child window (the Flutter view) is correctly positioned and sized.
+    // This is especially critical in Release mode where internal timing differences 
+    // can cause the child window to fall out of sync with the parent.
+    if (message == WM_SIZE || message == WM_SHOWWINDOW || message == WM_WINDOWPOSCHANGED) {
+      SyncChildContentSize();
+    }
+
     if (result) {
       return *result;
     }
@@ -60,7 +69,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
   }
 

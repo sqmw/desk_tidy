@@ -151,7 +151,11 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  bool result = ShowWindow(window_handle_, SW_SHOWNORMAL);
+  if (result) {
+    SyncChildContentSize();
+  }
+  return result;
 }
 
 // static
@@ -199,13 +203,20 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
     case WM_SIZE: {
-      RECT rect = GetClientArea();
-      if (child_content_ != nullptr) {
-        // Size and position the child window.
-        MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-                   rect.bottom - rect.top, TRUE);
-      }
+      SyncChildContentSize();
       return 0;
+    }
+
+    case WM_SHOWWINDOW: {
+      if (wparam == TRUE) {
+        SyncChildContentSize();
+      }
+      break;
+    }
+
+    case WM_WINDOWPOSCHANGED: {
+      SyncChildContentSize();
+      break;
     }
 
     case WM_ACTIVATE:
@@ -242,12 +253,16 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
-  RECT frame = GetClientArea();
-
-  MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
-             frame.bottom - frame.top, true);
-
+  SyncChildContentSize();
   SetFocus(child_content_);
+}
+
+void Win32Window::SyncChildContentSize() {
+  if (child_content_ != nullptr && window_handle_ != nullptr) {
+    RECT rect = GetClientArea();
+    MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
+               rect.bottom - rect.top, TRUE);
+  }
 }
 
 RECT Win32Window::GetClientArea() {
