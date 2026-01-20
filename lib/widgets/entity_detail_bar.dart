@@ -52,6 +52,13 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
           return KeyEventResult.handled;
         }
 
+        // [Fix] Enter 键保存 (Shift+Enter 允许换行，但文件名不能有换行符，直接忽略)
+        if (event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+          _saveEditing();
+          return KeyEventResult.handled;
+        }
+
         // [Fix] 手动处理 Delete 键 (包括小键盘 Delete)
         if (event.logicalKey == LogicalKeyboardKey.delete ||
             event.logicalKey == LogicalKeyboardKey.numpadDecimal) {

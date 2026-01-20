@@ -23,8 +23,6 @@ import '../widgets/shortcut_card.dart';
 import '../widgets/category_strip.dart';
 import '../widgets/selectable_shortcut_tile.dart';
 import 'all_page.dart';
-import 'file_page.dart';
-import 'folder_page.dart';
 import '../services/window_dock_logic.dart';
 import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
@@ -1632,20 +1630,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                                   ),
                                   NavigationRailDestination(
                                     icon: Tooltip(
-                                      message: '文件夹',
-                                      child: Icon(Icons.folder),
-                                    ),
-                                    label: const Text('文件夹'),
-                                  ),
-                                  NavigationRailDestination(
-                                    icon: Tooltip(
-                                      message: '文件',
-                                      child: Icon(Icons.insert_drive_file),
-                                    ),
-                                    label: const Text('文件'),
-                                  ),
-                                  NavigationRailDestination(
-                                    icon: Tooltip(
                                       message: '设置',
                                       child: Icon(Icons.settings),
                                     ),
@@ -1791,20 +1775,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           beautifyStyle: _beautifyStyle,
         );
       case 2:
-        return FolderPage(
-          desktopPath: _desktopPath,
-          showHidden: effectiveShowHidden,
-          beautifyIcons: _beautifyDesktopIcons,
-          beautifyStyle: _beautifyStyle,
-        );
-      case 3:
-        return FilePage(
-          desktopPath: _desktopPath,
-          showHidden: effectiveShowHidden,
-          beautifyIcons: _beautifyDesktopIcons,
-          beautifyStyle: _beautifyStyle,
-        );
-      case 4:
         return SettingsPage(
           transparency: (1.0 - _backgroundOpacity).clamp(0.0, 1.0),
           frostStrength: _frostStrength,

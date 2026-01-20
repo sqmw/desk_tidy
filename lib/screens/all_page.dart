@@ -16,6 +16,9 @@ import '../widgets/glass.dart';
 import '../widgets/middle_ellipsis_text.dart';
 import '../widgets/operation_progress_bar.dart';
 
+/// 实体筛选模式
+enum _EntityFilterMode { all, folders, files }
+
 class AllPage extends StatefulWidget {
   final String desktopPath;
   final bool showHidden;
@@ -56,7 +59,34 @@ class _AllPageState extends State<AllPage> {
   bool _entityMenuActive = false;
   _EntitySelectionInfo? _selected;
   bool _isDetailEditing = false;
+  _EntityFilterMode _filterMode = _EntityFilterMode.all;
   final Map<String, Future<Uint8List?>> _iconFutures = {};
+
+  /// 根据筛选模式过滤后的条目列表
+  List<FileSystemEntity> get _filteredEntries {
+    switch (_filterMode) {
+      case _EntityFilterMode.folders:
+        // 与原 FolderPage 一致：只显示文件夹，排除隐藏/系统文件夹
+        return _entries.where((e) {
+          if (e is! Directory) return false;
+          final name = path.basename(e.path);
+          // 排除以 . 开头的隐藏文件夹
+          if (name.startsWith('.')) return false;
+          return true;
+        }).toList();
+      case _EntityFilterMode.files:
+        // 与原 FilePage 一致：排除 .lnk, .exe, desktop.ini, thumbs.db
+        return _entries.where((e) {
+          if (e is! File) return false;
+          final lower = path.basename(e.path).toLowerCase();
+          if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
+          if (lower.endsWith('.lnk') || lower.endsWith('.exe')) return false;
+          return true;
+        }).toList();
+      case _EntityFilterMode.all:
+        return _entries;
+    }
+  }
 
   // Custom double-tap state
   int _lastTapTime = 0;
@@ -769,6 +799,31 @@ class _AllPageState extends State<AllPage> {
           ),
         ),
 
+        // 分类筛选 Tab
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: SegmentedButton<_EntityFilterMode>(
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _EntityFilterMode.all, label: Text('全部')),
+              ButtonSegment(
+                value: _EntityFilterMode.folders,
+                label: Text('文件夹'),
+              ),
+              ButtonSegment(value: _EntityFilterMode.files, label: Text('文件')),
+            ],
+            selected: {_filterMode},
+            onSelectionChanged: (newSelection) {
+              setState(() => _filterMode = newSelection.first);
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+
         // Split View: List | Details
         Expanded(
           child: Focus(
@@ -841,12 +896,12 @@ class _AllPageState extends State<AllPage> {
                     behavior: HitTestBehavior.translucent,
                     onSecondaryTapDown: (details) =>
                         _showPageMenu(details.globalPosition),
-                    child: _entries.isEmpty
+                    child: _filteredEntries.isEmpty
                         ? const Center(child: Text('未找到文件或快捷方式'))
                         : ListView.builder(
-                            itemCount: _entries.length,
+                            itemCount: _filteredEntries.length,
                             itemBuilder: (context, index) {
-                              final entity = _entries[index];
+                              final entity = _filteredEntries[index];
                               final isDir = entity is Directory;
                               final rawName = path.basename(entity.path);
                               final displayName =
