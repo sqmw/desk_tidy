@@ -17,6 +17,14 @@ Future<void> main() async {
       await windowReady.future;
       await windowManager.show();
       await windowManager.restore();
+
+      // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
+      final currentSize = await windowManager.getSize();
+      await windowManager.setSize(
+        Size(currentSize.width + 1, currentSize.height),
+      );
+      await windowManager.setSize(currentSize);
+
       await windowManager.setAlignment(Alignment.center);
       await windowManager.focus();
     },
