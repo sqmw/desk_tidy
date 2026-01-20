@@ -38,11 +38,13 @@ class _EntitySelectionInfo {
   final String name;
   final String fullPath;
   final String folderPath;
+  final FileSystemEntity entity;
 
   const _EntitySelectionInfo({
     required this.name,
     required this.fullPath,
     required this.folderPath,
+    required this.entity,
   });
 }
 
@@ -53,6 +55,7 @@ class _AllPageState extends State<AllPage> {
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
   _EntitySelectionInfo? _selected;
+  bool _isDetailEditing = false;
   final Map<String, Future<Uint8List?>> _iconFutures = {};
 
   // Custom double-tap state
@@ -114,6 +117,7 @@ class _AllPageState extends State<AllPage> {
               name: displayName,
               fullPath: first.path,
               folderPath: path.dirname(first.path),
+              entity: first,
             );
           } else if (_entries.isEmpty) {
             _selected = null;
@@ -165,6 +169,7 @@ class _AllPageState extends State<AllPage> {
               name: displayName,
               fullPath: first.path,
               folderPath: path.dirname(first.path),
+              entity: first,
             );
           } else if (_entries.isEmpty) {
             _selected = null;
@@ -382,6 +387,7 @@ class _AllPageState extends State<AllPage> {
         name: displayName,
         fullPath: entity.path,
         folderPath: path.dirname(entity.path),
+        entity: entity,
       );
     });
   }
@@ -436,6 +442,35 @@ class _AllPageState extends State<AllPage> {
     }
   }
 
+  Future<void> _renameEntity(FileSystemEntity entity, String newName) async {
+    if (newName.isEmpty) return;
+
+    final oldPath = entity.path;
+    final parent = path.dirname(oldPath);
+    final ext = path.extension(oldPath);
+
+    String finalName = newName;
+    if (ext.toLowerCase() == '.lnk' &&
+        !newName.toLowerCase().endsWith('.lnk')) {
+      finalName = '$newName.lnk';
+    } else if (ext.isNotEmpty &&
+        !newName.toLowerCase().endsWith(ext.toLowerCase())) {
+      finalName = '$newName$ext';
+    }
+
+    if (path.basename(oldPath) == finalName) return;
+
+    final newPath = path.join(parent, finalName);
+
+    try {
+      await entity.rename(newPath);
+      _showSnackBar('已重命名为 $newName');
+      _refresh();
+    } catch (e) {
+      _showSnackBar('重命名失败: $e');
+    }
+  }
+
   Widget _buildSelectionDetail() {
     final selected = _selected;
     if (selected == null) return const SizedBox.shrink();
@@ -454,6 +489,9 @@ class _AllPageState extends State<AllPage> {
           label: 'folder',
           quoted: true,
         ),
+        onRename: (newName) => _renameEntity(selected.entity, newName),
+        onEditingChanged: (editing) =>
+            setState(() => _isDetailEditing = editing),
       ),
     );
   }
@@ -758,6 +796,18 @@ class _AllPageState extends State<AllPage> {
                 _handlePaste();
                 return KeyEventResult.handled;
               }
+
+              // [Fix] 优先使用明确的状态检查
+              if (_isDetailEditing) return KeyEventResult.ignored;
+
+              // [Fix] 其次检查焦点是否在输入框中（如重命名、搜索）
+              final focus = FocusManager.instance.primaryFocus;
+              final isEditing =
+                  focus != null &&
+                  focus.context != null &&
+                  focus.context!.widget is EditableText;
+              if (isEditing) return KeyEventResult.ignored;
+
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.logicalKey == LogicalKeyboardKey.numpadDecimal) {
@@ -890,7 +940,9 @@ class _AllPageState extends State<AllPage> {
                 // Right: Details Panel
                 if (_selected != null)
                   SizedBox(
-                    width: 320,
+                    width: MediaQuery.of(context).size.width * 0.45 > 320
+                        ? 320
+                        : MediaQuery.of(context).size.width * 0.45,
                     child: SingleChildScrollView(
                       child: _buildSelectionDetail(),
                     ),

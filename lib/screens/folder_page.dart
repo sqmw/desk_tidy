@@ -616,6 +616,14 @@ class _FolderPageState extends State<FolderPage> {
                 _handlePaste();
                 return KeyEventResult.handled;
               }
+
+              final focus = FocusManager.instance.primaryFocus;
+              final isEditing =
+                  focus != null &&
+                  focus.context != null &&
+                  focus.context!.widget is EditableText;
+              if (isEditing) return KeyEventResult.ignored;
+
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.logicalKey == LogicalKeyboardKey.numpadDecimal) {

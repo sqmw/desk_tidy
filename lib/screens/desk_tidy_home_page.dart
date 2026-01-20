@@ -1127,7 +1127,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     setState(() {
       _appSearchQuery = value;
-      _searchSelectedIndex = -1; // 搜索内容变化时重置选中索引
+      // 搜索内容变化时先重置，后面会在帧回调中根据结果数量决定是否选中第一个
+      _searchSelectedIndex = -1;
 
       if (!_isEditingCategory) {
         if (!hadQuery && hasQuery) {
@@ -1144,6 +1145,17 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         _categoryBeforeSearch = null;
       }
     });
+
+    // [Feature] 自动选中第一个搜索结果（如果有结果的话）
+    if (hasQuery) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final results = _filteredShortcuts;
+        if (results.isNotEmpty && _searchSelectedIndex == -1) {
+          setState(() => _searchSelectedIndex = 0);
+        }
+      });
+    }
   }
 
   void _clearSearch({bool keepFocus = false, bool restoreCategory = true}) {
