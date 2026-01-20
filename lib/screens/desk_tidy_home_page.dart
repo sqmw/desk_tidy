@@ -235,6 +235,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
+
+    // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
+    final currentSize = await windowManager.getSize();
+    await windowManager.setSize(
+      Size(currentSize.width + 1, currentSize.height),
+    );
+    await windowManager.setSize(currentSize);
+
     _dockManager.onPresentFromHotkey();
 
     // 使用强制前台窗口方法获取真正的键盘焦点
@@ -1362,6 +1370,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
+
+    // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
+    final currentSize = await windowManager.getSize();
+    await windowManager.setSize(
+      Size(currentSize.width + 1, currentSize.height),
+    );
+    await windowManager.setSize(currentSize);
+
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
