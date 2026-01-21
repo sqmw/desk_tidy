@@ -119,6 +119,22 @@ Smart window docking for full-screen workflow:
 - Keep native desktop clean
 - Access everything through Desk Tidy
 
+### 📦 Desktop Organizer Boxes
+
+> Display desktop files and folders in separate floating windows, keeping your desktop clean while maintaining quick access.
+
+| Feature | Description |
+|---------|-------------|
+| **Categorized Display** | Folders and files shown in separate windows |
+| **Appearance Sync** | Auto-inherits transparency, blur and other settings from main app |
+| **Smart Positioning** | Drag to position, auto-remembers location |
+| **Launch with Main App** | One-click enable/disable in settings |
+
+<!-- Box screenshot: Place in .github/screenshots/box_demo.png -->
+![Desktop Organizer Boxes](.github/screenshots/box_demo.png)
+
+> 📁 Organizer boxes are implemented by the companion project [desk_tidy_box](../desk_tidy_box), working alongside the main app.
+
 ---
 
 ## ⌨️ Keyboard Shortcuts
