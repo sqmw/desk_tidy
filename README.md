@@ -1,91 +1,207 @@
-# Desk Tidy（Windows 桌面整理）
+# Desk Tidy
 
-## 语言选择 (Language Selection)
+> 🪟 **Windows 桌面整理神器** — 让你的桌面清爽如新
 
-<details open>
-<summary>🀄️ 中文 (默认 / Default)</summary>
+**🇨🇳 中文** | **[🇬🇧 English](README_EN.md)**
 
-桌面快捷入口 + 托盘/热区唤起 + 磁吸自动隐藏，配合磨砂/玻璃视觉样式。
+<!-- 主界面截图：请将截图放入 .github/screenshots/hero.png -->
+![主界面预览](.github/screenshots/hero.png)
 
-### 快速开始
-- 安装依赖：`fvm flutter pub get`
-- 运行：`fvm flutter run -d windows`
+---
 
-### 文档
-- 功能全览：`docs/overview.md`
-- 设置与持久化：`docs/settings.md`
-- 文件/文件夹操作：`docs/file_ops.md`
-- 图标采集/显示：`docs/icon_display.md`
-- 长名称显示与复制：`docs/icon_name.md`
-- 热区/磁吸/自动隐藏：`docs/auto_hide.md`
-- 经典桌面图标方案：`docs/windows_classic_scheme.md`
+## ✨ 亮点特性
 
-### 功能特性
+<table>
+<tr>
+<td width="50%">
 
-#### 核心功能
-- **桌面快捷入口**：自动扫描并显示桌面上的应用快捷方式
-- **真实图标显示**：提取并显示原始应用图标
-- **托盘/热区唤起**：通过系统托盘或屏幕热区快速唤起应用
-- **磁吸自动隐藏**：窗口吸附到屏幕边缘时自动隐藏，鼠标悬停时显示
-- **磨砂/玻璃视觉样式**：现代化的玻璃态设计，与桌面背景融合
-- **个性化设置**：支持窗口透明度、磨砂强度、图标大小等自定义
-- **主题切换**：支持跟随系统、浅色和深色主题
-- **桌面图标管理**：可隐藏/显示系统桌面图标
+### ⚡ 极致轻量
+- **CPU 占用 ≈ 0%**（待机状态）
+- **内存 ~280MB**
+- **安装包仅 11.8MB**，安装后 58MB
+- 后台静默运行，不打扰工作
 
-#### 计划推出功能
-- **图标风格自定义**：支持自定义图标形状、主题和动画效果
-- **快捷方式分类和搜索**：支持按类别组织快捷方式，提供快速搜索功能
-- **多显示器支持**：智能适配多显示器环境，支持跨显示器管理
+</td>
+<td width="50%">
 
-### 已知限制
-- 仅适配 Windows，其他平台的桌面/回收站能力未实现。
-- “自动刷新桌面”开关仍在迭代，刷新逻辑待完善。
+### 🎯 即刻唤醒
+- **全局快捷键** `Ctrl + Shift + Space`
+- 备用快捷键 `Alt + Shift + Space`
+- **系统托盘** 右键菜单控制
+- 热区唤醒（按住 Ctrl + 鼠标左上角）
 
-### 小工具
-- 统计 `lib/` 代码行：`fvm dart run bin/count_lib_loc.dart`
+</td>
+</tr>
+<tr>
+<td>
 
-</details>
+### 🎨 现代视觉
+- 磨砂玻璃效果，融入桌面
+- 自定义透明度与模糊强度
+- 支持自定义背景图片
+- 深色/浅色/跟随系统主题
 
-<details>
-<summary>🇬🇧 English</summary>
+</td>
+<td>
 
-Desktop shortcuts + Tray/HotZone activation + Magnetic auto-hide, with frosted/glass visual styles.
+### 🔍 智能搜索
+- **拼音首字母**模糊匹配
+- 键盘 ↑↓←→ 导航，回车直达
+- 唤醒后自动聚焦搜索框
 
-### Quick Start
-- Install dependencies: `fvm flutter pub get`
-- Run: `fvm flutter run -d windows`
+</td>
+</tr>
+</table>
 
-### Documentation
-- Overview: `docs/overview.md`
-- Settings and Persistence: `docs/settings.md`
-- File/Folder Operations: `docs/file_ops.md`
-- Icon Collection/Display: `docs/icon_display.md`
-- Long Name Display and Copy: `docs/icon_name.md`
-- HotZone/Magnetic/Auto-hide: `docs/auto_hide.md`
-- Windows Classic Scheme: `docs/windows_classic_scheme.md`
+---
 
-### Features
+## 🖼️ 界面预览
 
-#### Core Features
-- **Desktop Shortcuts**: Automatically scan and display desktop application shortcuts
-- **Real Icon Display**: Extract and display original application icons
-- **Tray/HotZone Activation**: Quickly activate the app via system tray or screen hot zones
-- **Magnetic Auto-hide**: Automatically hide when window is snapped to screen edge, show on mouse hover
-- **Frosted/Glass Visual Style**: Modern glassmorphism design, blending with desktop background
-- **Personalization Settings**: Support for window opacity, frost intensity, icon size, etc.
-- **Theme Switching**: Support system, light and dark themes
-- **Desktop Icon Management**: Ability to hide/show system desktop icons
+<!-- 功能截图：请将截图放入 .github/screenshots/ 文件夹 -->
+| 应用启动器 | 文件管理 | 个性设置 |
+|:---:|:---:|:---:|
+| ![应用页](.github/screenshots/app_page.png) | ![全部页](.github/screenshots/all_page.png) | ![设置页](.github/screenshots/settings_page.png) |
 
-#### Planned Features
-- **Icon Style Customization**: Support custom icon shapes, themes and animation effects
-- **Shortcut Classification and Search**: Support organizing shortcuts by categories and quick search
-- **Multi-monitor Support**: Intelligent adaptation to multi-monitor environments, cross-monitor management
+---
 
-### Known Limitations
-- Only adapted for Windows, desktop/recycle bin capabilities for other platforms are not implemented.
-- The "Auto Refresh Desktop" switch is still being iterated, and the refresh logic needs improvement.
+## 🚀 核心功能
 
-### Tools
-- Count lines of code in `lib/`: `fvm dart run bin/count_lib_loc.dart`
+### 📱 应用快捷启动
+- 自动扫描桌面快捷方式
+- **真实图标**显示，非通用占位符
+- 双击/回车即刻启动
+- 支持**分类整理**，自定义应用分组
 
-</details>
+<!-- 快速启动演示：请将 GIF 放入 .github/screenshots/demo.gif -->
+![快速启动演示](.github/screenshots/demo.gif)
+
+### 📁 文件统一管理
+- 桌面文件/文件夹一目了然
+- 右键菜单：打开、移动、删除、复制
+- 支持**打开方式**选择
+- 操作结果实时反馈
+
+### 🧲 磁吸自动隐藏
+
+窗口具备智能吸附功能，配合全屏工作场景使用：
+
+| 功能 | 说明 |
+|-----|------|
+| **吸附触发** | 将窗口拖到**屏幕左上角**松开即吸附 |
+| **吸附范围** | 左上角约 **200×150 像素**区域（自动适配屏幕） |
+| **自动隐藏** | 吸附后，鼠标离开窗口约 **260ms** 即隐藏到托盘 |
+| **重新唤醒** | 使用快捷键或托盘菜单重新显示 |
+
+> 💡 **提示**：拖动窗口过程中不会触发吸附，只有松开鼠标且窗口在吸附区域内才会生效。
+
+### 🔥 热区唤醒（可选）
+
+> 有了全局快捷键后，热区功能作为**辅助手段**，适合习惯鼠标操作的用户。
+
+| 热区位置 | 屏幕左上角，宽度约 1/4 屏幕，高度约 10 像素 |
+|---------|------------------------------------------|
+| 触发方式 | 按住 `Ctrl` 键 + 鼠标移入热区 |
+| 使用场景 | 适合不方便使用键盘时快速唤醒 |
+
+### 🎛️ 高度可定制
+
+| 设置项 | 说明 |
+|-------|------|
+| 窗口透明度 | 0% ~ 100% 无级调节 |
+| 磨砂强度 | 从清透到朦胧 |
+| 图标大小 | 24px ~ 96px |
+| 背景图片 | 支持自定义壁纸 |
+| 主题模式 | 深色 / 浅色 / 跟随系统 |
+| 开机自启 | 一键设置 |
+
+### 🖥️ 桌面图标管理
+- **一键隐藏/显示**系统桌面图标
+- 让原生桌面干净整洁
+- 所有内容通过 Desk Tidy 统一访问
+
+---
+
+## ⌨️ 快捷键
+
+| 快捷键 | 功能 |
+|-------|------|
+| `Ctrl + Shift + Space` | 唤醒窗口（主） |
+| `Alt + Shift + Space` | 唤醒窗口（备） |
+| `↑` `↓` `←` `→` | 导航选择 |
+| `Tab` / `Shift + Tab` | 线性导航 |
+| `Enter` | 打开选中项 |
+| `Esc` | 隐藏窗口 |
+
+---
+
+## 📦 安装
+
+### 方式一：下载安装包（推荐）
+
+| 项目 | 大小 |
+|-----|------|
+| 安装包 | **11.8 MB** |
+| 安装后 | **58 MB** |
+
+从 [Releases](https://github.com/your-username/desk_tidy/releases) 下载最新版安装包。
+
+### 方式二：从源码构建
+
+```bash
+# 克隆项目
+git clone https://github.com/your-repo/desk_tidy.git
+cd desk_tidy
+
+# 安装依赖
+flutter pub get
+
+# 运行
+flutter run -d windows
+
+# 构建发布版本
+flutter build windows --release
+```
+
+---
+
+## 🔧 技术栈
+
+- **框架**: Flutter (Windows Desktop)
+- **语言**: Dart + C++ (Win32 原生扩展)
+- **图标提取**: Windows Shell API
+- **窗口管理**: window_manager + 原生 HWND 操作
+
+---
+
+## 📋 系统要求
+
+| 项目 | 要求 |
+|-----|------|
+| 操作系统 | Windows 11（64 位）；Win10 理论兼容但未详细测试 |
+| 磁盘空间 | 约 58 MB |
+| 运行内存 | ~280 MB |
+
+---
+
+## 🗺️ 路线图
+
+- [x] 全局快捷键唤醒
+- [x] 拼音模糊搜索
+- [x] 分类管理
+- [x] 磁吸自动隐藏
+- [x] 桌面收纳盒
+- [ ] 多显示器支持
+- [ ] 插件系统
+- [ ] 云同步配置
+
+---
+
+## 📄 开源协议
+
+MIT License
+
+---
+
+<p align="center">
+  <b>⭐ 如果觉得有用，请给个 Star 支持一下！</b>
+</p>
