@@ -46,6 +46,8 @@ List<(T, MatchResult)> results = FuzzyMatcher.filterWithResult(...);
 | `pinyin` | 60 | 拼音全拼匹配 | "doubao" → "豆包" |
 | `pinyinInitials` | 55 | 拼音首字母匹配 | "db" → "豆包" |
 | `fuzzy` | 50 | 模糊顺序匹配 | "dbe" → "doubao.exe" |
+| `subsequence` | 40 | 子序列匹配 | "dao" → "doubao" |
+| `partialMatch` | 35 | 部分匹配（查询子串） | "abao" → "doubao" |
 
 ---
 
@@ -100,4 +102,6 @@ final filtered = FuzzyMatcher.filter<ShortcutItem>(
 
 | 日期 | 变更 |
 |------|------|
+| 2026-01-21 | 添加部分匹配（partialMatch），让 "abao" 通过 "bao" 匹配 "doubao"；修正 subsequence 示例 |
+| 2026-01-21 | 添加子序列匹配（subsequence），支持非连续字符匹配 |
 | 2026-01-18 | 创建模糊搜索系统，替换原有的前缀匹配 |

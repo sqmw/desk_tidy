@@ -32,6 +32,12 @@ enum MatchType {
   /// 模糊顺序匹配 - 50分
   fuzzy(50),
 
+  /// 子序列匹配（允许跳跃但不要求从头开始）- 40分
+  subsequence(40),
+
+  /// 部分匹配（查询子串匹配）- 35分
+  partialMatch(35),
+
   /// 不匹配 - 0分
   none(0);
 
@@ -124,6 +130,14 @@ class FuzzyMatcher {
 
     // 8. 模糊顺序匹配（最后尝试，性能消耗较大）
     result = _tryFuzzy(normalizedQuery, index);
+    if (result != null) return result;
+
+    // 9. 子序列匹配（最宽松的匹配，允许字符在任意位置按顺序出现）
+    result = _trySubsequence(normalizedQuery, index);
+    if (result != null) return result;
+
+    // 10. 部分匹配：尝试查询的子串进行匹配（如 "abao" 通过 "bao" 匹配）
+    result = _tryPartialMatch(normalizedQuery, index);
     if (result != null) return result;
 
     return MatchResult.none;
@@ -506,5 +520,145 @@ class FuzzyMatcher {
     final ratio = queryLength / span;
 
     return (ratio * 5).round().clamp(0, 5);
+  }
+
+  /// 子序列匹配（字符按顺序出现，可以在任何位置开始）
+  /// 与 _tryFuzzy 的区别：fuzzy 已经在 normalizedName 和 pinyin 上尝试过了，
+  /// subsequence 会尝试在 normalizedName 的任意子串中匹配。
+  /// 例如：'abao' 可以匹配 'doubao'（跳过 'dou'，匹配 'ubao' 中的 'a' 后匹配 'bao'）
+  static MatchResult? _trySubsequence(String query, AppSearchIndex index) {
+    // 在 normalizedName 中尝试子序列匹配
+    final indices = _subsequenceMatchIndices(query, index.normalizedName);
+    if (indices != null) {
+      final continuityBonus = _calculateContinuityBonus(indices);
+      final compactnessBonus = _calculateCompactnessBonus(
+        indices,
+        query.length,
+      );
+      // 位置越靠前分数越高
+      final positionBonus = indices.isEmpty
+          ? 0
+          : (5 - (indices.first / index.normalizedName.length * 5))
+                .round()
+                .clamp(0, 5);
+
+      return MatchResult(
+        matched: true,
+        score:
+            MatchType.subsequence.baseScore +
+            continuityBonus +
+            compactnessBonus +
+            positionBonus,
+        type: MatchType.subsequence,
+        matchedIndices: indices,
+      );
+    }
+
+    // 也在拼音中尝试
+    if (index.pinyin.isNotEmpty) {
+      final pinyinIndices = _subsequenceMatchIndices(query, index.pinyin);
+      if (pinyinIndices != null) {
+        return MatchResult(
+          matched: true,
+          score: MatchType.subsequence.baseScore,
+          type: MatchType.subsequence,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /// 子序列匹配：检查 query 中的字符是否按顺序出现在 text 中的任意位置
+  /// 与 _fuzzyMatchIndices 的区别：使用最优匹配策略，寻找最紧凑的匹配
+  static List<int>? _subsequenceMatchIndices(String query, String text) {
+    if (query.isEmpty) return [];
+    if (text.isEmpty) return null;
+
+    // 找到第一个字符的所有可能位置
+    final firstChar = query[0];
+    List<int>? bestIndices;
+
+    for (var startPos = 0; startPos < text.length; startPos++) {
+      if (text[startPos] != firstChar) continue;
+
+      // 从这个位置开始尝试匹配
+      final indices = <int>[startPos];
+      var textIdx = startPos + 1;
+      var matched = true;
+
+      for (var i = 1; i < query.length; i++) {
+        final char = query[i];
+        var found = false;
+
+        while (textIdx < text.length) {
+          if (text[textIdx] == char) {
+            indices.add(textIdx);
+            textIdx++;
+            found = true;
+            break;
+          }
+          textIdx++;
+        }
+
+        if (!found) {
+          matched = false;
+          break;
+        }
+      }
+
+      if (matched) {
+        // 选择最紧凑的匹配（跨度最小）
+        if (bestIndices == null ||
+            (indices.last - indices.first) <
+                (bestIndices.last - bestIndices.first)) {
+          bestIndices = indices;
+        }
+      }
+    }
+
+    return bestIndices;
+  }
+
+  /// 部分匹配：尝试查询的子串进行匹配
+  /// 例如 "abao" 可以通过 "bao" 匹配到 "doubao"
+  static MatchResult? _tryPartialMatch(String query, AppSearchIndex index) {
+    if (query.length < 2) return null;
+
+    // 尝试查询的后缀（从第二个字符开始）
+    for (var start = 1; start < query.length; start++) {
+      final suffix = query.substring(start);
+      if (suffix.length < 2) break; // 子串太短，没有意义
+
+      // 尝试子字符串匹配
+      final pos = index.normalizedName.indexOf(suffix);
+      if (pos >= 0) {
+        // 匹配分数基于子串长度占原查询的比例
+        final ratio = suffix.length / query.length;
+        final bonus = (ratio * 10).round();
+        return MatchResult(
+          matched: true,
+          score: MatchType.partialMatch.baseScore + bonus,
+          type: MatchType.partialMatch,
+          matchedIndices: List.generate(suffix.length, (i) => pos + i),
+        );
+      }
+
+      // 尝试在拼音中匹配
+      if (index.pinyin.isNotEmpty) {
+        final pinyinPos = index.pinyin.indexOf(suffix);
+        if (pinyinPos >= 0) {
+          final ratio = suffix.length / query.length;
+          final bonus = (ratio * 8).round();
+          return MatchResult(
+            matched: true,
+            score: MatchType.partialMatch.baseScore + bonus,
+            type: MatchType.partialMatch,
+          );
+        }
+      }
+    }
+
+    return null;
   }
 }

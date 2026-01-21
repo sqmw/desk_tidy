@@ -923,6 +923,30 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   KeyEventResult _handleSearchNavigation(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
+    // 首先处理应该直接传给 TextField 的按键
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+
+    // Shift+左右键：移动光标（不选择文本）
+    if (isShift &&
+        (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+            event.logicalKey == LogicalKeyboardKey.arrowRight)) {
+      final text = _appSearchController.text;
+      final selection = _appSearchController.selection;
+      if (text.isEmpty) return KeyEventResult.handled;
+
+      int newOffset;
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        newOffset = (selection.baseOffset - 1).clamp(0, text.length);
+      } else {
+        newOffset = (selection.baseOffset + 1).clamp(0, text.length);
+      }
+
+      _appSearchController.selection = TextSelection.collapsed(
+        offset: newOffset,
+      );
+      return KeyEventResult.handled;
+    }
+
     final shortcuts = _filteredShortcuts;
     if (shortcuts.isEmpty) {
       // 即使没有结果，ESC 也应该能关闭窗口
