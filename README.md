@@ -133,7 +133,7 @@
 <!-- 收纳盒截图：请将截图放入 .github/screenshots/box_demo.png -->
 ![桌面收纳盒](.github/screenshots/box_demo.png)
 
-> 📁 收纳盒由独立子项目 [desk_tidy_box](../desk_tidy_box) 实现，与主程序协同工作。
+> 📁 收纳盒由独立子项目 [desk_tidy_box](https://github.com/sqmw/desk_tidy_box) 实现，与主程序协同工作。
 
 ---
 

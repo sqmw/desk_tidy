@@ -133,7 +133,7 @@ Smart window docking for full-screen workflow:
 <!-- Box screenshot: Place in .github/screenshots/box_demo.png -->
 ![Desktop Organizer Boxes](.github/screenshots/box_demo.png)
 
-> 📁 Organizer boxes are implemented by the companion project [desk_tidy_box](../desk_tidy_box), working alongside the main app.
+> 📁 Organizer boxes are implemented by the companion project [desk_tidy_box](https://github.com/sqmw/desk_tidy_box), working alongside the main app.
 
 ---
 
