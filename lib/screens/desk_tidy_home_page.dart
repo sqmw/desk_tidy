@@ -229,6 +229,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       Offset(bounds.x.toDouble(), bounds.y.toDouble()),
     );
 
+    // [Anti-Flash] 先设置透明度为0，防止白屏闪烁
+    await windowManager.setOpacity(0.0);
+
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
@@ -240,6 +243,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       Size(currentSize.width + 1, currentSize.height),
     );
     await windowManager.setSize(currentSize);
+
+    // 等待一帧渲染
+    await Future.delayed(const Duration(milliseconds: 50));
+    await windowManager.setOpacity(1.0);
 
     _dockManager.onPresentFromHotkey();
 
