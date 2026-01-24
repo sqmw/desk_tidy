@@ -71,14 +71,39 @@ class _AllPageState extends State<AllPage> {
   bool _sortAscending = true;
   _EntitySelectionInfo? _selected;
   bool _isDetailEditing = false;
-  bool _showDetails = true; // New state for toggling details
+  bool _showDetails = true;
   _EntityFilterMode _filterMode = _EntityFilterMode.all;
   final Map<String, Future<Uint8List?>> _iconFutures = {};
 
-  /// 根据筛选模式过滤后的条目列表
-  /// 根据筛选模式、搜索和排序过滤列表
+  // Custom double-tap state
+  int _lastTapTime = 0;
+  String _lastTappedPath = '';
+  final FocusNode _focusNode = FocusNode();
+  final FloatingRenameOverlay _renameOverlay = FloatingRenameOverlay();
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AllPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.showHidden != widget.showHidden) {
+      _refresh();
+    }
+  }
+
   List<FileItem> get _filteredItems {
-    // 1. 基础筛选
     List<FileItem> list;
     switch (_filterMode) {
       case _EntityFilterMode.folders:
@@ -100,7 +125,6 @@ class _AllPageState extends State<AllPage> {
         break;
     }
 
-    // 2. 搜索逻辑
     if (_searchQuery.isNotEmpty) {
       final scored = <MapEntry<FileItem, int>>[];
       for (final item in list) {
@@ -109,14 +133,11 @@ class _AllPageState extends State<AllPage> {
           scored.add(MapEntry(item, result.score));
         }
       }
-      // 按分数降序排序
       scored.sort((a, b) => b.value.compareTo(a.value));
       return scored.map((e) => e.key).toList();
     }
 
-    // 3. 常规排序
     list.sort((a, b) {
-      // 文件夹始终置顶
       if (a.isDirectory && !b.isDirectory) return -1;
       if (!a.isDirectory && b.isDirectory) return 1;
 
@@ -141,44 +162,6 @@ class _AllPageState extends State<AllPage> {
     return list;
   }
 
-  // Custom double-tap state
-  int _lastTapTime = 0;
-  String _lastTappedPath = '';
-  final FocusNode _focusNode = FocusNode();
-  final FloatingRenameOverlay _renameOverlay = FloatingRenameOverlay();
-
-  @override
-  void initState() {
-    super.initState();
-    _refresh();
-    // Add global keyboard listener to debug Delete key
-    HardwareKeyboard.instance.addHandler(_globalKeyHandler);
-  }
-
-  bool _globalKeyHandler(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      debugPrint(
-        '[Global] Key: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId}) physical: ${event.physicalKey.debugName}',
-      );
-    }
-    return false; // Don't consume the event
-  }
-
-  @override
-  void dispose() {
-    HardwareKeyboard.instance.removeHandler(_globalKeyHandler);
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(covariant AllPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.showHidden != widget.showHidden) {
-      _refresh();
-    }
-  }
-
   Future<void> _refresh() async {
     if (_renameOverlay.isActive) _renameOverlay.hide();
     setState(() {
@@ -192,21 +175,6 @@ class _AllPageState extends State<AllPage> {
         setState(() {
           _items = items;
           _loading = false;
-          if (_items.isNotEmpty && _selected == null) {
-            final first = _items.first;
-            final rawName = first.name;
-            final displayName = rawName.toLowerCase().endsWith('.lnk')
-                ? rawName.substring(0, rawName.length - 4)
-                : rawName;
-            _selected = _EntitySelectionInfo(
-              name: displayName,
-              fullPath: first.entity.path,
-              folderPath: path.dirname(first.entity.path),
-              entity: first.entity,
-            );
-          } else if (_items.isEmpty) {
-            _selected = null;
-          }
         });
       } else {
         final dir = Directory(_currentPath!);
@@ -236,21 +204,6 @@ class _AllPageState extends State<AllPage> {
         setState(() {
           _items = items;
           _loading = false;
-          if (_items.isNotEmpty && _selected == null) {
-            final first = _items.first;
-            final rawName = first.name;
-            final displayName = rawName.toLowerCase().endsWith('.lnk')
-                ? rawName.substring(0, rawName.length - 4)
-                : rawName;
-            _selected = _EntitySelectionInfo(
-              name: displayName,
-              fullPath: first.entity.path,
-              folderPath: path.dirname(first.entity.path),
-              entity: first.entity,
-            );
-          } else if (_items.isEmpty) {
-            _selected = null;
-          }
         });
       }
     } catch (e) {
@@ -282,22 +235,16 @@ class _AllPageState extends State<AllPage> {
       for (final entity in dir.listSync()) {
         if (!seen.add(entity.path)) continue;
         final name = path.basename(entity.path);
-        final lower = name.toLowerCase();
-
         if (!widget.showHidden &&
             (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
           continue;
         }
-
-        if (lower == 'desktop.ini' || lower == 'thumbs.db') {
-          continue;
-        }
+        final lower = name.toLowerCase();
+        if (lower == 'desktop.ini' || lower == 'thumbs.db') continue;
 
         items.add(FileItem.fromEntity(entity));
       }
     }
-
-    // Default sort by name for initial load (optional, as _filteredItems will sort)
     return items;
   }
 
@@ -325,148 +272,157 @@ class _AllPageState extends State<AllPage> {
   Future<void> _showEntityMenu(
     FileSystemEntity entity,
     String displayName,
-    Offset position,
-  ) async {
+    Offset position, {
+    BuildContext? anchorContext,
+  }) async {
     _entityMenuActive = true;
     final isDir = entity is Directory;
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: [
-        PopupMenuItem(
-          value: 'open',
-          child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
+
+    Future.microtask(() async {
+      if (!mounted) return;
+      final result = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
         ),
-        PopupMenuItem(
-          value: 'open_with',
-          child: ListTile(
-            leading: Icon(Icons.app_registration),
-            title: Text('使用其他应用打开'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'show_in_explorer',
-          child: ListTile(
-            leading: Icon(Icons.folder_open),
-            title: Text('在文件资源管理器中显示'),
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'move',
-          child: ListTile(
-            leading: Icon(Icons.drive_file_move),
-            title: Text('移动到..'),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'copy',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
-        ),
-        PopupMenuItem(
-          value: 'copy_clipboard',
-          child: ListTile(
-            leading: const Icon(Icons.copy),
-            title: const Text('复制到剪贴板(系统)'),
-            trailing: Text(
-              'Ctrl+C',
-              style: Theme.of(context).textTheme.bodySmall,
+        items: [
+          const PopupMenuItem(
+            value: 'open',
+            child: ListTile(
+              leading: Icon(Icons.open_in_new),
+              title: Text('打开'),
             ),
           ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'rename',
-          child: ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('重命名'),
-            trailing: Text('F2', style: Theme.of(context).textTheme.bodySmall),
+          const PopupMenuItem(
+            value: 'open_with',
+            child: ListTile(
+              leading: Icon(Icons.app_registration),
+              title: Text('使用其他应用打开'),
+            ),
           ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            leading: const Icon(Icons.delete),
-            title: const Text('删除(回收站)'),
-            trailing: Text('Del', style: Theme.of(context).textTheme.bodySmall),
+          const PopupMenuItem(
+            value: 'show_in_explorer',
+            child: ListTile(
+              leading: Icon(Icons.folder_open),
+              title: Text('在文件资源管理器中显示'),
+            ),
           ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'copy_name',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
-        ),
-        PopupMenuItem(
-          value: 'copy_path',
-          child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
-        ),
-        PopupMenuItem(
-          value: 'copy_folder',
-          child: ListTile(leading: Icon(Icons.folder), title: Text('复制所在文件夹')),
-        ),
-      ],
-    );
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'move',
+            child: ListTile(
+              leading: Icon(Icons.drive_file_move),
+              title: Text('移动到..'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'copy',
+            child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
+          ),
+          PopupMenuItem(
+            value: 'copy_clipboard',
+            child: ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('复制到剪贴板(系统)'),
+              trailing: Text(
+                'Ctrl+C',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'rename',
+            child: ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('重命名'),
+              trailing: Text(
+                'F2',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: ListTile(
+              leading: const Icon(Icons.delete),
+              title: const Text('删除(回收站)'),
+              trailing: Text(
+                'Del',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'copy_name',
+            child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
+          ),
+          const PopupMenuItem(
+            value: 'copy_path',
+            child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
+          ),
+          const PopupMenuItem(
+            value: 'copy_folder',
+            child: ListTile(
+              leading: Icon(Icons.folder),
+              title: Text('复制所在文件夹'),
+            ),
+          ),
+        ],
+      );
 
-    switch (result) {
-      case 'open':
-        if (isDir) {
-          _openFolder(entity.path);
-        } else {
-          await openWithDefault(entity.path);
-        }
-        break;
-      case 'open_with':
-        await _promptOpenWith(entity.path);
-        break;
-      case 'show_in_explorer':
-        await showInExplorer(entity.path);
-        break;
-      case 'delete':
-        _deleteEntity(entity);
-        break;
-      case 'move':
-        _promptMove(entity);
-        break;
-      case 'copy':
-        _promptCopy(entity);
-        break;
-      case 'copy_clipboard':
-        final ok = copyEntityPathsToClipboard([entity.path]);
-        if (mounted) {
-          _showSnackBar(ok ? '已复制到剪贴板' : '复制到剪贴板失败');
-        }
-        break;
-      case 'copy_name':
-        await _copyToClipboard(displayName, label: 'name', quoted: false);
-        break;
-      case 'copy_path':
-        await _copyToClipboard(entity.path, label: 'path', quoted: true);
-        break;
-      case 'copy_folder':
-        await _copyToClipboard(
-          path.dirname(entity.path),
-          label: 'folder',
-          quoted: true,
-        );
-        break;
-      case 'rename':
-        // 使用点击位置作为锚点
-        final anchor = Rect.fromCenter(
-          center: position,
-          width: 200,
-          height: 40,
-        );
-        _promptRename(entity, null, anchor);
-        break;
-      default:
-        break;
-    }
-    _entityMenuActive = false;
+      _entityMenuActive = false;
+      if (!mounted || result == null) return;
+
+      switch (result) {
+        case 'open':
+          if (isDir) {
+            _openFolder(entity.path);
+          } else {
+            await openWithDefault(entity.path);
+          }
+          break;
+        case 'open_with':
+          await _promptOpenWith(entity.path);
+          break;
+        case 'show_in_explorer':
+          await showInExplorer(entity.path);
+          break;
+        case 'delete':
+          _deleteEntity(entity);
+          break;
+        case 'move':
+          _promptMove(entity);
+          break;
+        case 'copy':
+          _promptCopy(entity);
+          break;
+        case 'copy_clipboard':
+          final ok = copyEntityPathsToClipboard([entity.path]);
+          if (mounted) _showSnackBar(ok ? '已复制到剪贴板' : '复制到剪贴板失败');
+          break;
+        case 'copy_name':
+          await _copyToClipboard(displayName, label: '名称', quoted: false);
+          break;
+        case 'copy_path':
+          await _copyToClipboard(entity.path, label: '路径', quoted: true);
+          break;
+        case 'copy_folder':
+          await _copyToClipboard(
+            path.dirname(entity.path),
+            label: '文件夹',
+            quoted: true,
+          );
+          break;
+        case 'rename':
+          _promptRename(entity, anchorContext);
+          break;
+      }
+    });
   }
 
   void _selectEntity(FileSystemEntity entity, String displayName) {
@@ -486,29 +442,18 @@ class _AllPageState extends State<AllPage> {
     required String label,
     required bool quoted,
   }) async {
-    final value = quoted ? _quote(raw) : raw;
+    final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
     _showSnackBar('已复制 $label');
   }
 
-  String _quote(String raw) => '"${raw.replaceAll('"', '\\"')}"';
-
-  void _promptRename(
-    FileSystemEntity entity, [
-    BuildContext? anchorContext,
-    Rect? overrideAnchorRect,
-  ]) {
+  void _promptRename(FileSystemEntity entity, [BuildContext? anchorContext]) {
     final currentName = path.basename(entity.path);
-
-    // 计算锚点位置
     Rect? anchorRect;
 
-    // 1. 优先尝试通过 GlobalObjectKey 获取对应 Item 的 context（确保指向文件本身）
-    final key = GlobalObjectKey(entity.path);
-    final itemContext = key.currentContext;
-    if (itemContext != null) {
-      final renderBox = itemContext.findRenderObject() as RenderBox?;
+    if (anchorContext != null) {
+      final renderBox = anchorContext.findRenderObject() as RenderBox?;
       if (renderBox != null) {
         final topLeft = renderBox.localToGlobal(Offset.zero);
         anchorRect = Rect.fromLTWH(
@@ -520,12 +465,6 @@ class _AllPageState extends State<AllPage> {
       }
     }
 
-    // 2. 如果找不到 Item (例如未渲染)，尝试使用显式传入的锚点 (例如右键点击位置)
-    if (anchorRect == null && overrideAnchorRect != null) {
-      anchorRect = overrideAnchorRect;
-    }
-
-    // 3. 如果还是找不到，回退到屏幕中心
     if (anchorRect == null) {
       final size = MediaQuery.of(context).size;
       anchorRect = Rect.fromCenter(
@@ -537,7 +476,7 @@ class _AllPageState extends State<AllPage> {
 
     _renameOverlay.show(
       context: context,
-      anchorRect: anchorRect!,
+      anchorRect: anchorRect,
       currentName: currentName,
       onRename: (newName) async {
         if (newName == currentName) return;
@@ -556,11 +495,8 @@ class _AllPageState extends State<AllPage> {
 
   Future<void> _renameEntity(FileSystemEntity entity, String newName) async {
     if (newName.isEmpty) return;
-
-    final oldPath = entity.path;
-    final parent = path.dirname(oldPath);
-    final ext = path.extension(oldPath);
-
+    final parent = path.dirname(entity.path);
+    final ext = path.extension(entity.path);
     String finalName = newName;
     if (ext.toLowerCase() == '.lnk' &&
         !newName.toLowerCase().endsWith('.lnk')) {
@@ -569,11 +505,8 @@ class _AllPageState extends State<AllPage> {
         !newName.toLowerCase().endsWith(ext.toLowerCase())) {
       finalName = '$newName$ext';
     }
-
-    if (path.basename(oldPath) == finalName) return;
-
+    if (path.basename(entity.path) == finalName) return;
     final newPath = path.join(parent, finalName);
-
     try {
       await entity.rename(newPath);
       _showSnackBar('已重命名为 $newName');
@@ -583,7 +516,6 @@ class _AllPageState extends State<AllPage> {
     }
   }
 
-  // UI Helpers
   String _getSortLabel(_SortType type) {
     String label;
     switch (type) {
@@ -628,14 +560,11 @@ class _AllPageState extends State<AllPage> {
         path: selected.fullPath,
         folderPath: selected.folderPath,
         onCopyName: () =>
-            _copyToClipboard(selected.name, label: 'name', quoted: false),
+            _copyToClipboard(selected.name, label: '名称', quoted: false),
         onCopyPath: () =>
-            _copyToClipboard(selected.fullPath, label: 'path', quoted: true),
-        onCopyFolder: () => _copyToClipboard(
-          selected.folderPath,
-          label: 'folder',
-          quoted: true,
-        ),
+            _copyToClipboard(selected.fullPath, label: '路径', quoted: true),
+        onCopyFolder: () =>
+            _copyToClipboard(selected.folderPath, label: '文件夹', quoted: true),
         onRename: (newName) => _renameEntity(selected.entity, newName),
         onEditingChanged: (editing) =>
             setState(() => _isDetailEditing = editing),
@@ -645,53 +574,55 @@ class _AllPageState extends State<AllPage> {
 
   Future<void> _showPageMenu(Offset position) async {
     if (_entityMenuActive) return;
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: [
-        PopupMenuItem(
-          value: 'new_folder',
-          child: ListTile(
-            leading: Icon(Icons.create_new_folder),
-            title: Text('新建文件夹'),
-          ),
+    Future.microtask(() async {
+      if (!mounted) return;
+      final result = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
         ),
-        PopupMenuItem(
-          value: 'refresh',
-          child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
-        ),
-        PopupMenuItem(
-          value: 'paste',
-          child: ListTile(
-            leading: const Icon(Icons.paste),
-            title: const Text('粘贴'),
-            trailing: Text(
-              'Ctrl+V',
-              style: Theme.of(context).textTheme.bodySmall,
+        items: [
+          const PopupMenuItem(
+            value: 'new_folder',
+            child: ListTile(
+              leading: Icon(Icons.create_new_folder),
+              title: Text('新建文件夹'),
             ),
           ),
-        ),
-      ],
-    );
+          const PopupMenuItem(
+            value: 'refresh',
+            child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
+          ),
+          PopupMenuItem(
+            value: 'paste',
+            child: ListTile(
+              leading: const Icon(Icons.paste),
+              title: const Text('粘贴'),
+              trailing: Text(
+                'Ctrl+V',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+        ],
+      );
 
-    switch (result) {
-      case 'new_folder':
-        _promptNewFolder();
-        break;
-      case 'refresh':
-        _refresh();
-        break;
-      case 'paste':
-        await _handlePaste();
-        break;
-      default:
-        break;
-    }
+      if (!mounted || result == null) return;
+      switch (result) {
+        case 'new_folder':
+          await _promptNewFolder();
+          break;
+        case 'refresh':
+          _refresh();
+          break;
+        case 'paste':
+          await _handlePaste();
+          break;
+      }
+    });
   }
 
   Future<void> _handlePaste() async {
@@ -700,34 +631,17 @@ class _AllPageState extends State<AllPage> {
       _showSnackBar('剪贴板中没有文件');
       return;
     }
-
-    final targetDir =
-        _currentPath ??
-        widget
-            .desktopPath; // Paste to root desktop if _currentPath is null (All view)
-    // Wait, _currentPath null means "Aggregate desktop roots".
-    // If I paste, where should it go?
-    // User says "All's first layer belongs to desktop folder is also a folder".
-    // So pasting to widget.desktopPath (primary desktop) is a reasonable default.
-
+    final targetDir = _currentPath ?? widget.desktopPath;
     int successCount = 0;
     for (final srcPath in files) {
-      // Auto-rename logic? Or just fail if exists?
-      // User didn't specify. Standard explorer behavior is to copy.
-      // copyEntityToDirectory handles overwrite checks (returns success: false).
-      // Let's rely on copyEntityToDirectory's checks.
-
       final result = await copyEntityToDirectory(srcPath, targetDir);
-      if (result.success) {
-        successCount++;
-      }
+      if (result.success) successCount++;
     }
-
     if (successCount > 0) {
       _showSnackBar('已粘贴 $successCount 个项目');
       _refresh();
     } else {
-      _showSnackBar('粘贴失败 (可能目标已存在或文件不可读)');
+      _showSnackBar('粘贴失败', success: false);
     }
   }
 
@@ -735,36 +649,31 @@ class _AllPageState extends State<AllPage> {
     final controller = TextEditingController(text: '新建文件夹');
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('创建文件夹'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: '名称'),
-            onSubmitted: (_) => Navigator.of(context).pop(true),
+      builder: (context) => AlertDialog(
+        title: const Text('创建文件夹'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '名称'),
+          onSubmitted: (_) => Navigator.of(context).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('创建'),
-            ),
-          ],
-        );
-      },
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
     );
-
     if (confirmed != true) return;
     final name = controller.text.trim();
     if (name.isEmpty) return;
-
     final base = _currentPath ?? widget.desktopPath;
     final created = await createNewFolder(base, preferredName: name);
-
     if (created != null) {
       _showSnackBar('已创建 ${path.basename(created)}');
       _refresh();
@@ -795,14 +704,7 @@ class _AllPageState extends State<AllPage> {
     );
     if (targetDir == null || targetDir.isEmpty) return;
     final dest = path.join(targetDir, path.basename(entity.path));
-
     try {
-      final dir = Directory(targetDir);
-      if (!dir.existsSync()) {
-        _showSnackBar('目标路径不存在');
-
-        return;
-      }
       if (File(dest).existsSync() || Directory(dest).existsSync()) {
         _showSnackBar('目标已存在同名项');
         return;
@@ -823,7 +725,6 @@ class _AllPageState extends State<AllPage> {
       showHidden: widget.showHidden,
     );
     if (targetDir == null || targetDir.isEmpty) return;
-
     final result = await copyEntityToDirectory(entity.path, targetDir);
     if (!mounted) return;
     if (result.success) {
@@ -860,7 +761,6 @@ class _AllPageState extends State<AllPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
           child: GlassContainer(
@@ -913,7 +813,6 @@ class _AllPageState extends State<AllPage> {
           ),
         ),
 
-        // Search & Filter Bar (Glass Style)
         Padding(
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
           child: GlassContainer(
@@ -927,7 +826,6 @@ class _AllPageState extends State<AllPage> {
             padding: const EdgeInsets.all(4),
             child: Row(
               children: [
-                // Search Input
                 Expanded(
                   child: TextField(
                     controller: _searchController,
@@ -962,23 +860,16 @@ class _AllPageState extends State<AllPage> {
                         vertical: 10,
                       ),
                       border: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      enabledBorder: InputBorder.none,
                     ),
-                    onChanged: (value) {
-                      setState(() => _searchQuery = value);
-                    },
+                    onChanged: (value) => setState(() => _searchQuery = value),
                   ),
                 ),
-                // Divider
                 Container(
                   width: 1,
                   height: 24,
                   color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                 ),
-
-                // Sort Button
                 PopupMenuButton<_SortType>(
                   tooltip: '排序: ${_getSortLabel(_sortType)}',
                   child: Padding(
@@ -993,14 +884,13 @@ class _AllPageState extends State<AllPage> {
                   ),
                   initialValue: _sortType,
                   onSelected: (type) {
-                    if (_sortType == type) {
+                    if (_sortType == type)
                       setState(() => _sortAscending = !_sortAscending);
-                    } else {
+                    else
                       setState(() {
                         _sortType = type;
                         _sortAscending = true;
                       });
-                    }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(
@@ -1021,7 +911,6 @@ class _AllPageState extends State<AllPage> {
                     ),
                   ],
                 ),
-                // Toggle Details Button
                 if (_selected != null)
                   IconButton(
                     icon: Icon(
@@ -1042,13 +931,12 @@ class _AllPageState extends State<AllPage> {
           ),
         ),
 
-        // Filter Segmented Button (Restored)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: SizedBox(
             width: double.infinity,
             child: SegmentedButton<_EntityFilterMode>(
-              style: ButtonStyle(
+              style: const ButtonStyle(
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -1065,22 +953,19 @@ class _AllPageState extends State<AllPage> {
                 ),
               ],
               selected: {_filterMode},
-              onSelectionChanged: (newSelection) {
-                setState(() => _filterMode = newSelection.first);
-              },
+              onSelectionChanged: (newSelection) =>
+                  setState(() => _filterMode = newSelection.first),
             ),
           ),
         ),
         const SizedBox(height: 8),
 
-        // Split View: List | Details (Responsive)
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 600;
               final showDetailsPanel = _selected != null && _showDetails;
 
-              // Extract the list widget to reuse
               Widget buildList() {
                 return _filteredItems.isEmpty
                     ? const Center(child: Text('未找到文件或快捷方式'))
@@ -1096,7 +981,7 @@ class _AllPageState extends State<AllPage> {
                               : item.name;
                           final isSelected = _selected?.fullPath == entity.path;
                           return Material(
-                            key: GlobalObjectKey(entity.path),
+                            key: ValueKey(entity.path),
                             color: isSelected
                                 ? Theme.of(
                                     context,
@@ -1105,24 +990,19 @@ class _AllPageState extends State<AllPage> {
                             child: InkWell(
                               onTapDown: (_) {
                                 _selectEntity(entity, displayName);
-                                if (_focusNode.canRequestFocus) {
-                                  _focusNode.requestFocus();
-                                }
+                                _focusNode.requestFocus();
                               },
-                              onTap: () {
+                              onTap: () async {
                                 final now =
                                     DateTime.now().millisecondsSinceEpoch;
                                 if (now - _lastTapTime < 300 &&
                                     _lastTappedPath == entity.path) {
-                                  // Double tap confirmed
-                                  if (isDir) {
+                                  if (isDir)
                                     _openFolder(entity.path);
-                                  } else {
-                                    openWithDefault(entity.path);
-                                  }
+                                  else
+                                    await openWithDefault(entity.path);
                                   _lastTapTime = 0;
                                 } else {
-                                  // Single tap
                                   _lastTapTime = now;
                                   _lastTappedPath = entity.path;
                                 }
@@ -1134,6 +1014,7 @@ class _AllPageState extends State<AllPage> {
                                   entity,
                                   displayName,
                                   details.globalPosition,
+                                  anchorContext: context,
                                 );
                               },
                               borderRadius: BorderRadius.circular(8),
@@ -1172,7 +1053,6 @@ class _AllPageState extends State<AllPage> {
                                     ).textTheme.bodySmall,
                                   ),
                                 ),
-                                trailing: null,
                               ),
                             ),
                           );
@@ -1180,7 +1060,6 @@ class _AllPageState extends State<AllPage> {
                       );
               }
 
-              // Details Widget
               Widget buildDetails() {
                 if (!showDetailsPanel) return const SizedBox.shrink();
                 return SizedBox(
@@ -1193,56 +1072,45 @@ class _AllPageState extends State<AllPage> {
                 );
               }
 
-              // Focus wrapper for keyboard events
-              final focusWrapper = Focus(
+              return Focus(
                 focusNode: _focusNode,
                 autofocus: true,
                 onKeyEvent: (node, event) {
-                  // Key handling logic reused from previous implementation
                   if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-                  final isCtrl = HardwareKeyboard.instance.isControlPressed;
-
-                  if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyC) {
-                    final s = _selected;
-                    if (s != null) {
-                      copyEntityPathsToClipboard([s.fullPath]);
-                      _showSnackBar('已复制到剪贴板');
+                  final isCtrl =
+                      HardwareKeyboard.instance.isLogicalKeyPressed(
+                        LogicalKeyboardKey.controlLeft,
+                      ) ||
+                      HardwareKeyboard.instance.isLogicalKeyPressed(
+                        LogicalKeyboardKey.controlRight,
+                      );
+                  if (isCtrl) {
+                    if (event.logicalKey == LogicalKeyboardKey.keyC) {
+                      if (_selected != null) {
+                        copyEntityPathsToClipboard([_selected!.fullPath]);
+                        _showSnackBar('已复制到剪贴板');
+                        return KeyEventResult.handled;
+                      }
+                    } else if (event.logicalKey == LogicalKeyboardKey.keyV) {
+                      _handlePaste();
                       return KeyEventResult.handled;
                     }
                   }
-                  if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyV) {
-                    _handlePaste();
-                    return KeyEventResult.handled;
-                  }
-
                   if (_isDetailEditing) return KeyEventResult.ignored;
-
                   final focus = FocusManager.instance.primaryFocus;
-                  final isEditing =
-                      focus != null &&
-                      focus.context != null &&
-                      focus.context!.widget is EditableText;
-                  if (isEditing) return KeyEventResult.ignored;
+                  if (focus?.context?.widget is EditableText)
+                    return KeyEventResult.ignored;
 
                   if (event.logicalKey == LogicalKeyboardKey.delete ||
                       event.logicalKey == LogicalKeyboardKey.backspace ||
                       event.logicalKey == LogicalKeyboardKey.numpadDecimal) {
-                    final s = _selected;
-                    if (s != null) {
-                      _deleteEntity(File(s.fullPath));
+                    if (_selected != null) {
+                      _deleteEntity(File(_selected!.fullPath));
                       return KeyEventResult.handled;
                     }
-                  }
-                  if (event.logicalKey == LogicalKeyboardKey.f2) {
-                    final s = _selected;
-                    if (s != null) {
-                      final entity = File(s.fullPath).existsSync()
-                          ? File(s.fullPath) as FileSystemEntity
-                          : Directory(s.fullPath);
-                      final key = GlobalObjectKey(s.fullPath);
-                      final itemContext = key.currentContext;
-                      _promptRename(entity, itemContext);
+                  } else if (event.logicalKey == LogicalKeyboardKey.f2) {
+                    if (_selected != null) {
+                      _promptRename(_selected!.entity, null);
                       return KeyEventResult.handled;
                     }
                   }
@@ -1268,8 +1136,6 @@ class _AllPageState extends State<AllPage> {
                         ),
                 ),
               );
-
-              return focusWrapper;
             },
           ),
         ),
@@ -1302,7 +1168,6 @@ class _EntityIcon extends StatelessWidget {
         style: beautifyStyle,
       );
     }
-
     return FutureBuilder<Uint8List?>(
       future: _resolveIconBytes(),
       builder: (context, snapshot) {

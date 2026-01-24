@@ -33,8 +33,6 @@ class _FilePageState extends State<FilePage> {
   String? _selectedPath;
   final FocusNode _focusNode = FocusNode();
   List<File> _files = [];
-
-  // Custom double-tap state
   int _lastTapTime = 0;
   String _lastTappedPath = '';
 
@@ -72,17 +70,11 @@ class _FilePageState extends State<FilePage> {
             .where((entity) {
               if (entity is! File) return false;
               final name = path.basename(entity.path);
-              final lower = name.toLowerCase();
-
               if (!widget.showHidden &&
-                  (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
+                  (name.startsWith('.') || isHiddenOrSystem(entity.path)))
                 return false;
-              }
-
-              if (lower == 'desktop.ini' || lower == 'thumbs.db') {
-                return false;
-              }
-
+              final lower = name.toLowerCase();
+              if (lower == 'desktop.ini' || lower == 'thumbs.db') return false;
               return !lower.endsWith('.lnk') && !lower.endsWith('.exe');
             })
             .map((e) => e as File)
@@ -107,21 +99,17 @@ class _FilePageState extends State<FilePage> {
       _showSnackBar('剪贴板中没有文件');
       return;
     }
-
     final targetDir = widget.desktopPath;
     int successCount = 0;
     for (final srcPath in files) {
       final result = await copyEntityToDirectory(srcPath, targetDir);
-      if (result.success) {
-        successCount++;
-      }
+      if (result.success) successCount++;
     }
-
     if (successCount > 0) {
       _showSnackBar('已粘贴 $successCount 个项目');
       _refresh();
     } else {
-      _showSnackBar('粘贴失败 (可能目标已存在或文件不可读)');
+      _showSnackBar('粘贴失败', success: false);
     }
   }
 
@@ -138,8 +126,257 @@ class _FilePageState extends State<FilePage> {
     }
   }
 
-  Future<void> _promptRename(String filePath) async {
-    final currentName = path.basename(filePath);
+  Future<void> _showPageMenu(Offset position) async {
+    Future.microtask(() async {
+      if (!mounted) return;
+      final result = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
+        ),
+        items: [
+          const PopupMenuItem(
+            value: 'new_folder',
+            child: ListTile(
+              leading: Icon(Icons.create_new_folder),
+              title: Text('新建文件夹'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'refresh',
+            child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
+          ),
+          PopupMenuItem(
+            value: 'paste',
+            child: ListTile(
+              leading: const Icon(Icons.paste),
+              title: const Text('粘贴'),
+              trailing: Text(
+                'Ctrl+V',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+        ],
+      );
+      if (!mounted || result == null) return;
+      switch (result) {
+        case 'new_folder':
+          await _promptNewFolderPage();
+          break;
+        case 'refresh':
+          _refresh();
+          break;
+        case 'paste':
+          await _handlePaste();
+          break;
+      }
+    });
+  }
+
+  Future<void> _promptNewFolderPage() async {
+    final controller = TextEditingController(text: '新建文件夹');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建文件夹'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '文件夹名称'),
+          onSubmitted: (_) => Navigator.of(ctx).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final name = controller.text.trim();
+    if (name.isEmpty) return;
+    final created = await createNewFolder(
+      widget.desktopPath,
+      preferredName: name,
+    );
+    if (created != null) {
+      _showSnackBar('已创建 ${path.basename(created)}');
+      _refresh();
+    } else {
+      _showSnackBar('创建失败', success: false);
+    }
+  }
+
+  Future<void> _showFileMenu(
+    BuildContext context,
+    File file,
+    Offset position,
+  ) async {
+    final displayName = path.basename(file.path);
+    Future.microtask(() async {
+      if (!mounted) return;
+      final result = await showMenu<String>(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
+        ),
+        items: [
+          const PopupMenuItem(
+            value: 'open',
+            child: ListTile(
+              leading: Icon(Icons.open_in_new),
+              title: Text('打开'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'open_with',
+            child: ListTile(
+              leading: Icon(Icons.app_registration),
+              title: Text('使用其他应用打开'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'show_in_explorer',
+            child: ListTile(
+              leading: Icon(Icons.folder_open),
+              title: Text('在文件资源管理器中显示'),
+            ),
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'move',
+            child: ListTile(
+              leading: Icon(Icons.drive_file_move),
+              title: Text('移动到..'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'copy',
+            child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
+          ),
+          PopupMenuItem(
+            value: 'copy_clipboard',
+            child: ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('复制到剪贴板(系统)'),
+              trailing: Text(
+                'Ctrl+C',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'rename',
+            child: ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('重命名'),
+              trailing: Text(
+                'F2',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: ListTile(
+              leading: const Icon(Icons.delete),
+              title: const Text('删除(回收站)'),
+              trailing: Text(
+                'Del',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: 'copy_name',
+            child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
+          ),
+          const PopupMenuItem(
+            value: 'copy_path',
+            child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
+          ),
+          const PopupMenuItem(
+            value: 'copy_folder',
+            child: ListTile(
+              leading: Icon(Icons.folder),
+              title: Text('复制所在文件夹'),
+            ),
+          ),
+        ],
+      );
+      if (!mounted || result == null) return;
+      switch (result) {
+        case 'open':
+          await openWithDefault(file.path);
+          break;
+        case 'open_with':
+          await _promptOpenWithFile(context, file.path);
+          break;
+        case 'show_in_explorer':
+          await showInExplorer(file.path);
+          break;
+        case 'delete':
+          await _deleteFile(file.path);
+          break;
+        case 'move':
+          await _promptMoveFile(context, file);
+          break;
+        case 'copy':
+          await _promptCopyFile(context, file);
+          break;
+        case 'copy_clipboard':
+          {
+            final ok = copyEntityPathsToClipboard([file.path]);
+            _showSnackBar(ok ? '已复制到剪贴板' : '复制到剪贴板失败');
+          }
+          break;
+        case 'rename':
+          await _promptRenameFile(context, file);
+          break;
+        case 'copy_name':
+          await _copyToClipboard(displayName, label: '名称', quoted: false);
+          break;
+        case 'copy_path':
+          await _copyToClipboard(file.path, label: '路径', quoted: true);
+          break;
+        case 'copy_folder':
+          await _copyToClipboard(
+            path.dirname(file.path),
+            label: '文件夹',
+            quoted: true,
+          );
+          break;
+      }
+    });
+  }
+
+  Future<void> _copyToClipboard(
+    String raw, {
+    required String label,
+    required bool quoted,
+  }) async {
+    final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    _showSnackBar('已复制 $label');
+  }
+
+  Future<void> _promptRenameFile(BuildContext context, File file) async {
+    final currentName = path.basename(file.path);
     final controller = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
@@ -164,70 +401,113 @@ class _FilePageState extends State<FilePage> {
       ),
     );
     if (newName == null || newName.isEmpty || newName == currentName) return;
-    final parentDir = path.dirname(filePath);
+    final parentDir = path.dirname(file.path);
     final newPath = path.join(parentDir, newName);
     try {
-      await File(filePath).rename(newPath);
-      _showSnackBar('已重命名为 $newName');
-      _refresh();
+      await file.rename(newPath);
+      if (mounted) {
+        _showSnackBar('已重命名为 $newName');
+        _refresh();
+      }
     } catch (e) {
-      _showSnackBar('重命名失败: $e');
+      if (mounted) _showSnackBar('重命名失败: $e', success: false);
     }
+  }
+
+  Future<void> _promptMoveFile(BuildContext context, File file) async {
+    final targetDir = await showFolderPicker(
+      context: context,
+      initialPath: path.dirname(file.path),
+      showHidden: true,
+    );
+    if (targetDir == null || targetDir.isEmpty) return;
+    final dest = path.join(targetDir, path.basename(file.path));
+    try {
+      if (File(dest).existsSync()) {
+        if (mounted) _showSnackBar('目标已存在同名文件', success: false);
+        return;
+      }
+      await file.rename(dest);
+      if (mounted) {
+        _showSnackBar('已移动到 $dest');
+        _refresh();
+      }
+    } catch (e) {
+      if (mounted) _showSnackBar('移动失败: $e', success: false);
+    }
+  }
+
+  Future<void> _promptCopyFile(BuildContext context, File file) async {
+    final targetDir = await showFolderPicker(
+      context: context,
+      initialPath: path.dirname(file.path),
+      showHidden: true,
+    );
+    if (targetDir == null || targetDir.isEmpty) return;
+    final result = await copyEntityToDirectory(file.path, targetDir);
+    if (mounted) {
+      if (result.success)
+        _showSnackBar('已复制到 ${result.destPath}');
+      else
+        _showSnackBar('复制失败: ${result.message ?? 'unknown'}', success: false);
+    }
+  }
+
+  Future<void> _promptOpenWithFile(
+    BuildContext context,
+    String targetPath,
+  ) async {
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final appPath = picked.files.single.path;
+    if (appPath == null || appPath.isEmpty) return;
+    await openWithApp(appPath, targetPath);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_files.isEmpty) {
-      return const Center(child: Text('未找到文件'));
-    }
-
+    if (_files.isEmpty) return const Center(child: Text('未找到文件'));
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
-
-        // Verbose debug log
-        debugPrint(
-          '[FilePage] Key: ${event.logicalKey.keyLabel} (${event.logicalKey.keyId})',
-        );
-
-        final isCtrl = HardwareKeyboard.instance.isControlPressed;
-
-        if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyC) {
-          final s = _selectedPath;
-          if (s != null) {
-            copyEntityPathsToClipboard([s]);
-            _showSnackBar('已复制到剪贴板');
+        final isCtrl =
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.controlLeft,
+            ) ||
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.controlRight,
+            );
+        if (isCtrl) {
+          if (event.logicalKey == LogicalKeyboardKey.keyC) {
+            if (_selectedPath != null) {
+              copyEntityPathsToClipboard([_selectedPath!]);
+              _showSnackBar('已复制到剪贴板');
+              return KeyEventResult.handled;
+            }
+          } else if (event.logicalKey == LogicalKeyboardKey.keyV) {
+            _handlePaste();
             return KeyEventResult.handled;
           }
         }
-        if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyV) {
-          _handlePaste();
-          return KeyEventResult.handled;
-        }
-
         final focus = FocusManager.instance.primaryFocus;
-        final isEditing =
-            focus != null &&
-            focus.context != null &&
-            focus.context!.widget is EditableText;
-        if (isEditing) return KeyEventResult.ignored;
-
+        if (focus?.context?.widget is EditableText)
+          return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.delete ||
             event.logicalKey == LogicalKeyboardKey.backspace ||
             event.logicalKey == LogicalKeyboardKey.numpadDecimal) {
-          debugPrint('Delete/Backspace pressed, selected: $_selectedPath');
-          final s = _selectedPath;
-          if (s != null) {
-            _deleteFile(s);
+          if (_selectedPath != null) {
+            _deleteFile(_selectedPath!);
             return KeyEventResult.handled;
           }
-        }
-        if (event.logicalKey == LogicalKeyboardKey.f2) {
-          final s = _selectedPath;
-          if (s != null) {
-            _promptRename(s);
+        } else if (event.logicalKey == LogicalKeyboardKey.f2) {
+          if (_selectedPath != null) {
+            _promptRenameFile(context, File(_selectedPath!));
             return KeyEventResult.handled;
           }
         }
@@ -235,10 +515,7 @@ class _FilePageState extends State<FilePage> {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: (details) {
-          // If no item is selected, show page menu
-          _showPageMenu(details.globalPosition);
-        },
+        onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
         child: GridView.builder(
           padding: const EdgeInsets.all(12),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -252,7 +529,6 @@ class _FilePageState extends State<FilePage> {
             final file = _files[index];
             final name = path.basename(file.path);
             final isSelected = file.path == _selectedPath;
-
             return Material(
               color: isSelected
                   ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
@@ -317,350 +593,6 @@ class _FilePageState extends State<FilePage> {
       ),
     );
   }
-
-  Future<void> _showPageMenu(Offset position) async {
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: [
-        const PopupMenuItem(
-          value: 'new_folder',
-          child: ListTile(
-            leading: Icon(Icons.create_new_folder),
-            title: Text('新建文件夹'),
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'refresh',
-          child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
-        ),
-        const PopupMenuItem(
-          value: 'paste',
-          child: ListTile(
-            leading: Icon(Icons.paste),
-            title: Text('粘贴'),
-            trailing: Text(
-              'Ctrl+V',
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-        ),
-      ],
-    );
-
-    if (!mounted) return;
-
-    switch (result) {
-      case 'new_folder':
-        await _promptNewFolderPage();
-        break;
-      case 'refresh':
-        _refresh();
-        break;
-      case 'paste':
-        await _handlePaste();
-        break;
-    }
-  }
-
-  Future<void> _promptNewFolderPage() async {
-    final controller = TextEditingController(text: '新建文件夹');
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('新建文件夹'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '文件夹名称'),
-          onSubmitted: (_) => Navigator.of(ctx).pop(true),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final name = controller.text.trim();
-      if (name.isNotEmpty) {
-        final created = await createNewFolder(
-          widget.desktopPath,
-          preferredName: name,
-        );
-        if (created != null) {
-          _showSnackBar('已创建 ${path.basename(created)}');
-          _refresh();
-        } else {
-          _showSnackBar('创建失败', success: false);
-        }
-      }
-    }
-  }
-
-  Future<void> _showFileMenu(
-    BuildContext context,
-    File file,
-    Offset position,
-  ) async {
-    final displayName = path.basename(file.path);
-    final result = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        position.dx + 1,
-        position.dy + 1,
-      ),
-      items: [
-        const PopupMenuItem(
-          value: 'open',
-          child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
-        ),
-        const PopupMenuItem(
-          value: 'open_with',
-          child: ListTile(
-            leading: Icon(Icons.app_registration),
-            title: Text('使用其他应用打开'),
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'show_in_explorer',
-          child: ListTile(
-            leading: Icon(Icons.folder_open),
-            title: Text('在文件资源管理器中显示'),
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'move',
-          child: ListTile(
-            leading: Icon(Icons.drive_file_move),
-            title: Text('移动到..'),
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'copy',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('复制到...')),
-        ),
-        PopupMenuItem(
-          value: 'copy_clipboard',
-          child: ListTile(
-            leading: const Icon(Icons.copy),
-            title: const Text('复制到剪贴板(系统)'),
-            trailing: Text(
-              'Ctrl+C',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'rename',
-          child: ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('重命名'),
-            trailing: Text('F2', style: Theme.of(context).textTheme.bodySmall),
-          ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            leading: const Icon(Icons.delete),
-            title: const Text('删除(回收站)'),
-            trailing: Text('Del', style: Theme.of(context).textTheme.bodySmall),
-          ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'copy_name',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
-        ),
-        const PopupMenuItem(
-          value: 'copy_path',
-          child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
-        ),
-        const PopupMenuItem(
-          value: 'copy_folder',
-          child: ListTile(leading: Icon(Icons.folder), title: Text('复制所在文件夹')),
-        ),
-      ],
-    );
-
-    if (!mounted) return;
-
-    switch (result) {
-      case 'open':
-        await openWithDefault(file.path);
-        break;
-      case 'open_with':
-        await _promptOpenWith(file.path);
-        break;
-      case 'show_in_explorer':
-        await showInExplorer(file.path);
-        break;
-      case 'move':
-        await _promptMoveFile(context, file);
-        break;
-      case 'copy':
-        await _promptCopyFile(context, file);
-        break;
-      case 'copy_clipboard':
-        final ok = copyEntityPathsToClipboard([file.path]);
-        if (mounted) {
-          OperationManager.instance.quickTask(
-            ok ? '已复制到剪贴板' : '复制到剪贴板失败',
-            success: ok,
-          );
-        }
-        break;
-      case 'rename':
-        await _promptRenameFile(context, file);
-        break;
-      case 'delete':
-        _deleteFile(file.path);
-        break;
-      case 'copy_name':
-        await copyToClipboard(displayName, label: 'name', quoted: false);
-        break;
-      case 'copy_path':
-        await copyToClipboard(file.path, label: 'path', quoted: true);
-        break;
-      case 'copy_folder':
-        await copyToClipboard(
-          path.dirname(file.path),
-          label: 'folder',
-          quoted: true,
-        );
-        break;
-      default:
-        break;
-    }
-  }
-
-  Future<void> copyToClipboard(
-    String raw, {
-    required String label,
-    required bool quoted,
-  }) async {
-    final value = quoted ? '"${raw.replaceAll('"', '\\"')}"' : raw;
-    await Clipboard.setData(ClipboardData(text: value));
-    if (!mounted) return;
-    OperationManager.instance.quickTask('已复制 $label');
-  }
-
-  Future<void> _promptRenameFile(BuildContext context, File file) async {
-    final currentName = path.basename(file.path);
-    final controller = TextEditingController(text: currentName);
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重命名'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入新名称'),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-    if (newName == null || newName.isEmpty || newName == currentName) return;
-    final parentDir = path.dirname(file.path);
-    final newPath = path.join(parentDir, newName);
-    try {
-      await file.rename(newPath);
-      if (mounted) {
-        OperationManager.instance.quickTask('已重命名为 $newName');
-        _refresh();
-      }
-    } catch (e) {
-      if (mounted) {
-        OperationManager.instance.quickTask('重命名失败: $e', success: false);
-      }
-    }
-  }
-
-  Future<void> _promptMoveFile(BuildContext context, File file) async {
-    final targetDir = await showFolderPicker(
-      context: context,
-      initialPath: path.dirname(file.path),
-      showHidden: true,
-    );
-    if (targetDir == null || targetDir.isEmpty) return;
-    final dest = path.join(targetDir, path.basename(file.path));
-    try {
-      if (File(dest).existsSync()) {
-        if (mounted) {
-          OperationManager.instance.quickTask('目标已存在同名文件', success: false);
-        }
-        return;
-      }
-      await file.rename(dest);
-      if (mounted) {
-        OperationManager.instance.quickTask('已移动到 $dest');
-        _refresh();
-      }
-    } catch (e) {
-      if (mounted) {
-        OperationManager.instance.quickTask('移动失败: $e', success: false);
-      }
-    }
-  }
-
-  Future<void> _promptCopyFile(BuildContext context, File file) async {
-    final targetDir = await showFolderPicker(
-      context: context,
-      initialPath: path.dirname(file.path),
-      showHidden: true,
-    );
-    if (targetDir == null || targetDir.isEmpty) return;
-
-    final result = await copyEntityToDirectory(file.path, targetDir);
-    if (mounted) {
-      if (result.success) {
-        OperationManager.instance.quickTask('已复制到 ${result.destPath}');
-      } else {
-        OperationManager.instance.quickTask(
-          '复制失败: ${result.message ?? 'unknown'}',
-          success: false,
-        );
-      }
-    }
-  }
-
-  Future<void> _promptOpenWith(String targetPath) async {
-    final picked = await FilePicker.platform.pickFiles(
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final appPath = picked.files.single.path;
-    if (appPath == null || appPath.isEmpty) return;
-    await openWithApp(appPath, targetPath);
-  }
 }
 
 class _FileIcon extends StatelessWidget {
@@ -668,14 +600,12 @@ class _FileIcon extends StatelessWidget {
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
   final double size;
-
   const _FileIcon({
     required this.filePath,
     required this.beautifyIcon,
     required this.beautifyStyle,
     this.size = 28,
   });
-
   static final Map<String, Future<Uint8List?>> _iconFutures = {};
 
   @override
@@ -691,7 +621,7 @@ class _FileIcon extends StatelessWidget {
             size: size,
             enabled: beautifyIcon,
             style: beautifyStyle,
-            fit: BoxFit.contain, // best guess used
+            fit: BoxFit.contain,
           );
         }
         final ext = path.extension(filePath).toLowerCase();
@@ -713,7 +643,6 @@ class _FileIcon extends StatelessWidget {
     final ext = path.extension(filePath).toLowerCase();
     final primary = await _getIconFuture(filePath);
     if (primary != null && primary.isNotEmpty) return primary;
-
     if (ext == '.lnk') {
       final target = getShortcutTarget(filePath);
       if (target != null && target.isNotEmpty) {
