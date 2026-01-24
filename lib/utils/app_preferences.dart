@@ -27,6 +27,13 @@ class AppPreferences {
   static const _kWinH = 'window.h';
   static const _kCategories = 'categories.v1';
 
+  // 系统项目显示设置
+  static const _kShowRecycleBin = 'systemItems.recycleBin';
+  static const _kShowThisPC = 'systemItems.thisPC';
+  static const _kShowControlPanel = 'systemItems.controlPanel';
+  static const _kShowNetwork = 'systemItems.network';
+  static const _kShowUserFiles = 'systemItems.userFiles';
+
   // 快捷键唤醒窗口布局（使用屏幕比例）
   static const _kHotkeyXRatio = 'window.hotkey.xRatio';
   static const _kHotkeyYRatio = 'window.hotkey.yRatio';
@@ -63,6 +70,11 @@ class AppPreferences {
           0,
           IconBeautifyStyle.values.length - 1,
         )];
+    final showRecycleBin = prefs.getBool(_kShowRecycleBin) ?? true;
+    final showThisPC = prefs.getBool(_kShowThisPC) ?? true;
+    final showControlPanel = prefs.getBool(_kShowControlPanel) ?? false;
+    final showNetwork = prefs.getBool(_kShowNetwork) ?? false;
+    final showUserFiles = prefs.getBool(_kShowUserFiles) ?? false;
 
     return DeskTidyConfig(
       transparency: transparency.clamp(0.0, 1.0),
@@ -78,6 +90,11 @@ class AppPreferences {
       beautifyAppIcons: beautifyAppIcons,
       beautifyDesktopIcons: beautifyDesktopIcons,
       beautifyStyle: beautifyStyle,
+      showRecycleBin: showRecycleBin,
+      showThisPC: showThisPC,
+      showControlPanel: showControlPanel,
+      showNetwork: showNetwork,
+      showUserFiles: showUserFiles,
     );
   }
 
@@ -139,6 +156,31 @@ class AppPreferences {
   static Future<void> saveBeautifyStyle(IconBeautifyStyle style) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kBeautifyStyle, style.index);
+  }
+
+  static Future<void> saveShowRecycleBin(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowRecycleBin, v);
+  }
+
+  static Future<void> saveShowThisPC(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowThisPC, v);
+  }
+
+  static Future<void> saveShowControlPanel(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowControlPanel, v);
+  }
+
+  static Future<void> saveShowNetwork(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowNetwork, v);
+  }
+
+  static Future<void> saveShowUserFiles(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kShowUserFiles, v);
   }
 
   static Future<String?> backupAndSaveBackgroundPath(
@@ -308,6 +350,11 @@ class DeskTidyConfig {
   final bool beautifyAppIcons;
   final bool beautifyDesktopIcons;
   final IconBeautifyStyle beautifyStyle;
+  final bool showRecycleBin;
+  final bool showThisPC;
+  final bool showControlPanel;
+  final bool showNetwork;
+  final bool showUserFiles;
 
   const DeskTidyConfig({
     required this.transparency,
@@ -323,6 +370,11 @@ class DeskTidyConfig {
     required this.beautifyAppIcons,
     required this.beautifyDesktopIcons,
     required this.beautifyStyle,
+    required this.showRecycleBin,
+    required this.showThisPC,
+    required this.showControlPanel,
+    required this.showNetwork,
+    required this.showUserFiles,
   });
 }
 

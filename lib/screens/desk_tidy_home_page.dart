@@ -28,6 +28,7 @@ import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
 import '../widgets/operation_progress_bar.dart';
 import '../services/hotkey_service.dart';
+import '../models/system_items.dart';
 
 ThemeModeOption _themeModeOption = ThemeModeOption.dark;
 bool _showHidden = false;
@@ -79,6 +80,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _beautifyDesktopIcons = false;
   IconBeautifyStyle _beautifyStyle = IconBeautifyStyle.cute;
   bool _enableDesktopBoxes = false;
+  bool _showRecycleBin = true;
+  bool _showThisPC = true;
+  bool _showControlPanel = false;
+  bool _showNetwork = false;
+  bool _showUserFiles = false;
 
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
   Timer? _desktopIconSyncTimer;
@@ -296,6 +302,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       _beautifyDesktopIcons = config.beautifyDesktopIcons;
       _beautifyStyle = config.beautifyStyle;
       _enableDesktopBoxes = config.enableDesktopBoxes;
+      _showRecycleBin = config.showRecycleBin;
+      _showThisPC = config.showThisPC;
+      _showControlPanel = config.showControlPanel;
+      _showNetwork = config.showNetwork;
+      _showUserFiles = config.showUserFiles;
     });
     _handleThemeChange(_themeModeOption);
     await _loadCategories();
@@ -472,6 +483,28 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       final shortcutItems = (await Future.wait(
         shortcutFutures,
       )).whereType<ShortcutItem>().toList();
+
+      // 插入已启用的系统项目
+      final systemItemsToLoad = <SystemItemType>[];
+      if (_showThisPC) systemItemsToLoad.add(SystemItemType.thisPC);
+      if (_showRecycleBin) systemItemsToLoad.add(SystemItemType.recycleBin);
+      if (_showControlPanel) systemItemsToLoad.add(SystemItemType.controlPanel);
+      if (_showNetwork) systemItemsToLoad.add(SystemItemType.network);
+      if (_showUserFiles) systemItemsToLoad.add(SystemItemType.userFiles);
+
+      for (final type in systemItemsToLoad) {
+        final info = SystemItemInfo.all[type]!;
+        final icon = await extractIconAsync(
+          info.iconResource,
+          size: requestIconSize,
+        );
+        shortcutItems.add(ShortcutItem.system(type, iconData: icon));
+      }
+
+      // 按名称自然排序（字母顺序），使系统项目与普通应用自然混合
+      shortcutItems.sort((a, b) {
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
 
       // 只在数据变化时更新UI，实现无感更新
       if (forceReloadIcons || !_shortcutsEqual(_shortcuts, shortcutItems)) {
@@ -1815,6 +1848,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           autoLaunch: _autoLaunch,
           hideDesktopItems: _hideDesktopItems,
           enableDesktopBoxes: _enableDesktopBoxes,
+          showRecycleBin: _showRecycleBin,
+          showThisPC: _showThisPC,
+          showControlPanel: _showControlPanel,
+          showNetwork: _showNetwork,
+          showUserFiles: _showUserFiles,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
           beautifyAppIcons: _beautifyAppIcons,
@@ -1857,6 +1895,35 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             await AppPreferences.saveAutoLaunch(v);
           },
           onHideDesktopItemsChanged: _handleHideDesktopItemsChanged,
+          onEnableDesktopBoxesChanged: (v) async {
+            setState(() => _enableDesktopBoxes = v);
+            await AppPreferences.saveEnableDesktopBoxes(v);
+          },
+          onShowRecycleBinChanged: (v) {
+            setState(() => _showRecycleBin = v);
+            AppPreferences.saveShowRecycleBin(v);
+            _loadShortcuts();
+          },
+          onShowThisPCChanged: (v) {
+            setState(() => _showThisPC = v);
+            AppPreferences.saveShowThisPC(v);
+            _loadShortcuts();
+          },
+          onShowControlPanelChanged: (v) {
+            setState(() => _showControlPanel = v);
+            AppPreferences.saveShowControlPanel(v);
+            _loadShortcuts();
+          },
+          onShowNetworkChanged: (v) {
+            setState(() => _showNetwork = v);
+            AppPreferences.saveShowNetwork(v);
+            _loadShortcuts();
+          },
+          onShowUserFilesChanged: (v) {
+            setState(() => _showUserFiles = v);
+            AppPreferences.saveShowUserFiles(v);
+            _loadShortcuts();
+          },
           onThemeModeChanged: (v) {
             _handleThemeChange(v);
             if (v != null) {
@@ -1896,7 +1963,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
             setState(() => _beautifyDesktopIcons = v);
             AppPreferences.saveBeautifyDesktopIcons(v);
           },
-          onEnableDesktopBoxesChanged: _handleEnableDesktopBoxesChanged,
         );
       default:
         return _buildApplicationContent();
@@ -1915,15 +1981,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     }
     OperationManager.instance.quickTask(hide ? '已隐藏系统桌面图标' : '已显示系统桌面图标');
     await _syncDesktopIconVisibility();
-  }
-
-  Future<void> _handleEnableDesktopBoxesChanged(bool enable) async {
-    setState(() => _enableDesktopBoxes = enable);
-    await AppPreferences.saveEnableDesktopBoxes(enable);
-    await BoxLauncher.instance.updateBoxes(
-      enabled: enable,
-      desktopPath: _desktopPath,
-    );
   }
 
   void _handleThemeChange(ThemeModeOption? option) {

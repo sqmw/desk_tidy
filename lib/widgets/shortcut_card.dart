@@ -8,6 +8,7 @@ import '../models/shortcut_item.dart';
 import '../models/icon_beautify_style.dart';
 import '../utils/desktop_helper.dart';
 import '../widgets/beautified_icon.dart';
+import '../models/system_items.dart';
 
 class ShortcutCard extends StatefulWidget {
   final ShortcutItem shortcut;
@@ -127,47 +128,61 @@ class _ShortcutCardState extends State<ShortcutCard> {
         globalPosition.dx + 1,
         globalPosition.dy + 1,
       ),
-      items: const [
-        PopupMenuItem(
+      items: [
+        const PopupMenuItem(
           value: 'open',
           child: ListTile(
             leading: Icon(Icons.open_in_new),
             title: Text('Open'),
           ),
         ),
-        PopupMenuItem(
-          value: 'categorize',
-          child: ListTile(
-            leading: Icon(Icons.bookmarks_outlined),
-            title: Text('添加到分类'),
+        if (!shortcut.isSystemItem) ...[
+          const PopupMenuItem(
+            value: 'categorize',
+            child: ListTile(
+              leading: Icon(Icons.bookmarks_outlined),
+              title: Text('添加到分类'),
+            ),
           ),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(leading: Icon(Icons.delete), title: Text('删除(回收站)')),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
+          const PopupMenuItem(
+            value: 'delete',
+            child: ListTile(
+              leading: Icon(Icons.delete),
+              title: Text('删除(回收站)'),
+            ),
+          ),
+        ],
+        const PopupMenuDivider(),
+        const PopupMenuItem(
           value: 'copy_name',
           child: ListTile(leading: Icon(Icons.copy), title: Text('Copy name')),
         ),
-        PopupMenuItem(
-          value: 'copy_path',
-          child: ListTile(leading: Icon(Icons.link), title: Text('Copy path')),
-        ),
-        PopupMenuItem(
-          value: 'copy_folder',
-          child: ListTile(
-            leading: Icon(Icons.folder),
-            title: Text('Copy folder'),
+        if (!shortcut.isSystemItem) ...[
+          const PopupMenuItem(
+            value: 'copy_path',
+            child: ListTile(
+              leading: Icon(Icons.link),
+              title: Text('Copy path'),
+            ),
           ),
-        ),
+          const PopupMenuItem(
+            value: 'copy_folder',
+            child: ListTile(
+              leading: Icon(Icons.folder),
+              title: Text('Copy folder'),
+            ),
+          ),
+        ],
       ],
     );
 
     switch (result) {
       case 'open':
-        openWithDefault(resolvedPath);
+        if (shortcut.isSystemItem) {
+          SystemItemInfo.open(shortcut.systemItemType!);
+        } else {
+          openWithDefault(resolvedPath);
+        }
         widget.onLaunched?.call();
         break;
       case 'categorize':
@@ -360,7 +375,9 @@ class _ShortcutCardState extends State<ShortcutCard> {
             _showShortcutMenu(details.globalPosition);
           },
           onDoubleTap: () {
-            if (shortcut.targetPath.isNotEmpty) {
+            if (shortcut.isSystemItem) {
+              SystemItemInfo.open(shortcut.systemItemType!);
+            } else if (shortcut.targetPath.isNotEmpty) {
               openWithDefault(shortcut.targetPath);
             } else {
               openWithDefault(shortcut.path);

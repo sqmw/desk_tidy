@@ -26,6 +26,11 @@ class SettingsPage extends StatefulWidget {
   final bool beautifyDesktopIcons;
   final IconBeautifyStyle beautifyStyle;
   final bool enableDesktopBoxes;
+  final bool showRecycleBin;
+  final bool showThisPC;
+  final bool showControlPanel;
+  final bool showNetwork;
+  final bool showUserFiles;
 
   final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onFrostStrengthChanged;
@@ -41,6 +46,11 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onBeautifyAllChanged;
   final ValueChanged<IconBeautifyStyle> onBeautifyStyleChanged;
   final ValueChanged<bool> onEnableDesktopBoxesChanged;
+  final ValueChanged<bool> onShowRecycleBinChanged;
+  final ValueChanged<bool> onShowThisPCChanged;
+  final ValueChanged<bool> onShowControlPanelChanged;
+  final ValueChanged<bool> onShowNetworkChanged;
+  final ValueChanged<bool> onShowUserFilesChanged;
 
   const SettingsPage({
     super.key,
@@ -57,6 +67,11 @@ class SettingsPage extends StatefulWidget {
     required this.beautifyDesktopIcons,
     required this.beautifyStyle,
     required this.enableDesktopBoxes,
+    required this.showRecycleBin,
+    required this.showThisPC,
+    required this.showControlPanel,
+    required this.showNetwork,
+    required this.showUserFiles,
     required this.onTransparencyChanged,
     required this.onFrostStrengthChanged,
     required this.onIconSizeChanged,
@@ -71,6 +86,11 @@ class SettingsPage extends StatefulWidget {
     required this.onBeautifyAllChanged,
     required this.onBeautifyStyleChanged,
     required this.onEnableDesktopBoxesChanged,
+    required this.onShowRecycleBinChanged,
+    required this.onShowThisPCChanged,
+    required this.onShowControlPanelChanged,
+    required this.onShowNetworkChanged,
+    required this.onShowUserFilesChanged,
   });
 
   @override
@@ -347,6 +367,62 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: widget.onThemeModeChanged,
               ),
               onPressed: (_) => widget.onThemeModeChanged(ThemeModeOption.dark),
+            ),
+          ],
+        ),
+
+        /// 系统项目：回收站 / 此电脑 / 控制面板 / 网络 / 个人文件夹
+        SettingsSection(
+          title: const Text(''), // 隐藏标题
+          tiles: <SettingsTile>[
+            SettingsTile(
+              leading: const Icon(Icons.computer),
+              title: const Text('显示此电脑'),
+              trailing: Checkbox(
+                value: widget.showThisPC,
+                onChanged: (v) => widget.onShowThisPCChanged(v ?? false),
+              ),
+              onPressed: (_) => widget.onShowThisPCChanged(!widget.showThisPC),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('显示回收站'),
+              trailing: Checkbox(
+                value: widget.showRecycleBin,
+                onChanged: (v) => widget.onShowRecycleBinChanged(v ?? false),
+              ),
+              onPressed: (_) =>
+                  widget.onShowRecycleBinChanged(!widget.showRecycleBin),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.settings_applications),
+              title: const Text('显示控制面板'),
+              trailing: Checkbox(
+                value: widget.showControlPanel,
+                onChanged: (v) => widget.onShowControlPanelChanged(v ?? false),
+              ),
+              onPressed: (_) =>
+                  widget.onShowControlPanelChanged(!widget.showControlPanel),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.network_check),
+              title: const Text('显示网络'),
+              trailing: Checkbox(
+                value: widget.showNetwork,
+                onChanged: (v) => widget.onShowNetworkChanged(v ?? false),
+              ),
+              onPressed: (_) =>
+                  widget.onShowNetworkChanged(!widget.showNetwork),
+            ),
+            SettingsTile(
+              leading: const Icon(Icons.folder_shared),
+              title: const Text('显示个人文件夹'),
+              trailing: Checkbox(
+                value: widget.showUserFiles,
+                onChanged: (v) => widget.onShowUserFilesChanged(v ?? false),
+              ),
+              onPressed: (_) =>
+                  widget.onShowUserFilesChanged(!widget.showUserFiles),
             ),
           ],
         ),

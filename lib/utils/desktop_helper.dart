@@ -1110,12 +1110,16 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
   if (cachedValue == null) {
     final pathPtr = filePath.toNativeUtf16();
     final shFileInfo = calloc<SHFILEINFO>();
+    final isVirtual =
+        filePath.startsWith('::') ||
+        filePath.startsWith('shell::') ||
+        filePath.contains(',');
     final hr = SHGetFileInfo(
       pathPtr.cast(),
       0,
       shFileInfo.cast(),
       sizeOf<SHFILEINFO>(),
-      SHGFI_ICON | SHGFI_LARGEICON,
+      SHGFI_ICON | SHGFI_LARGEICON | (isVirtual ? 0 : SHGFI_USEFILEATTRIBUTES),
     );
     calloc.free(pathPtr);
     if (hr == 0) {
@@ -1188,12 +1192,16 @@ int _getSystemIconIndex(String filePath) {
   final attrs = _fileAttributesForSystemIcon(filePath);
   final pathPtr = filePath.toNativeUtf16();
   final shFileInfo = calloc<SHFILEINFO>();
+  final isVirtual =
+      filePath.startsWith('::') ||
+      filePath.startsWith('shell::') ||
+      filePath.contains(',');
   final hr = SHGetFileInfo(
     pathPtr.cast(),
-    attrs,
+    isVirtual ? 0 : attrs,
     shFileInfo.cast(),
     sizeOf<SHFILEINFO>(),
-    SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES,
+    SHGFI_SYSICONINDEX | (isVirtual ? 0 : SHGFI_USEFILEATTRIBUTES),
   );
   calloc.free(pathPtr);
   if (hr == 0) {
@@ -1218,6 +1226,19 @@ int _fileAttributesForSystemIcon(String filePath) {
 }
 
 _IconLocation? _getIconLocation(String filePath) {
+  // Support manual resource path: "path,index"
+  if (filePath.contains(',')) {
+    final parts = filePath.split(',');
+    if (parts.length == 2) {
+      final path = parts[0].trim();
+      final indexStr = parts[1].trim();
+      final index = int.tryParse(indexStr);
+      if (index != null) {
+        return _IconLocation(path, index);
+      }
+    }
+  }
+
   final pathPtr = filePath.toNativeUtf16();
   final shFileInfo = calloc<SHFILEINFO>();
   final result = SHGetFileInfo(
