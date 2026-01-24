@@ -67,6 +67,10 @@ List<(T, MatchResult)> results = FuzzyMatcher.filterWithResult(...);
 - 匹配范围越小，分数越高
 - 基于 `queryLength / matchSpan` 计算
 
+### 名称长度排序
+- 分数相同时，名称越短排名越靠前
+- 例如："Visual Studio" 排在 "Visual Studio Insiders" 之前
+
 ---
 
 ## 使用示例
@@ -102,6 +106,7 @@ final filtered = FuzzyMatcher.filter<ShortcutItem>(
 
 | 日期 | 变更 |
 |------|------|
+| 2026-01-24 | 优化排序：分数相同时，名称越短排名越靠前（如 "Visual Studio" 优先于 "Visual Studio Insiders"）|
 | 2026-01-21 | 添加部分匹配（partialMatch），让 "abao" 通过 "bao" 匹配 "doubao"；修正 subsequence 示例 |
 | 2026-01-21 | 添加子序列匹配（subsequence），支持非连续字符匹配 |
 | 2026-01-18 | 创建模糊搜索系统，替换原有的前缀匹配 |

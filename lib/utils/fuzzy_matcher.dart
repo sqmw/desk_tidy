@@ -156,16 +156,21 @@ class FuzzyMatcher {
     final normalizedQuery = normalizeSearchText(query);
     if (normalizedQuery.isEmpty) return items;
 
-    final scored = <(T, MatchResult)>[];
+    final scored = <(T, MatchResult, int)>[]; // (item, result, nameLength)
     for (final item in items) {
-      final result = match(query, indexer(item));
+      final index = indexer(item);
+      final result = match(query, index);
       if (result.matched) {
-        scored.add((item, result));
+        scored.add((item, result, index.sourceName.length));
       }
     }
 
-    // 按分数降序排列
-    scored.sort((a, b) => b.$2.score.compareTo(a.$2.score));
+    // 按分数降序排列；分数相同时按名称长度升序（更短的名称更精确）
+    scored.sort((a, b) {
+      final scoreCompare = b.$2.score.compareTo(a.$2.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return a.$3.compareTo(b.$3); // 名称长度升序
+    });
 
     return scored.map((e) => e.$1).toList();
   }
@@ -192,16 +197,22 @@ class FuzzyMatcher {
           .toList();
     }
 
-    final scored = <(T, MatchResult)>[];
+    final scored = <(T, MatchResult, int)>[]; // (item, result, nameLength)
     for (final item in items) {
-      final result = match(query, indexer(item));
+      final index = indexer(item);
+      final result = match(query, index);
       if (result.matched) {
-        scored.add((item, result));
+        scored.add((item, result, index.sourceName.length));
       }
     }
 
-    scored.sort((a, b) => b.$2.score.compareTo(a.$2.score));
-    return scored;
+    // 按分数降序排列；分数相同时按名称长度升序（更短的名称更精确）
+    scored.sort((a, b) {
+      final scoreCompare = b.$2.score.compareTo(a.$2.score);
+      if (scoreCompare != 0) return scoreCompare;
+      return a.$3.compareTo(b.$3); // 名称长度升序
+    });
+    return scored.map((e) => (e.$1, e.$2)).toList();
   }
 
   // ==================== 私有匹配方法 ====================
