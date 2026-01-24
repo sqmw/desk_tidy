@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Timer? _dragEndTimer;
   Timer? _autoRefreshTimer;
   bool _isRefreshing = false;
+  int _shortcutLoadToken = 0;
   List<ShortcutItem> _shortcuts = [];
   List<AppCategory> _categories = [];
   String? _activeCategoryId;
@@ -443,8 +445,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       }
 
       const requestIconSize = 256;
+      final existingIcons = <String, Uint8List?>{};
+      for (final shortcut in _shortcuts) {
+        existingIcons[shortcut.path] = shortcut.iconData;
+      }
 
-      final shortcutFutures = shortcutsPaths.map((shortcutPath) async {
+      final shortcutItems = <ShortcutItem>[];
+      for (final shortcutPath in shortcutsPaths) {
         final name = shortcutPath.split('\\').last.replaceAll('.lnk', '');
 
         String targetPath = shortcutPath;
@@ -459,32 +466,22 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
         // Don't treat folder shortcuts as "apps".
         if (isFolderShortcut) {
-          return null;
+          continue;
         }
 
-        final primaryIcon = await extractIconAsync(
-          shortcutPath,
-          size: requestIconSize,
+        shortcutItems.add(
+          ShortcutItem(
+            name: name,
+            path: shortcutPath,
+            iconPath: '',
+            description: '桌面快捷方式',
+            targetPath: targetPath,
+            iconData: existingIcons[shortcutPath],
+          ),
         );
-        final iconData =
-            primaryIcon ??
-            await extractIconAsync(targetPath, size: requestIconSize);
+      }
 
-        return ShortcutItem(
-          name: name,
-          path: shortcutPath,
-          iconPath: '',
-          description: '桌面快捷方式',
-          targetPath: targetPath,
-          iconData: iconData,
-        );
-      }).toList();
-
-      final shortcutItems = (await Future.wait(
-        shortcutFutures,
-      )).whereType<ShortcutItem>().toList();
-
-      // 插入已启用的系统项目
+      // 插入已启用的系统项目（先用占位图标，后续异步补齐）
       final systemItemsToLoad = <SystemItemType>[];
       if (_showThisPC) systemItemsToLoad.add(SystemItemType.thisPC);
       if (_showRecycleBin) systemItemsToLoad.add(SystemItemType.recycleBin);
@@ -493,12 +490,13 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       if (_showUserFiles) systemItemsToLoad.add(SystemItemType.userFiles);
 
       for (final type in systemItemsToLoad) {
-        final info = SystemItemInfo.all[type]!;
-        final icon = await extractIconAsync(
-          info.iconResource,
-          size: requestIconSize,
+        final virtualPath = SystemItemInfo.virtualPath(type);
+        shortcutItems.add(
+          ShortcutItem.system(
+            type,
+            iconData: existingIcons[virtualPath],
+          ),
         );
-        shortcutItems.add(ShortcutItem.system(type, iconData: icon));
       }
 
       // 按名称自然排序（字母顺序），使系统项目与普通应用自然混合
@@ -506,19 +504,26 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
 
-      // 只在数据变化时更新UI，实现无感更新
-      if (forceReloadIcons || !_shortcutsEqual(_shortcuts, shortcutItems)) {
-        final searchIndex = _buildSearchIndex(shortcutItems);
-        setState(() {
-          _shortcuts = shortcutItems;
-          _searchIndexByPath = searchIndex;
-        });
-        _syncCategoriesWithShortcuts(shortcutItems);
-      }
+      final searchIndex = _buildSearchIndex(shortcutItems);
+      setState(() {
+        _shortcuts = shortcutItems;
+        _searchIndexByPath = searchIndex;
+      });
+      _syncCategoriesWithShortcuts(shortcutItems);
 
       if (shouldShowLoading) {
         setState(() => _isLoading = false);
       }
+
+      final loadToken = ++_shortcutLoadToken;
+      unawaited(
+        _hydrateShortcutIcons(
+          shortcutItems,
+          loadToken,
+          requestIconSize,
+          forceReloadIcons,
+        ),
+      );
     } catch (e) {
       print('加载快捷方式失败: $e');
       if (shouldShowLoading) {
@@ -527,6 +532,74 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     } finally {
       _isRefreshing = false;
     }
+  }
+
+  Future<void> _hydrateShortcutIcons(
+    List<ShortcutItem> baseItems,
+    int loadToken,
+    int requestIconSize,
+    bool forceReloadIcons,
+  ) async {
+    final updatedIcons = <String, Uint8List?>{};
+    final tasks = <Future<void>>[];
+
+    for (final item in baseItems) {
+      if (!forceReloadIcons && item.iconData != null) {
+        continue;
+      }
+      tasks.add(() async {
+        try {
+          Uint8List? icon;
+          if (item.isSystemItem && item.systemItemType != null) {
+            final info = SystemItemInfo.all[item.systemItemType]!;
+            icon = await extractIconAsync(
+              info.iconResource,
+              size: requestIconSize,
+            );
+          } else {
+            final primary = await extractIconAsync(
+              item.path,
+              size: requestIconSize,
+            );
+            final targetPath =
+                item.targetPath.isNotEmpty ? item.targetPath : item.path;
+            icon = primary ??
+                await extractIconAsync(targetPath, size: requestIconSize);
+          }
+
+          if (icon != null && icon.isNotEmpty) {
+            updatedIcons[item.path] = icon;
+          }
+        } catch (_) {
+          // Ignore icon failures to keep UI responsive.
+        }
+      }());
+    }
+
+    if (tasks.isEmpty) return;
+    await Future.wait(tasks);
+
+    if (!mounted || loadToken != _shortcutLoadToken) return;
+    if (updatedIcons.isEmpty) return;
+
+    final updated = baseItems.map((item) {
+      final icon = updatedIcons[item.path];
+      if (icon == null) return item;
+      return ShortcutItem(
+        name: item.name,
+        path: item.path,
+        iconPath: item.iconPath,
+        description: item.description,
+        targetPath: item.targetPath,
+        iconData: icon,
+        isSystemItem: item.isSystemItem,
+        systemItemType: item.systemItemType,
+      );
+    }).toList();
+
+    setState(() {
+      _shortcuts = updated;
+    });
   }
 
   void _syncCategoriesWithShortcuts(List<ShortcutItem> shortcuts) {

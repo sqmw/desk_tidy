@@ -41,6 +41,7 @@ const int _iconCacheVersion = 9;
 const int _iconCacheCapacity = 64;
 final LinkedHashMap<String, Uint8List?> _iconCache =
     LinkedHashMap<String, Uint8List?>();
+final Map<String, Future<Uint8List?>> _iconInFlight = {};
 
 class _IconTask {
   final String path;
@@ -55,6 +56,14 @@ final Queue<_IconTask> _iconTaskQueue = Queue<_IconTask>();
 int _activeIconIsolates = 0;
 // Limit concurrent isolates to avoid creating too many DCs at once.
 const int _maxIconIsolates = 3;
+final Queue<_IconTask> _mainIconTaskQueue = Queue<_IconTask>();
+bool _mainIconDrainScheduled = false;
+
+void _debugLog(String message) {
+  if (kDebugMode) {
+    debugPrint(message);
+  }
+}
 
 math.Point<int> getPrimaryScreenSize() {
   final w = GetSystemMetrics(SM_CXSCREEN);
@@ -1065,6 +1074,8 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
   // Try to locate the icon resource via shell, then extract a high-res icon via
   // PrivateExtractIconsW (handles PNG-in-ICO as well). Fallback to SHGetFileInfo
   // HICON if needed.
+  final comReady = _ensureComReady();
+  try {
   final desiredSize = size.clamp(16, 256);
 
   final primaryKey = _cacheKeyForFile(filePath, desiredSize);
@@ -1125,14 +1136,12 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
     calloc.free(pathPtr);
     if (hr == 0) {
       calloc.free(shFileInfo);
-      _writeIconCache(primaryKey, null);
       return null;
     }
 
     final iconHandle = shFileInfo.ref.hIcon;
     calloc.free(shFileInfo);
     if (iconHandle == 0) {
-      _writeIconCache(primaryKey, null);
       return null;
     }
 
@@ -1145,6 +1154,11 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
       : primaryKey;
   _writeIconCache(finalKey, cachedValue);
   return cachedValue;
+  } finally {
+    if (comReady) {
+      CoUninitialize();
+    }
+  }
 }
 
 Uint8List? _extractJumboIconPng(String filePath, int desiredSize) {
@@ -1639,7 +1653,11 @@ Future<Uint8List?> extractIconAsync(String filePath, {int size = 64}) {
   final cached = _readIconCache(cacheKey);
   if (cached.found) return Future.value(cached.value);
 
+  final existing = _iconInFlight[cacheKey];
+  if (existing != null) return existing;
+
   final completer = Completer<Uint8List?>();
+  _iconInFlight[cacheKey] = completer.future;
   _iconTaskQueue.add(_IconTask(filePath, desiredSize, cacheKey, completer));
   _drainIconTasks();
   return completer.future;
@@ -1649,28 +1667,63 @@ void _drainIconTasks() {
   while (_activeIconIsolates < _maxIconIsolates && _iconTaskQueue.isNotEmpty) {
     final task = _iconTaskQueue.removeFirst();
     _activeIconIsolates++;
+    final path = task.path;
+    final size = task.size;
 
-    Isolate.run<Uint8List?>(() => extractIcon(task.path, size: task.size))
+    _runIconIsolate(path, size)
         .then((data) {
-          // Fallback: if isolate extraction fails/returns empty, retry in main
-          // isolate to avoid missing icons (may block briefly but recovers).
-          Uint8List? result = data;
-          if (result == null || result.isEmpty) {
-            result = extractIcon(task.path, size: task.size);
+          final result = (data == null || data.isEmpty) ? null : data;
+          if (result != null) {
+            _writeIconCache(task.cacheKey, result);
+            task.completer.complete(result);
+            _iconInFlight.remove(task.cacheKey);
+          } else {
+            _debugLog(
+              'icon isolate empty: ${task.path} size=${task.size}',
+            );
+            _mainIconTaskQueue.add(task);
+            _scheduleMainIconDrain();
           }
-          _writeIconCache(task.cacheKey, result);
-          task.completer.complete(result);
         })
-        .catchError((_, __) {
-          final result = extractIcon(task.path, size: task.size);
-          _writeIconCache(task.cacheKey, result);
-          task.completer.complete(result);
+        .catchError((err, st) {
+          _debugLog(
+            'icon isolate error: ${task.path} size=${task.size} err=$err\n$st',
+          );
+          _mainIconTaskQueue.add(task);
+          _scheduleMainIconDrain();
         })
         .whenComplete(() {
           _activeIconIsolates--;
           _drainIconTasks();
         });
   }
+}
+
+void _scheduleMainIconDrain() {
+  if (_mainIconDrainScheduled) return;
+  _mainIconDrainScheduled = true;
+  Future<void>(() async {
+    while (_mainIconTaskQueue.isNotEmpty) {
+      final task = _mainIconTaskQueue.removeFirst();
+      Uint8List? result;
+      try {
+        result = extractIcon(task.path, size: task.size);
+      } catch (_) {
+        _debugLog(
+          'icon main fallback error: ${task.path} size=${task.size}',
+        );
+        result = null;
+      }
+      _writeIconCache(task.cacheKey, result);
+      if (!task.completer.isCompleted) {
+        task.completer.complete(result);
+      }
+      _iconInFlight.remove(task.cacheKey);
+      // Yield between tasks to keep UI responsive.
+      await Future<void>.delayed(const Duration(milliseconds: 8));
+    }
+    _mainIconDrainScheduled = false;
+  });
 }
 
 _IconCacheResult _readIconCache(String key) {
@@ -1696,6 +1749,44 @@ String _cacheKeyForSystemIndex(int index, int size) =>
 
 String _cacheKeyForFile(String filePath, int size) =>
     'v$_iconCacheVersion|file:${path.normalize(filePath)}|$size';
+
+bool _ensureComReady() {
+  final hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  return hr == S_OK || hr == S_FALSE;
+}
+
+Uint8List? _extractIconIsolate(String path, int size) {
+  return extractIcon(path, size: size);
+}
+
+Future<Uint8List?> _runIconIsolate(String path, int size) async {
+  final port = ReceivePort();
+  await Isolate.spawn(
+    _iconIsolateEntry,
+    <Object>[port.sendPort, path, size],
+  );
+  final message = await port.first;
+  port.close();
+  if (message is TransferableTypedData) {
+    return message.materialize().asUint8List();
+  }
+  if (message is Uint8List) {
+    return message;
+  }
+  return null;
+}
+
+void _iconIsolateEntry(List<Object> args) {
+  final sendPort = args[0] as SendPort;
+  final path = args[1] as String;
+  final size = args[2] as int;
+  final bytes = _extractIconIsolate(path, size);
+  if (bytes == null || bytes.isEmpty) {
+    sendPort.send(null);
+    return;
+  }
+  sendPort.send(TransferableTypedData.fromList([bytes]));
+}
 
 List<String> getClipboardFilePaths() {
   if (!Platform.isWindows) return [];
