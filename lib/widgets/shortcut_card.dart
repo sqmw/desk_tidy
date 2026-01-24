@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -131,12 +132,24 @@ class _ShortcutCardState extends State<ShortcutCard> {
       items: [
         const PopupMenuItem(
           value: 'open',
-          child: ListTile(
-            leading: Icon(Icons.open_in_new),
-            title: Text('Open'),
-          ),
+          child: ListTile(leading: Icon(Icons.open_in_new), title: Text('打开')),
         ),
         if (!shortcut.isSystemItem) ...[
+          const PopupMenuItem(
+            value: 'open_with',
+            child: ListTile(
+              leading: Icon(Icons.app_registration),
+              title: Text('使用其他应用打开'),
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'show_in_explorer',
+            child: ListTile(
+              leading: Icon(Icons.folder_open),
+              title: Text('在文件资源管理器中显示'),
+            ),
+          ),
+          const PopupMenuDivider(),
           const PopupMenuItem(
             value: 'categorize',
             child: ListTile(
@@ -155,21 +168,18 @@ class _ShortcutCardState extends State<ShortcutCard> {
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'copy_name',
-          child: ListTile(leading: Icon(Icons.copy), title: Text('Copy name')),
+          child: ListTile(leading: Icon(Icons.copy), title: Text('复制名称')),
         ),
         if (!shortcut.isSystemItem) ...[
           const PopupMenuItem(
             value: 'copy_path',
-            child: ListTile(
-              leading: Icon(Icons.link),
-              title: Text('Copy path'),
-            ),
+            child: ListTile(leading: Icon(Icons.link), title: Text('复制路径')),
           ),
           const PopupMenuItem(
             value: 'copy_folder',
             child: ListTile(
               leading: Icon(Icons.folder),
-              title: Text('Copy folder'),
+              title: Text('复制所在文件夹'),
             ),
           ),
         ],
@@ -184,6 +194,24 @@ class _ShortcutCardState extends State<ShortcutCard> {
           openWithDefault(resolvedPath);
         }
         widget.onLaunched?.call();
+        break;
+      case 'open_with':
+        // Reuse internal method or prompt
+        // Note: openWithApp is available in desktop_helper
+        final picked = await FilePicker.platform.pickFiles(
+          allowMultiple: false,
+          type: FileType.custom,
+          allowedExtensions: ['exe', 'bat', 'cmd', 'com', 'lnk'],
+        );
+        if (picked != null && picked.files.isNotEmpty) {
+          final appPath = picked.files.single.path;
+          if (appPath != null) {
+            await openWithApp(appPath, resolvedPath);
+          }
+        }
+        break;
+      case 'show_in_explorer':
+        await showInExplorer(shortcut.path);
         break;
       case 'categorize':
         await widget.onCategoryMenuRequested?.call(shortcut, globalPosition);

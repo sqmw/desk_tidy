@@ -233,81 +233,181 @@ class _FilePageState extends State<FilePage> {
         }
         return KeyEventResult.ignored;
       },
-      child: GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 100,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.8,
-        ),
-        itemCount: _files.length,
-        itemBuilder: (context, index) {
-          final file = _files[index];
-          final name = path.basename(file.path);
-          final isSelected = file.path == _selectedPath;
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: (details) {
+          // If no item is selected, show page menu
+          _showPageMenu(details.globalPosition);
+        },
+        child: GridView.builder(
+          padding: const EdgeInsets.all(12),
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 100,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: _files.length,
+          itemBuilder: (context, index) {
+            final file = _files[index];
+            final name = path.basename(file.path);
+            final isSelected = file.path == _selectedPath;
 
-          return Material(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                : Colors.transparent,
-            child: InkWell(
-              onTapDown: (_) {
-                setState(() => _selectedPath = file.path);
-                _focusNode.requestFocus();
-              },
-              onTap: () {
-                final now = DateTime.now().millisecondsSinceEpoch;
-                if (now - _lastTapTime < 300 && _lastTappedPath == file.path) {
-                  openWithDefault(file.path);
-                  _lastTapTime = 0;
-                } else {
-                  _lastTapTime = now;
-                  _lastTappedPath = file.path;
-                }
-              },
-              onSecondaryTapDown: (details) {
-                setState(() => _selectedPath = file.path);
-                _focusNode.requestFocus();
-                _showFileMenu(context, file, details.globalPosition);
-              },
-              borderRadius: BorderRadius.circular(12),
-              hoverColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _FileIcon(
-                      filePath: file.path,
-                      beautifyIcon: widget.beautifyIcons,
-                      beautifyStyle: widget.beautifyStyle,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Tooltip(
-                        message: name,
-                        child: Text(
-                          name,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(height: 1.2, fontSize: 11),
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
+            return Material(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                  : Colors.transparent,
+              child: InkWell(
+                onTapDown: (_) {
+                  setState(() => _selectedPath = file.path);
+                  _focusNode.requestFocus();
+                },
+                onTap: () {
+                  final now = DateTime.now().millisecondsSinceEpoch;
+                  if (now - _lastTapTime < 300 &&
+                      _lastTappedPath == file.path) {
+                    openWithDefault(file.path);
+                    _lastTapTime = 0;
+                  } else {
+                    _lastTapTime = now;
+                    _lastTappedPath = file.path;
+                  }
+                },
+                onSecondaryTapDown: (details) {
+                  setState(() => _selectedPath = file.path);
+                  _focusNode.requestFocus();
+                  _showFileMenu(context, file, details.globalPosition);
+                },
+                borderRadius: BorderRadius.circular(12),
+                hoverColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _FileIcon(
+                        filePath: file.path,
+                        beautifyIcon: widget.beautifyIcons,
+                        beautifyStyle: widget.beautifyStyle,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Tooltip(
+                          message: name,
+                          child: Text(
+                            name,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(height: 1.2, fontSize: 11),
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
+  }
+
+  Future<void> _showPageMenu(Offset position) async {
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      items: [
+        const PopupMenuItem(
+          value: 'new_folder',
+          child: ListTile(
+            leading: Icon(Icons.create_new_folder),
+            title: Text('新建文件夹'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'refresh',
+          child: ListTile(leading: Icon(Icons.refresh), title: Text('刷新')),
+        ),
+        const PopupMenuItem(
+          value: 'paste',
+          child: ListTile(
+            leading: Icon(Icons.paste),
+            title: Text('粘贴'),
+            trailing: Text(
+              'Ctrl+V',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted) return;
+
+    switch (result) {
+      case 'new_folder':
+        await _promptNewFolderPage();
+        break;
+      case 'refresh':
+        _refresh();
+        break;
+      case 'paste':
+        await _handlePaste();
+        break;
+    }
+  }
+
+  Future<void> _promptNewFolderPage() async {
+    final controller = TextEditingController(text: '新建文件夹');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建文件夹'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '文件夹名称'),
+          onSubmitted: (_) => Navigator.of(ctx).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final name = controller.text.trim();
+      if (name.isNotEmpty) {
+        final created = await createNewFolder(
+          widget.desktopPath,
+          preferredName: name,
+        );
+        if (created != null) {
+          _showSnackBar('已创建 ${path.basename(created)}');
+          _refresh();
+        } else {
+          _showSnackBar('创建失败', success: false);
+        }
+      }
+    }
   }
 
   Future<void> _showFileMenu(
@@ -334,6 +434,13 @@ class _FilePageState extends State<FilePage> {
           child: ListTile(
             leading: Icon(Icons.app_registration),
             title: Text('使用其他应用打开'),
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'show_in_explorer',
+          child: ListTile(
+            leading: Icon(Icons.folder_open),
+            title: Text('在文件资源管理器中显示'),
           ),
         ),
         const PopupMenuDivider(),
@@ -400,6 +507,9 @@ class _FilePageState extends State<FilePage> {
         break;
       case 'open_with':
         await _promptOpenWith(file.path);
+        break;
+      case 'show_in_explorer':
+        await showInExplorer(file.path);
         break;
       case 'move':
         await _promptMoveFile(context, file);

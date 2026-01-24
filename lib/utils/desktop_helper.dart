@@ -8,6 +8,7 @@ import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 import 'package:path/path.dart' as path;
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:process_run/shell.dart' as pr;
 
@@ -1722,4 +1723,40 @@ List<String> getClipboardFilePaths() {
     CloseClipboard();
   }
   return paths;
+}
+
+Future<String?> createNewFolder(
+  String parentPath, {
+  String preferredName = '新建文件夹',
+}) async {
+  try {
+    final dir = Directory(parentPath);
+    if (!dir.existsSync()) return null;
+
+    String targetName = preferredName;
+    String targetPath = path.join(parentPath, targetName);
+    int counter = 2;
+
+    while (Directory(targetPath).existsSync() ||
+        File(targetPath).existsSync()) {
+      targetName = '$preferredName ($counter)';
+      targetPath = path.join(parentPath, targetName);
+      counter++;
+    }
+
+    await Directory(targetPath).create();
+    return targetPath;
+  } catch (e) {
+    debugPrint('Error creating folder: $e');
+    return null;
+  }
+}
+
+Future<void> showInExplorer(String targetPath) async {
+  try {
+    // explorer.exe /select,"path" opens the folder and selects the file.
+    await Process.run('explorer.exe', ['/select,', targetPath]);
+  } catch (e) {
+    debugPrint('Error showing in explorer: $e');
+  }
 }

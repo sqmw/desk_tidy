@@ -649,7 +649,7 @@ class _FolderPageState extends State<FolderPage> {
               return KeyEventResult.ignored;
             },
             child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
+              behavior: HitTestBehavior.opaque,
               onSecondaryTapDown: (details) =>
                   _showPageMenu(details.globalPosition),
               child: _entries.isEmpty

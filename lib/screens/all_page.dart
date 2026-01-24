@@ -349,6 +349,13 @@ class _AllPageState extends State<AllPage> {
             title: Text('使用其他应用打开'),
           ),
         ),
+        PopupMenuItem(
+          value: 'show_in_explorer',
+          child: ListTile(
+            leading: Icon(Icons.folder_open),
+            title: Text('在文件资源管理器中显示'),
+          ),
+        ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: 'move',
@@ -415,6 +422,9 @@ class _AllPageState extends State<AllPage> {
         break;
       case 'open_with':
         await _promptOpenWith(entity.path);
+        break;
+      case 'show_in_explorer':
+        await showInExplorer(entity.path);
         break;
       case 'delete':
         _deleteEntity(entity);
@@ -751,18 +761,15 @@ class _AllPageState extends State<AllPage> {
     if (confirmed != true) return;
     final name = controller.text.trim();
     if (name.isEmpty) return;
+
     final base = _currentPath ?? widget.desktopPath;
-    final target = path.join(base, name);
-    try {
-      if (Directory(target).existsSync() || File(target).existsSync()) {
-        _showSnackBar('同名文件或文件夹已存在');
-        return;
-      }
-      await Directory(target).create(recursive: true);
-      _showSnackBar('已创建 $target');
+    final created = await createNewFolder(base, preferredName: name);
+
+    if (created != null) {
+      _showSnackBar('已创建 ${path.basename(created)}');
       _refresh();
-    } catch (e) {
-      _showSnackBar('创建失败: $e');
+    } else {
+      _showSnackBar('创建失败', success: false);
     }
   }
 
@@ -1075,108 +1082,102 @@ class _AllPageState extends State<AllPage> {
 
               // Extract the list widget to reuse
               Widget buildList() {
-                return GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onSecondaryTapDown: (details) =>
-                      _showPageMenu(details.globalPosition),
-                  child: _filteredItems.isEmpty
-                      ? const Center(child: Text('未找到文件或快捷方式'))
-                      : ListView.builder(
-                          itemCount: _filteredItems.length,
-                          itemBuilder: (context, index) {
-                            final item = _filteredItems[index];
-                            final entity = item.entity;
-                            final isDir = item.isDirectory;
-                            final displayName =
-                                item.name.toLowerCase().endsWith('.lnk')
-                                ? item.name.substring(0, item.name.length - 4)
-                                : item.name;
-                            final isSelected =
-                                _selected?.fullPath == entity.path;
-                            return Material(
-                              key: GlobalObjectKey(entity.path),
-                              color: isSelected
-                                  ? Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withValues(alpha: 0.1)
-                                  : Colors.transparent,
-                              child: InkWell(
-                                onTapDown: (_) {
-                                  _selectEntity(entity, displayName);
-                                  if (_focusNode.canRequestFocus) {
-                                    _focusNode.requestFocus();
-                                  }
-                                },
-                                onTap: () {
-                                  final now =
-                                      DateTime.now().millisecondsSinceEpoch;
-                                  if (now - _lastTapTime < 300 &&
-                                      _lastTappedPath == entity.path) {
-                                    // Double tap confirmed
-                                    if (isDir) {
-                                      _openFolder(entity.path);
-                                    } else {
-                                      openWithDefault(entity.path);
-                                    }
-                                    _lastTapTime = 0;
-                                  } else {
-                                    // Single tap
-                                    _lastTapTime = now;
-                                    _lastTappedPath = entity.path;
-                                  }
-                                },
-                                onSecondaryTapDown: (details) {
-                                  _selectEntity(entity, displayName);
+                return _filteredItems.isEmpty
+                    ? const Center(child: Text('未找到文件或快捷方式'))
+                    : ListView.builder(
+                        itemCount: _filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = _filteredItems[index];
+                          final entity = item.entity;
+                          final isDir = item.isDirectory;
+                          final displayName =
+                              item.name.toLowerCase().endsWith('.lnk')
+                              ? item.name.substring(0, item.name.length - 4)
+                              : item.name;
+                          final isSelected = _selected?.fullPath == entity.path;
+                          return Material(
+                            key: GlobalObjectKey(entity.path),
+                            color: isSelected
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.1)
+                                : Colors.transparent,
+                            child: InkWell(
+                              onTapDown: (_) {
+                                _selectEntity(entity, displayName);
+                                if (_focusNode.canRequestFocus) {
                                   _focusNode.requestFocus();
-                                  _showEntityMenu(
-                                    entity,
-                                    displayName,
-                                    details.globalPosition,
-                                  );
-                                },
-                                borderRadius: BorderRadius.circular(8),
-                                hoverColor: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withValues(alpha: 0.4),
-                                child: ListTile(
-                                  dense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  leading: _EntityIcon(
-                                    entity: entity,
-                                    getIconFuture: _getIconFuture,
-                                    beautifyIcon: widget.beautifyIcons,
-                                    beautifyStyle: widget.beautifyStyle,
-                                  ),
-                                  title: Tooltip(
-                                    message: displayName,
-                                    child: Text(
-                                      displayName,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  subtitle: Tooltip(
-                                    message: entity.path,
-                                    child: MiddleEllipsisText(
-                                      text: entity.path,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                  ),
-                                  trailing: null,
+                                }
+                              },
+                              onTap: () {
+                                final now =
+                                    DateTime.now().millisecondsSinceEpoch;
+                                if (now - _lastTapTime < 300 &&
+                                    _lastTappedPath == entity.path) {
+                                  // Double tap confirmed
+                                  if (isDir) {
+                                    _openFolder(entity.path);
+                                  } else {
+                                    openWithDefault(entity.path);
+                                  }
+                                  _lastTapTime = 0;
+                                } else {
+                                  // Single tap
+                                  _lastTapTime = now;
+                                  _lastTappedPath = entity.path;
+                                }
+                              },
+                              onSecondaryTapDown: (details) {
+                                _selectEntity(entity, displayName);
+                                _focusNode.requestFocus();
+                                _showEntityMenu(
+                                  entity,
+                                  displayName,
+                                  details.globalPosition,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              hoverColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
                                 ),
+                                leading: _EntityIcon(
+                                  entity: entity,
+                                  getIconFuture: _getIconFuture,
+                                  beautifyIcon: widget.beautifyIcons,
+                                  beautifyStyle: widget.beautifyStyle,
+                                ),
+                                title: Tooltip(
+                                  message: displayName,
+                                  child: Text(
+                                    displayName,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                subtitle: Tooltip(
+                                  message: entity.path,
+                                  child: MiddleEllipsisText(
+                                    text: entity.path,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ),
+                                trailing: null,
                               ),
-                            );
-                          },
-                        ),
-                );
+                            ),
+                          );
+                        },
+                      );
               }
 
               // Details Widget
@@ -1247,20 +1248,25 @@ class _AllPageState extends State<AllPage> {
                   }
                   return KeyEventResult.ignored;
                 },
-                child: isWide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: buildList()),
-                          buildDetails(),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          buildDetails(),
-                          Expanded(child: buildList()),
-                        ],
-                      ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onSecondaryTapDown: (details) =>
+                      _showPageMenu(details.globalPosition),
+                  child: isWide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: buildList()),
+                            buildDetails(),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            buildDetails(),
+                            Expanded(child: buildList()),
+                          ],
+                        ),
+                ),
               );
 
               return focusWrapper;
