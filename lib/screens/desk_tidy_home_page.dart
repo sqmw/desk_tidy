@@ -1971,6 +1971,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           onEnableDesktopBoxesChanged: (v) async {
             setState(() => _enableDesktopBoxes = v);
             await AppPreferences.saveEnableDesktopBoxes(v);
+            await BoxLauncher.instance.updateBoxes(
+              enabled: v,
+              desktopPath: _desktopPath,
+            );
           },
           onShowRecycleBinChanged: (v) {
             setState(() => _showRecycleBin = v);

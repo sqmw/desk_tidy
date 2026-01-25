@@ -33,6 +33,7 @@
   - 显示隐藏文件/文件夹
   - 自动刷新桌面
   - 开机自动启动 (Windows)
+  - 桌面分类盒子（启用/关闭会启动或停止 `desk_tidy_box.exe`）
 - 图标主题（图标+文字）：
   - 全局开关（默认同时启用应用列表与桌面列表）
   - 风格选择（可爱/卡通/霓虹）
@@ -42,3 +43,4 @@
 - 设置界面：`lib/setting/settings_page.dart`
 - 持久化逻辑：`lib/utils/app_preferences.dart`
 - 开机自启（注册表读写）：`lib/utils/desktop_helper.dart` 中 `setAutoLaunchEnabled`
+- 桌面盒子启动/关闭：`lib/services/box_launcher.dart`，设置回调在 `lib/screens/desk_tidy_home_page.dart`
