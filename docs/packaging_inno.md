@@ -31,3 +31,24 @@ iscc installers\desk_tidy.iss /dMyAppVersion=$ver
 - 创建开始菜单及可选桌面快捷方式，安装后可选运行。
 
 如需修改发布者名称、URL 或输出文件名，可直接编辑 `installers/desk_tidy.iss` 顶部的宏或 `[Setup]` 段。
+## 优化版打包脚本 ( desk_tidy_pure_release.iss )
+
+该脚本专为同时打包主程序 (`desk_tidy`) 和盒子程序 (`desk_tidy_box`) 设计，并进行了体积优化。
+
+### 核心优化：共享源文件去重 (Shared Source Deduplication)
+
+由于主程序和盒子程序都依赖于 Flutter 引擎文件（如 `flutter_windows.dll`），如果在两个目录分别打包，安装包体积会显著增大。
+
+- **逻辑**：在该脚本中，主程序和盒子程序引用**同一个源路径**下的引擎文件：
+  ```pascal
+  ; 主程序引用
+  Source: "{#MyReleaseBuildDir}\flutter_windows.dll"; DestDir: "{app}"; Flags: ignoreversion
+  ; 盒子程序重用相同源文件
+  Source: "{#MyReleaseBuildDir}\flutter_windows.dll"; DestDir: "{app}\box"; Flags: ignoreversion
+  ```
+- **打包表现**：Inno Setup 会识别出两个条目指向同一个物理文件，在生成的 `.exe` 中**仅压缩存储一份**数据。
+- **安装表现**：安装程序在运行过程中，会将该文件**分别解压并复制**到对应的两个文件夹中，确保两个程序都能正常加载引擎。
+
+### 注意事项
+- 编译前需确保主程序和子程序都已经完成 `release` 构建。
+- 子程序必须在安装目录下有自己的依赖副本（即使是重复的），因为 Windows 的加载机制要求 DLL 与 EXE 同级。

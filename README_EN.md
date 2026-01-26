@@ -159,13 +159,13 @@ Smart window docking for full-screen workflow:
 | Installer | **11.8 MB** |
 | Installed | **58 MB** |
 
-Download from [Releases](https://github.com/your-username/desk_tidy/releases).
+Download from [Releases](https://github.com/sqmw/desk_tidy/releases).
 
 ### Option 2: Build from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/your-repo/desk_tidy.git
+git clone https://github.com/sqmw/desk_tidy.git
 cd desk_tidy
 
 # Install dependencies

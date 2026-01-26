@@ -159,13 +159,13 @@
 | 安装包 | **11.8 MB** |
 | 安装后 | **58 MB** |
 
-从 [Releases](https://github.com/your-username/desk_tidy/releases) 下载最新版安装包。
+从 [Releases](https://github.com/sqmw/desk_tidy/releases) 下载最新版安装包。
 
 ### 方式二：从源码构建
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/desk_tidy.git
+git clone https://github.com/sqmw/desk_tidy.git
 cd desk_tidy
 
 # 安装依赖

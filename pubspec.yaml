@@ -120,9 +120,9 @@ flutter_launcher_icons:
 
   
 msix_config:
-  display_name: MyApp
-  publisher_display_name: MyCompany
-  identity_name: com.mycompany.myapp
+  display_name: Desk Tidy
+  publisher_display_name: sqmw
+  identity_name: com.sqmw.desk_tidy
   msix_version: 1.0.0.0
   logo_path: windows\runner\resources\app_icon.ico   # 或 400x400+ 的 png
   capabilities: internetClient
