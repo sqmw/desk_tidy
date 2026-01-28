@@ -6,7 +6,7 @@
 ; 3. Shared source deduplication for smaller installer size.
 
 #define MyAppName "Desk Tidy"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.2.7"
 #define MyAppPublisher "Antigravity"
 #define MyAppExeName "desk_tidy.exe"
 #define MyAppId "{{D35K-T1DY-R3L3-A53-RE3R-F1XED}}"
@@ -55,6 +55,7 @@ Source: "{#MyReleaseBuildDir}\screen_retriever_windows_plugin.dll"; DestDir: "{a
 Source: "{#MyReleaseBuildDir}\system_tray_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MyReleaseBuildDir}\url_launcher_windows_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MyReleaseBuildDir}\window_manager_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MyReleaseBuildDir}\video_player_win_plugin.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; --- Box App (Subfolder) ---
 Source: "{#MyBoxBuildDir}\desk_tidy_box.exe"; DestDir: "{app}\box"; Flags: ignoreversion
