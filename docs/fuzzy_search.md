@@ -44,6 +44,7 @@ List<(T, MatchResult)> results = FuzzyMatcher.filterWithResult(...);
 | `contains` | 70 | 子字符串匹配 | "bao" → "doubao" |
 | `camelCase` | 65 | 驼峰首字母匹配 | "DT" → "DeskTidy" |
 | `pinyin` | 60 | 拼音全拼匹配 | "doubao" → "豆包" |
+| `chinesePinyin` | 58 | 中文转拼音匹配 (双向/Token) | "豆包" → "Doubao" |
 | `pinyinInitials` | 55 | 拼音首字母匹配 | "db" → "豆包" |
 | `fuzzy` | 50 | 模糊顺序匹配 | "dbe" → "doubao.exe" |
 | `subsequence` | 40 | 子序列匹配 | "dao" → "doubao" |
@@ -54,6 +55,14 @@ List<(T, MatchResult)> results = FuzzyMatcher.filterWithResult(...);
 ## 评分算法
 
 基础分数由匹配类型决定，还会根据以下因素加分：
+
+### 中文转拼音加分 (`chinesePinyin`)
+- **长度占比**：匹配部分占查询词长度越多，加分越高（Max +20）
+- **位置惩罚**：匹配位置越靠后，分数越低（Max -5）
+- **示例**：
+  - "豆包" → "Doubao"：Base 58 + RatioBonus ~15 = ~73
+  - "a抖音" → "Douyin"：Base 58 + RatioBonus(6/7) - PosPenalty ~75
+  - "豆包" → "Doubao - 快捷方式"：Base 58 + TokenMatch ~70
 
 ### 位置加分
 - 匹配位置越靠前，分数越高
@@ -106,6 +115,7 @@ final filtered = FuzzyMatcher.filter<ShortcutItem>(
 
 | 日期 | 变更 |
 |------|------|
+| 2026-01-28 | 添加中文转拼音匹配 (`chinesePinyin`)：支持 "豆包" -> "Doubao"；支持 "抖音" -> "a抖音" (高分)；支持后缀 Token 匹配 ("Doubao - 快捷方式") |
 | 2026-01-24 | 优化排序：分数相同时，名称越短排名越靠前（如 "Visual Studio" 优先于 "Visual Studio Insiders"）|
 | 2026-01-21 | 添加部分匹配（partialMatch），让 "abao" 通过 "bao" 匹配 "doubao"；修正 subsequence 示例 |
 | 2026-01-21 | 添加子序列匹配（subsequence），支持非连续字符匹配 |

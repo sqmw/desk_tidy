@@ -22,7 +22,7 @@ List<String> tokenizeSearchText(String input) {
       .toList();
 }
 
-String _safePinyin(String input) {
+String safePinyin(String input) {
   if (input.trim().isEmpty) return '';
   try {
     return PinyinHelper.getPinyinE(input);
@@ -64,14 +64,14 @@ class AppSearchIndex {
   factory AppSearchIndex.fromName(String name) {
     final normalized = normalizeSearchText(name);
     final tokens = tokenizeSearchText(name);
-    final pinyin = normalizeSearchText(_safePinyin(name));
+    final pinyin = normalizeSearchText(safePinyin(name));
     final pinyinInitials = normalizeSearchText(_safeShortPinyin(name));
     final latinInitials = _buildLatinInitials(tokens);
     final tokenPinyins = <String>[];
     final tokenPinyinInitials = <String>[];
     for (final token in tokens) {
       if (!_containsChinese.hasMatch(token)) continue;
-      final tokenPinyin = normalizeSearchText(_safePinyin(token));
+      final tokenPinyin = normalizeSearchText(safePinyin(token));
       if (tokenPinyin.isNotEmpty) {
         tokenPinyins.add(tokenPinyin);
       }

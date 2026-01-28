@@ -26,6 +26,9 @@ enum MatchType {
   /// 拼音全拼匹配 - 60分
   pinyin(60),
 
+  /// 中文转拼音匹配 - 58分
+  chinesePinyin(58),
+
   /// 拼音首字母匹配 - 55分
   pinyinInitials(55),
 
@@ -122,6 +125,10 @@ class FuzzyMatcher {
 
     // 6. 拼音全拼匹配
     result = _tryPinyin(normalizedQuery, index);
+    if (result != null) return result;
+
+    // 6.5. 中文转拼音匹配 (输入中文匹配英文/拼音)
+    result = _tryChineseToPinyin(normalizedQuery, index);
     if (result != null) return result;
 
     // 7. 拼音首字母匹配
@@ -667,6 +674,118 @@ class FuzzyMatcher {
             type: MatchType.partialMatch,
           );
         }
+      }
+    }
+
+    return null;
+  }
+
+  /// 中文转拼音匹配
+  /// 将搜索词转换为拼音后尝试匹配
+  static MatchResult? _tryChineseToPinyin(String query, AppSearchIndex index) {
+    if (query.isEmpty) return null;
+
+    // 如果查询词不包含中文，不需要尝试此转换
+    if (!RegExp(r'[\u4e00-\u9fff]').hasMatch(query)) return null;
+
+    final queryPinyin = normalizeSearchText(safePinyin(query));
+    if (queryPinyin.isEmpty) return null;
+
+    // 1. 正向匹配：目标包含查询拼音 (Target contains Query)
+    // 场景：搜"豆包"(doubao) -> 匹配"Doubao"
+    if (index.normalizedName.contains(queryPinyin)) {
+      final ratio = queryPinyin.length / index.normalizedName.length;
+      final bonus = (ratio * 15).round(); // Max 15
+      return MatchResult(
+        matched: true,
+        score: MatchType.chinesePinyin.baseScore + bonus,
+        type: MatchType.chinesePinyin,
+      );
+    }
+
+    // 2. 反向匹配：查询拼音包含目标名称 (Query contains Target)
+    // 场景：搜"a抖音"(adouyin) -> 匹配"Douyin" (在后)
+    // 场景：搜"抖音"(douyin) -> 匹配"Douyin" (全匹配)
+    final pos = queryPinyin.indexOf(index.normalizedName);
+    if (pos >= 0) {
+      // 长度比重：占用查询词长度越多，分数越高
+      final lenRatio = index.normalizedName.length / queryPinyin.length;
+      final lenBonus = (lenRatio * 20).round(); // Max 20
+
+      // 位置比重：越靠前分数越高
+      // pos=0 -> penalty=0. pos=end -> penalty=5
+      final posPenalty = (pos / queryPinyin.length * 5).round();
+
+      return MatchResult(
+        matched: true,
+        score: MatchType.chinesePinyin.baseScore + lenBonus - posPenalty,
+        type: MatchType.chinesePinyin,
+      );
+    }
+
+    // 3. 拼音字段匹配 (Fallback)
+    if (index.pinyin.contains(queryPinyin)) {
+      return MatchResult(
+        matched: true,
+        score: MatchType.chinesePinyin.baseScore,
+        type: MatchType.chinesePinyin,
+      );
+    }
+
+    if (index.pinyin.isNotEmpty && queryPinyin.contains(index.pinyin)) {
+      final lenRatio = index.pinyin.length / queryPinyin.length;
+      final lenBonus = (lenRatio * 20).round();
+      return MatchResult(
+        matched: true,
+        score: MatchType.chinesePinyin.baseScore + lenBonus,
+        type: MatchType.chinesePinyin,
+      );
+    }
+
+    // 4. Token 匹配 (解决后缀问题，如 "Doubao - 快捷方式")
+    // 检查是否有任何 token (或其拼音) 被查询拼音包含
+    // 遍历 normalized tokens ("doubao", "快捷方式")
+    for (final token in index.tokens) {
+      if (token.isEmpty) continue;
+      // 英文Token直接比较: "adoubao" contains "doubao"
+      // 注意：这里 token 是原词的 normalized 形式。
+      if (queryPinyin.contains(token)) {
+        final pos = queryPinyin.indexOf(token);
+        final lenRatio = token.length / queryPinyin.length;
+        final lenBonus = (lenRatio * 20).round();
+        final posPenalty = (pos / queryPinyin.length * 5).round();
+
+        return MatchResult(
+          matched: true,
+          score: MatchType.chinesePinyin.baseScore + lenBonus - posPenalty,
+          type: MatchType.chinesePinyin,
+        );
+      }
+    }
+
+    // 遍历 token pinyins ("kuaijiefangshi")
+    for (final tokenPinyin in index.tokenPinyins) {
+      if (queryPinyin.contains(tokenPinyin)) {
+        final pos = queryPinyin.indexOf(tokenPinyin);
+        final lenRatio = tokenPinyin.length / queryPinyin.length;
+        final lenBonus = (lenRatio * 20).round();
+        final posPenalty = (pos / queryPinyin.length * 5).round();
+
+        return MatchResult(
+          matched: true,
+          score: MatchType.chinesePinyin.baseScore + lenBonus - posPenalty,
+          type: MatchType.chinesePinyin,
+        );
+      }
+      // 反向：TokenPinyin 包含 QueryPinyin (搜 "快捷" -> 匹配 "快捷方式")
+      if (tokenPinyin.contains(queryPinyin)) {
+        final ratio = queryPinyin.length / tokenPinyin.length;
+        final bonus = (ratio * 15).round();
+        return MatchResult(
+          matched: true,
+          score: MatchType.chinesePinyin.baseScore + bonus,
+          type: MatchType.chinesePinyin,
+        );
       }
     }
 
