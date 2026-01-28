@@ -988,6 +988,11 @@ class _AllPageState extends State<AllPage> {
                                   ).colorScheme.primary.withValues(alpha: 0.1)
                                 : Colors.transparent,
                             child: InkWell(
+                              onFocusChange: (hasFocus) {
+                                if (hasFocus) {
+                                  _selectEntity(entity, displayName);
+                                }
+                              },
                               onTapDown: (_) {
                                 _selectEntity(entity, displayName);
                                 _focusNode.requestFocus();
