@@ -1,7 +1,13 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 
+import '../utils/desktop_helper.dart';
 import 'glass.dart';
+import 'video_preview_widget.dart';
 
 class EntityDetailBar extends StatefulWidget {
   final String name;
@@ -184,6 +190,8 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
                   widget.folderPath,
                   style: theme.textTheme.bodySmall,
                 ),
+                const SizedBox(height: 12),
+                _buildPreview(context),
               ],
             ),
           ),
@@ -211,6 +219,97 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
         ],
       ),
     );
+  }
+
+  Widget _buildPreview(BuildContext context) {
+    // Check extension
+    final ext = path.extension(widget.path).toLowerCase();
+    final imageExts = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp'};
+    final videoExts = {
+      '.mp4',
+      '.mkv',
+      '.avi',
+      '.mov',
+      '.wmv',
+      '.flv',
+      '.webm',
+      '.m4v',
+      '.mpg',
+      '.mpeg',
+      '.3gp',
+    };
+
+    if (imageExts.contains(ext)) {
+      return InkWell(
+        onTap: () => openWithDefault(widget.path),
+        customBorder: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 200),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.black12,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Image.file(
+            File(widget.path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    } else if (videoExts.contains(ext)) {
+      return Container(
+        constraints: const BoxConstraints(maxHeight: 200),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.black12,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: VideoPreviewWidget(
+          path: widget.path,
+          onError: (context, error) {
+            // Fallback to thumbnail logic if video player fails
+            return FutureBuilder<Uint8List?>(
+              future: extractIconAsync(widget.path, size: 256),
+              builder: (context, snapshot) {
+                if (snapshot.hasData &&
+                    snapshot.data != null &&
+                    snapshot.data!.isNotEmpty) {
+                  return InkWell(
+                    onTap: () => openWithDefault(widget.path),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      fit: StackFit.passthrough,
+                      children: [
+                        Image.memory(snapshot.data!, fit: BoxFit.contain),
+                        Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black45,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: const Icon(
+                            Icons.play_arrow,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const Center(child: Icon(Icons.movie));
+              },
+            );
+          },
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildNameField(ThemeData theme) {
