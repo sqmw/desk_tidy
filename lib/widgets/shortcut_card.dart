@@ -527,7 +527,7 @@ class _ShortcutCardState extends State<ShortcutCard> {
               size: visualIconSize,
               enabled: widget.beautifyIcon,
               style: widget.beautifyStyle,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             );
           }
           return BeautifiedIcon(
