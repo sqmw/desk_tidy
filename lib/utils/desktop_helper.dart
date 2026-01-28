@@ -1076,84 +1076,134 @@ Uint8List? extractIcon(String filePath, {int size = 64}) {
   // HICON if needed.
   final comReady = _ensureComReady();
   try {
-  final desiredSize = size.clamp(16, 256);
+    final desiredSize = size.clamp(16, 256);
 
-  final primaryKey = _cacheKeyForFile(filePath, desiredSize);
-  final primaryCached = _readIconCache(primaryKey);
-  if (primaryCached.found) return primaryCached.value;
+    final primaryKey = _cacheKeyForFile(filePath, desiredSize);
+    final primaryCached = _readIconCache(primaryKey);
+    if (primaryCached.found) return primaryCached.value;
 
-  Uint8List? cachedValue;
-  _IconLocation? cachedLocation;
+    Uint8List? cachedValue;
+    _IconLocation? cachedLocation;
 
-  final location = _getIconLocation(filePath);
-  if (location != null && location.path.isNotEmpty) {
-    final cacheKey = _cacheKeyForLocation(location, desiredSize);
-    final existing = _readIconCache(cacheKey);
-    if (existing.found) return existing.value;
+    final location = _getIconLocation(filePath);
+    if (location != null && location.path.isNotEmpty) {
+      final cacheKey = _cacheKeyForLocation(location, desiredSize);
+      final existing = _readIconCache(cacheKey);
+      if (existing.found) return existing.value;
 
-    final hicon = _extractHiconFromLocation(
-      location.path,
-      location.index,
-      desiredSize,
-    );
-    if (hicon != 0) {
-      final png = _encodeHicon(hicon, size: desiredSize);
-      DestroyIcon(hicon);
-      if (png != null && png.isNotEmpty) {
-        _writeIconCache(cacheKey, png);
-        cachedLocation = location;
-        cachedValue = png;
+      final hicon = _extractHiconFromLocation(
+        location.path,
+        location.index,
+        desiredSize,
+      );
+      if (hicon != 0) {
+        final png = _encodeHicon(hicon, size: desiredSize);
+        DestroyIcon(hicon);
+        if (png != null && png.isNotEmpty) {
+          _writeIconCache(cacheKey, png);
+          cachedLocation = location;
+          cachedValue = png;
+        }
       }
     }
-  }
 
-  if (cachedValue == null) {
-    final jumbo = _extractJumboIconPng(filePath, desiredSize);
-    if (jumbo != null && jumbo.isNotEmpty) {
-      final idx = _getSystemIconIndex(filePath);
-      if (idx >= 0) {
-        _writeIconCache(_cacheKeyForSystemIndex(idx, desiredSize), jumbo);
+    if (cachedValue == null) {
+      String? targetPath;
+      final ext = path.extension(filePath).toLowerCase();
+      const imageExts = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp'};
+
+      if (imageExts.contains(ext)) {
+        targetPath = filePath;
+      } else if (ext == '.lnk') {
+        try {
+          final resolved = getShortcutTarget(filePath);
+          if (resolved != null &&
+              imageExts.contains(path.extension(resolved).toLowerCase())) {
+            targetPath = resolved;
+          }
+        } catch (_) {}
       }
-      cachedValue = jumbo;
-    }
-  }
 
-  // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
-  if (cachedValue == null) {
-    final pathPtr = filePath.toNativeUtf16();
-    final shFileInfo = calloc<SHFILEINFO>();
-    final isVirtual =
-        filePath.startsWith('::') ||
-        filePath.startsWith('shell::') ||
-        filePath.contains(',');
-    final hr = SHGetFileInfo(
-      pathPtr.cast(),
-      0,
-      shFileInfo.cast(),
-      sizeOf<SHFILEINFO>(),
-      SHGFI_ICON | SHGFI_LARGEICON | (isVirtual ? 0 : SHGFI_USEFILEATTRIBUTES),
-    );
-    calloc.free(pathPtr);
-    if (hr == 0) {
+      if (targetPath != null) {
+        try {
+          final file = File(targetPath);
+          if (file.existsSync()) {
+            final bytes = file.readAsBytesSync();
+            if (bytes.isNotEmpty) {
+              final image = img.decodeImage(bytes);
+              if (image != null) {
+                img.Image resized = image;
+                if (image.width > desiredSize || image.height > desiredSize) {
+                  if (image.width > image.height) {
+                    resized = img.copyResize(image, width: desiredSize);
+                  } else {
+                    resized = img.copyResize(image, height: desiredSize);
+                  }
+                }
+
+                final png = Uint8List.fromList(img.encodePng(resized));
+                if (png.isNotEmpty) {
+                  cachedValue = png;
+                  _writeIconCache(primaryKey, png);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          _debugLog('Failed to generate thumbnail for $targetPath: $e');
+        }
+      }
+    }
+
+    if (cachedValue == null) {
+      final jumbo = _extractJumboIconPng(filePath, desiredSize);
+      if (jumbo != null && jumbo.isNotEmpty) {
+        final idx = _getSystemIconIndex(filePath);
+        if (idx >= 0) {
+          _writeIconCache(_cacheKeyForSystemIndex(idx, desiredSize), jumbo);
+        }
+        cachedValue = jumbo;
+      }
+    }
+
+    // Fallback: obtain HICON from shell, draw it into a 32bpp DIB, then encode.
+    if (cachedValue == null) {
+      final pathPtr = filePath.toNativeUtf16();
+      final shFileInfo = calloc<SHFILEINFO>();
+      final isVirtual =
+          filePath.startsWith('::') ||
+          filePath.startsWith('shell::') ||
+          filePath.contains(',');
+      final hr = SHGetFileInfo(
+        pathPtr.cast(),
+        0,
+        shFileInfo.cast(),
+        sizeOf<SHFILEINFO>(),
+        SHGFI_ICON |
+            SHGFI_LARGEICON |
+            (isVirtual ? 0 : SHGFI_USEFILEATTRIBUTES),
+      );
+      calloc.free(pathPtr);
+      if (hr == 0) {
+        calloc.free(shFileInfo);
+        return null;
+      }
+
+      final iconHandle = shFileInfo.ref.hIcon;
       calloc.free(shFileInfo);
-      return null;
+      if (iconHandle == 0) {
+        return null;
+      }
+
+      cachedValue = _encodeHicon(iconHandle, size: desiredSize);
+      DestroyIcon(iconHandle);
     }
 
-    final iconHandle = shFileInfo.ref.hIcon;
-    calloc.free(shFileInfo);
-    if (iconHandle == 0) {
-      return null;
-    }
-
-    cachedValue = _encodeHicon(iconHandle, size: desiredSize);
-    DestroyIcon(iconHandle);
-  }
-
-  final finalKey = cachedLocation != null
-      ? _cacheKeyForLocation(cachedLocation, desiredSize)
-      : primaryKey;
-  _writeIconCache(finalKey, cachedValue);
-  return cachedValue;
+    final finalKey = cachedLocation != null
+        ? _cacheKeyForLocation(cachedLocation, desiredSize)
+        : primaryKey;
+    _writeIconCache(finalKey, cachedValue);
+    return cachedValue;
   } finally {
     if (comReady) {
       CoUninitialize();
@@ -1678,9 +1728,7 @@ void _drainIconTasks() {
             task.completer.complete(result);
             _iconInFlight.remove(task.cacheKey);
           } else {
-            _debugLog(
-              'icon isolate empty: ${task.path} size=${task.size}',
-            );
+            _debugLog('icon isolate empty: ${task.path} size=${task.size}');
             _mainIconTaskQueue.add(task);
             _scheduleMainIconDrain();
           }
@@ -1709,9 +1757,7 @@ void _scheduleMainIconDrain() {
       try {
         result = extractIcon(task.path, size: task.size);
       } catch (_) {
-        _debugLog(
-          'icon main fallback error: ${task.path} size=${task.size}',
-        );
+        _debugLog('icon main fallback error: ${task.path} size=${task.size}');
         result = null;
       }
       _writeIconCache(task.cacheKey, result);
@@ -1761,10 +1807,7 @@ Uint8List? _extractIconIsolate(String path, int size) {
 
 Future<Uint8List?> _runIconIsolate(String path, int size) async {
   final port = ReceivePort();
-  await Isolate.spawn(
-    _iconIsolateEntry,
-    <Object>[port.sendPort, path, size],
-  );
+  await Isolate.spawn(_iconIsolateEntry, <Object>[port.sendPort, path, size]);
   final message = await port.first;
   port.close();
   if (message is TransferableTypedData) {
