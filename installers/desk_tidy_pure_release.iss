@@ -6,8 +6,9 @@
 ; 3. Shared source deduplication for smaller installer size.
 
 #define MyAppName "Desk Tidy"
-#define MyAppVersion "1.2.7"
-#define MyAppPublisher "Antigravity"
+#define MyAppVersion "1.2.8"
+#define MyAppPublisher "ksun22515@gmail.com"
+#define MyAppURL "mailto:ksun22515@gmail.com"
 #define MyAppExeName "desk_tidy.exe"
 #define MyAppId "{{D35K-T1DY-R3L3-A53-RE3R-F1XED}}"
 
@@ -23,7 +24,16 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+; fix: Ensure File Version in Windows Properties is set
+VersionInfoVersion={#MyAppVersion}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
+VersionInfoCopyright=Copyright (C) 2024 {#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=build\installer
