@@ -3,7 +3,11 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ffi' hide Size; // For COM in Isolate
+import 'package:win32/win32.dart'; // For CoInitialize/CoUninitialize
 
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -426,10 +430,44 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
       final desktopPath = await getDesktopPath();
       _desktopPath = desktopPath;
-      final shortcutsPaths = await scanDesktopShortcuts(
-        desktopPath,
-        showHidden: _showHidden,
-      );
+
+      // Collect all root paths to scan (User Desktop + Public Desktop)
+      final desktopScanPaths = desktopLocations(desktopPath);
+
+      // Start Menu Integration
+      final startMenuScanPaths = <String>[];
+      try {
+        final startMenuPaths = await getStartMenuLocations();
+        startMenuScanPaths.addAll(startMenuPaths);
+      } catch (e) {
+        print('Error getting start menu locations: $e');
+      }
+
+      final shortcutsPaths = <String>[];
+
+      // System Tools paths
+      try {
+        final tools = await findSystemTools();
+        shortcutsPaths.addAll(tools);
+      } catch (e) {
+        print('Error finding system tools: $e');
+      }
+
+      // Offload heavy directory scanning to Isolate
+      try {
+        final foundInIsolate = await compute(
+          _scanPathsInIsolate,
+          _ScanRequest(
+            desktopPaths: desktopScanPaths,
+            startMenuPaths: startMenuScanPaths,
+            showHidden: _showHidden,
+          ),
+        );
+        shortcutsPaths.addAll(foundInIsolate);
+        print('Isolate scan completed. Found ${foundInIsolate.length} items.');
+      } catch (e) {
+        print('Isolate scan failed: $e');
+      }
 
       // 快速路径 diff：路径相同则无需解析图标和刷新 UI
       final incomingPaths = [...shortcutsPaths]..sort();
@@ -451,6 +489,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       }
 
       final shortcutItems = <ShortcutItem>[];
+      final seenTargetPaths = <String>{};
+
       for (final shortcutPath in shortcutsPaths) {
         final name = shortcutPath.split('\\').last.replaceAll('.lnk', '');
 
@@ -469,12 +509,17 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           continue;
         }
 
+        // De-duplication
+        final normTarget = targetPath.toLowerCase().trim();
+        if (seenTargetPaths.contains(normTarget)) continue;
+        seenTargetPaths.add(normTarget);
+
         shortcutItems.add(
           ShortcutItem(
             name: name,
             path: shortcutPath,
             iconPath: '',
-            description: '桌面快捷方式',
+            description: '应用',
             targetPath: targetPath,
             iconData: existingIcons[shortcutPath],
           ),
@@ -492,10 +537,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
       for (final type in systemItemsToLoad) {
         final virtualPath = SystemItemInfo.virtualPath(type);
         shortcutItems.add(
-          ShortcutItem.system(
-            type,
-            iconData: existingIcons[virtualPath],
-          ),
+          ShortcutItem.system(type, iconData: existingIcons[virtualPath]),
         );
       }
 
@@ -561,9 +603,11 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
               item.path,
               size: requestIconSize,
             );
-            final targetPath =
-                item.targetPath.isNotEmpty ? item.targetPath : item.path;
-            icon = primary ??
+            final targetPath = item.targetPath.isNotEmpty
+                ? item.targetPath
+                : item.path;
+            icon =
+                primary ??
                 await extractIconAsync(targetPath, size: requestIconSize);
           }
 
@@ -2508,4 +2552,105 @@ class _LayoutMetrics {
     required this.mainAxisSpacing,
     required this.horizontalPadding,
   });
+}
+
+class _ScanRequest {
+  final List<String> desktopPaths;
+  final List<String> startMenuPaths;
+  final bool showHidden;
+
+  _ScanRequest({
+    required this.desktopPaths,
+    required this.startMenuPaths,
+    required this.showHidden,
+  });
+}
+
+// Top-level function for compute
+Future<List<String>> _scanPathsInIsolate(_ScanRequest req) async {
+  // Initialize COM for this Isolate
+  final hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  if (FAILED(hr)) {
+    // Proceed best effort
+  }
+
+  final results = <String>[];
+
+  bool isJunk(String name) {
+    final lower = name.toLowerCase();
+    const keywords = [
+      'uninstall',
+      'uninst',
+      'setup',
+      'install',
+      'config',
+      'update',
+      'readme',
+      'help',
+      'visit',
+      'website',
+      'homepage',
+      '卸载',
+      '安装',
+      '设置',
+      '帮助',
+      '说明',
+      '关于',
+    ];
+    for (final k in keywords) if (lower.contains(k)) return true;
+    return false;
+  }
+
+  const allowedExtensions = {'.exe', '.lnk', '.url', '.appref-ms'};
+
+  Future<void> scanDir(Directory dir, {bool checkUrlTargets = false}) async {
+    try {
+      if (!dir.existsSync()) return;
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        try {
+          final name = path.basename(entity.path);
+          if (!req.showHidden && (name.startsWith('.'))) continue;
+
+          final lowerName = name.toLowerCase();
+          if (lowerName == 'desktop.ini' || lowerName == 'thumbs.db') continue;
+          if (lowerName.endsWith('.url')) continue; // Always skip .url FILES
+          if (isJunk(name)) continue;
+
+          if (entity is File) {
+            final ext = path.extension(lowerName);
+            if (allowedExtensions.contains(ext)) {
+              // Deep check for .lnk pointing to .url (Only for Start Menu)
+              if (checkUrlTargets && lowerName.endsWith('.lnk')) {
+                final target = getShortcutTarget(entity.path);
+                if (target != null && target.toLowerCase().endsWith('.url')) {
+                  continue; // Skip this shortcut
+                }
+              }
+              results.add(entity.path);
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  // Scan Desktop (No deep filter)
+  for (final dirPath in req.desktopPaths) {
+    if (dirPath.isNotEmpty)
+      await scanDir(Directory(dirPath), checkUrlTargets: false);
+  }
+
+  // Scan Start Menu (With deep filter)
+  for (final dirPath in req.startMenuPaths) {
+    if (dirPath.isNotEmpty)
+      await scanDir(Directory(dirPath), checkUrlTargets: true);
+  }
+
+  // Uninitialize COM
+  CoUninitialize();
+
+  return results;
 }

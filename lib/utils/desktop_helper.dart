@@ -710,6 +710,59 @@ List<String> desktopLocations(
   bool includePublic = true,
 }) => _desktopLocations(primaryPath, includePublic: includePublic);
 
+Future<List<String>> getStartMenuLocations() async {
+  final locations = <String>{};
+
+  // Current User Start Menu
+  final userStartMenu = _getKnownFolderPath(FOLDERID_Programs);
+  if (userStartMenu != null && userStartMenu.isNotEmpty) {
+    locations.add(userStartMenu);
+  }
+
+  // All Users (Common) Start Menu
+  final commonStartMenu = _getKnownFolderPath(FOLDERID_CommonPrograms);
+  if (commonStartMenu != null && commonStartMenu.isNotEmpty) {
+    locations.add(commonStartMenu);
+  }
+
+  return locations.toList();
+}
+
+Future<List<String>> findSystemTools() async {
+  final tools = <String>[];
+
+  // CMD
+  final system32 = Platform.environment['SystemRoot'] != null
+      ? path.join(Platform.environment['SystemRoot']!, 'System32')
+      : r'C:\Windows\System32';
+
+  final cmdPath = path.join(system32, 'cmd.exe');
+  if (File(cmdPath).existsSync()) {
+    tools.add(cmdPath);
+  }
+
+  // PowerShell
+  final powershellPath = path.join(
+    system32,
+    r'WindowsPowerShell\v1.0\powershell.exe',
+  );
+  if (File(powershellPath).existsSync()) {
+    tools.add(powershellPath);
+  }
+
+  // Windows Terminal (wt.exe)
+  // Check LocalAppData/Microsoft/WindowsApps/wt.exe
+  final localAppData = Platform.environment['LOCALAPPDATA'];
+  if (localAppData != null) {
+    final wtPath = path.join(localAppData, r'Microsoft\WindowsApps\wt.exe');
+    if (File(wtPath).existsSync()) {
+      tools.add(wtPath);
+    }
+  }
+
+  return tools;
+}
+
 bool isHiddenOrSystem(String fullPath) {
   try {
     final ptr = fullPath.toNativeUtf16();
@@ -1034,40 +1087,84 @@ Future<List<String>> scanDesktopShortcuts(
   String desktopPath, {
   bool showHidden = false,
 }) async {
-  final directories = _desktopLocations(desktopPath);
+  final locations = _desktopLocations(desktopPath);
   final shortcuts = <String>{};
-  const allowedExtensions = {'.exe', '.lnk', '.url', '.appref-ms'};
 
-  for (final dirPath in directories) {
+  for (final dirPath in locations) {
     try {
-      final desktopDir = Directory(dirPath);
-      if (!desktopDir.existsSync()) continue;
+      final dir = Directory(dirPath);
+      if (!dir.existsSync()) continue;
 
-      await for (final entity in desktopDir.list()) {
-        final name = path.basename(entity.path);
-        final lowerName = name.toLowerCase();
-
-        if (!showHidden &&
-            (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
-          continue;
-        }
-
-        if (lowerName == 'desktop.ini' || lowerName == 'thumbs.db') {
-          continue;
-        }
-
-        if (entity is File) {
-          final ext = path.extension(lowerName);
-          if (!allowedExtensions.contains(ext)) continue;
-          shortcuts.add(entity.path);
-        }
-      }
-    } catch (e) {
-      print('扫描桌面失败 ($dirPath): $e');
-    }
+      final found = await scanDirectoryShortcuts(
+        dirPath,
+        showHidden: showHidden,
+        recursive: false,
+      );
+      shortcuts.addAll(found);
+    } catch (_) {}
   }
 
   return shortcuts.toList();
+}
+
+Future<List<String>> scanDirectoryShortcuts(
+  String dirPath, {
+  bool showHidden = false,
+  bool recursive = false,
+  Set<String>? visited,
+}) async {
+  final results = <String>[];
+  final visitedDirs = visited ?? <String>{};
+
+  // Basic cycle detection for recursion
+  if (visitedDirs.contains(dirPath)) return results;
+  visitedDirs.add(dirPath);
+
+  const allowedExtensions = {'.exe', '.lnk', '.url', '.appref-ms'};
+
+  try {
+    final dir = Directory(dirPath);
+    if (!dir.existsSync()) return results;
+
+    await for (final entity in dir.list(recursive: false, followLinks: false)) {
+      final name = path.basename(entity.path);
+      final lowerName = name.toLowerCase();
+
+      // Filter hidden/system if needed
+      if (!showHidden &&
+          (name.startsWith('.') || isHiddenOrSystem(entity.path))) {
+        continue;
+      }
+
+      if (lowerName == 'desktop.ini' || lowerName == 'thumbs.db') {
+        continue;
+      }
+
+      final type = FileSystemEntity.typeSync(entity.path);
+
+      if (type == FileSystemEntityType.file) {
+        final ext = path.extension(lowerName);
+        // Only add if it's an executable or shortcut
+        if (allowedExtensions.contains(ext)) {
+          results.add(entity.path);
+        }
+      } else if (recursive && type == FileSystemEntityType.directory) {
+        // Recursive scan
+        final subResults = await scanDirectoryShortcuts(
+          entity.path,
+          showHidden: showHidden,
+          recursive: true,
+          visited: visitedDirs,
+        );
+        results.addAll(subResults);
+      }
+    }
+  } catch (e) {
+    // Ignore access errors etc.
+    // print('Scan failed for $dirPath: $e');
+  }
+
+  return results;
 }
 
 Uint8List? extractIcon(String filePath, {int size = 64}) {
