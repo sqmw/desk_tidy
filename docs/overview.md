@@ -40,3 +40,4 @@
 - 代码行统计：`fvm dart run bin/count_lib_loc.dart`。  
 - 框架稳定性：解决了 `MouseTracker` 和 `RenderBox` 相关的断言异常，详见 `docs/framework_stability_fix.md`。
 - 单实例与更新机制详见 `docs/single_instance.md`、`docs/update_service.md`。  
+- 大文件拆分重构记录：`docs/refactor/2026-02-01/00_summary.md`。
