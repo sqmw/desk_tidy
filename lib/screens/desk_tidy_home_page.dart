@@ -2125,20 +2125,20 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     final theme = Theme.of(context);
     final hasQuery = _appSearchQuery.trim().isNotEmpty;
     final iconSize = (18 * scale).clamp(16.0, 22.0);
-    final borderColor = _searchHasFocus
-        ? theme.colorScheme.primary.withValues(alpha: 0.45)
-        : theme.dividerColor.withValues(alpha: 0.16);
+    // 移除边框，改用背景色区分
+    // 聚焦时稍微增加背景不透明度，而不是加边框
+    final opacity = (_toolbarPanelOpacity + (_searchHasFocus ? 0.12 : 0.05))
+        .clamp(0.0, 1.0);
+
     final iconColor = _searchHasFocus
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface.withValues(alpha: 0.72);
-    final opacity = (_toolbarPanelOpacity + (_searchHasFocus ? 0.06 : 0.0))
-        .clamp(0.0, 1.0);
 
     return GlassContainer(
       borderRadius: BorderRadius.circular(14),
       opacity: opacity,
       blurSigma: _toolbarPanelBlur,
-      border: Border.all(color: borderColor, width: 1),
+      // border: null, // 移除边框
       padding: EdgeInsets.symmetric(
         horizontal: 10 * scale,
         vertical: 6 * scale,
@@ -2168,6 +2168,10 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                   border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
                 ),
               ),
             ),
