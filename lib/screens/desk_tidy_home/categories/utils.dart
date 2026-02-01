@@ -8,16 +8,4 @@ extension _DeskTidyHomeCategoryUtils on _DeskTidyHomePageState {
     }
     return true;
   }
-
-  // 比较两个快捷方式列表是否相等
-  bool _shortcutsEqual(List<ShortcutItem> oldList, List<ShortcutItem> newList) {
-    if (oldList.length != newList.length) return false;
-
-    // 使用Set来比较，性能更好
-    final oldPathSet = oldList.map((item) => item.path).toSet();
-    final newPathSet = newList.map((item) => item.path).toSet();
-
-    return oldPathSet.length == newPathSet.length &&
-        oldPathSet.containsAll(newPathSet);
-  }
 }

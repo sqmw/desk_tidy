@@ -73,6 +73,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
   Future<void> _presentFromTrayPopup() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
+    _lastActivationMode = _ActivationMode.tray;
 
     // 先准备内容，避免白屏闪烁
     if (mounted) _setState(() => _panelVisible = true);

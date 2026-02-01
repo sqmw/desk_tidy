@@ -132,6 +132,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
             await _presentFromTrayPopup();
           } else {
             _trayMode = false;
+            _lastActivationMode = _ActivationMode.tray;
             _dockManager.onPresentFromTray();
             await windowManager.setSkipTaskbar(false);
             await windowManager.show();

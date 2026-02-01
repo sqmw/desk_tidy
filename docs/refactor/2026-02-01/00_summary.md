@@ -30,3 +30,4 @@
 - `docs/refactor/2026-02-01/10_icon_extract_sync.md`
 - `docs/refactor/2026-02-01/11_app_preferences.md`
 - `docs/refactor/2026-02-01/12_home_handlers.md`
+- `docs/refactor/2026-02-01/13_cleanup_warnings.md`
