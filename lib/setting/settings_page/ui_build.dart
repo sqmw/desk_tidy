@@ -371,10 +371,21 @@ extension _SettingsPageUi on _SettingsPageState {
           ],
         ),
 
-        /// 检查更新
+        /// 检查更新 & 关于
         SettingsSection(
           title: const Text(''),
           tiles: [
+            SettingsTile(
+              leading: const Icon(Icons.star, color: Colors.amber),
+              title: const Text('Star 支持我们'),
+              trailing: const Icon(Icons.chevron_right),
+              onPressed: (_) {
+                launchUrl(
+                  Uri.parse('https://github.com/sqmw/desk_tidy'),
+                  mode: LaunchMode.externalApplication,
+                );
+              },
+            ),
             SettingsTile(
               leading: Icon(Icons.update, color: theme.colorScheme.primary),
               title: const Text('检查更新'),

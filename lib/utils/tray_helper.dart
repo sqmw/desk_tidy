@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:system_tray/system_tray.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 class TrayHelper {
   final SystemTray _tray = SystemTray();
   bool _initialized = false;
@@ -26,23 +28,19 @@ class TrayHelper {
 
       final menu = Menu();
       await menu.buildFrom([
-        MenuItemLabel(
-          label: '显示主窗口',
-          onClicked: (_) => onShowRequested(),
-        ),
-        MenuItemLabel(
-          label: '隐藏到托盘',
-          onClicked: (_) => onHideRequested(),
-        ),
+        MenuItemLabel(label: '显示主窗口', onClicked: (_) => onShowRequested()),
+        MenuItemLabel(label: '隐藏到托盘', onClicked: (_) => onHideRequested()),
         MenuSeparator(),
         MenuItemLabel(
-          label: '退出(隐藏到托盘)',
-          onClicked: (_) => onHideRequested(),
+          label: 'Star 支持我们🌟',
+          onClicked: (_) => launchUrl(
+            Uri.parse('https://github.com/sqmw/desk_tidy'),
+            mode: LaunchMode.externalApplication,
+          ),
         ),
-        MenuItemLabel(
-          label: '彻底退出',
-          onClicked: (_) => onQuitRequested(),
-        ),
+        MenuSeparator(),
+        MenuItemLabel(label: '退出(隐藏到托盘)', onClicked: (_) => onHideRequested()),
+        MenuItemLabel(label: '彻底退出', onClicked: (_) => onQuitRequested()),
       ]);
 
       await _tray.setContextMenu(menu);
