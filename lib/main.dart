@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/desk_tidy_home_page.dart';
@@ -32,6 +33,12 @@ Future<void> main() async {
   if (!isPrimary) return;
 
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Keep decoded image cache bounded. Desktop icon grids can decode many images
+  // when scrolling; without a cap, process memory may grow and stay high.
+  PaintingBinding.instance.imageCache.maximumSize = 300;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 80 << 20; // 80MB
+
   await windowManager.ensureInitialized();
 
   final bounds = await AppPreferences.loadWindowBounds();

@@ -4,16 +4,19 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
   Future<void> _loadShortcuts({
     bool showLoading = true,
     bool forceReloadIcons = false,
+    List<String>? desktopShortcutPathsOverride,
   }) async {
-    if (_isRefreshing) return;
-    _isRefreshing = true;
+    final loadToken = ++_shortcutLoadToken;
     final shouldShowLoading = showLoading || _shortcuts.isEmpty;
     try {
       if (shouldShowLoading) {
-        _setState(() => _isLoading = true);
+        if (mounted && loadToken == _shortcutLoadToken) {
+          _setState(() => _isLoading = true);
+        }
       }
 
       final desktopPath = await getDesktopPath();
+      if (!mounted || loadToken != _shortcutLoadToken) return;
       _desktopPath = desktopPath;
 
       // Collect all root paths to scan (User Desktop + Public Desktop)
@@ -38,20 +41,54 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
         print('Error finding system tools: $e');
       }
 
+      if (desktopShortcutPathsOverride != null) {
+        shortcutsPaths.addAll(desktopShortcutPathsOverride);
+      }
+
       // Offload heavy directory scanning to Isolate
       try {
         final foundInIsolate = await compute(
           _scanPathsInIsolate,
           _ScanRequest(
-            desktopPaths: desktopScanPaths,
+            desktopPaths: desktopShortcutPathsOverride == null
+                ? desktopScanPaths
+                : const [],
             startMenuPaths: startMenuScanPaths,
             showHidden: _showHidden,
           ),
         );
+        if (!mounted || loadToken != _shortcutLoadToken) return;
         shortcutsPaths.addAll(foundInIsolate);
         print('Isolate scan completed. Found ${foundInIsolate.length} items.');
+
+        final snapshotSource =
+            desktopShortcutPathsOverride ??
+            foundInIsolate.where((p) {
+              final lower = p.toLowerCase();
+              for (final root in desktopScanPaths) {
+                if (root.isEmpty) continue;
+                final normalizedRoot = path.normalize(root).toLowerCase();
+                final rootWithSep = normalizedRoot.endsWith(path.separator)
+                    ? normalizedRoot
+                    : '$normalizedRoot${path.separator}';
+                if (lower == normalizedRoot || lower.startsWith(rootWithSep)) {
+                  return true;
+                }
+              }
+              return false;
+            });
+
+        _autoRefreshDesktopPathsSnapshot =
+            snapshotSource.map((e) => e.toLowerCase()).toList()..sort();
+        _hasLoadedShortcutsOnce = true;
       } catch (e) {
         print('Isolate scan failed: $e');
+        if (desktopShortcutPathsOverride != null) {
+          _autoRefreshDesktopPathsSnapshot =
+              desktopShortcutPathsOverride.map((e) => e.toLowerCase()).toList()
+                ..sort();
+          _hasLoadedShortcutsOnce = true;
+        }
       }
 
       // 快速路径 diff：路径相同则无需解析图标和刷新 UI
@@ -62,7 +99,9 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
       // 如果路径没有变化且不是强制显示加载状态（即非手动刷新），则直接返回
       if (pathsUnchanged && !showLoading && !forceReloadIcons) {
         if (shouldShowLoading) {
-          _setState(() => _isLoading = false);
+          if (mounted && loadToken == _shortcutLoadToken) {
+            _setState(() => _isLoading = false);
+          }
         }
         return;
       }
@@ -132,6 +171,7 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
       });
 
       final searchIndex = _buildSearchIndex(shortcutItems);
+      if (!mounted || loadToken != _shortcutLoadToken) return;
       _setState(() {
         _shortcuts = shortcutItems;
         _searchIndexByPath = searchIndex;
@@ -139,10 +179,11 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
       _syncCategoriesWithShortcuts(shortcutItems);
 
       if (shouldShowLoading) {
-        _setState(() => _isLoading = false);
+        if (mounted && loadToken == _shortcutLoadToken) {
+          _setState(() => _isLoading = false);
+        }
       }
 
-      final loadToken = ++_shortcutLoadToken;
       unawaited(
         _hydrateShortcutIcons(
           shortcutItems,
@@ -154,10 +195,10 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
     } catch (e) {
       print('加载快捷方式失败: $e');
       if (shouldShowLoading) {
-        _setState(() => _isLoading = false);
+        if (mounted && loadToken == _shortcutLoadToken) {
+          _setState(() => _isLoading = false);
+        }
       }
-    } finally {
-      _isRefreshing = false;
     }
   }
 

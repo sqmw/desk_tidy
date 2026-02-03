@@ -35,7 +35,9 @@ class _AllPageState extends State<AllPage> {
   bool _isDetailEditing = false;
   bool _showDetails = true;
   _EntityFilterMode _filterMode = _EntityFilterMode.all;
-  final Map<String, Future<Uint8List?>> _iconFutures = {};
+  static const int _iconFutureCacheCapacity = 512;
+  final LinkedHashMap<String, Future<Uint8List?>> _iconFutures =
+      LinkedHashMap<String, Future<Uint8List?>>();
 
   // Custom double-tap state
   int _lastTapTime = 0;
@@ -56,6 +58,7 @@ class _AllPageState extends State<AllPage> {
     _focusNode.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _iconFutures.clear();
     super.dispose();
   }
 

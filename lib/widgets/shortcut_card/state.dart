@@ -33,6 +33,8 @@ class _ShortcutCardState extends State<ShortcutCard> {
   OverlayEntry? _labelOverlay;
   bool _selected = false;
   bool _hovered = false;
+  bool? _pendingHoverValue;
+  bool _hoverUpdateScheduled = false;
   late final FocusNode _focusNode;
   final GlobalKey _labelTextKey = GlobalKey();
   ValueListenable<bool>? _windowFocusNotifier;
@@ -40,6 +42,19 @@ class _ShortcutCardState extends State<ShortcutCard> {
   void _setState(VoidCallback fn) => setState(fn);
 
   double get _textSize => (widget.iconSize * 0.34).clamp(10.0, 18.0);
+
+  void _requestHover(bool value) {
+    _pendingHoverValue = value;
+    if (_hoverUpdateScheduled) return;
+    _hoverUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hoverUpdateScheduled = false;
+      if (!mounted) return;
+      final next = _pendingHoverValue;
+      if (next == null || _hovered == next) return;
+      _setState(() => _hovered = next);
+    });
+  }
 
   @override
   void initState() {

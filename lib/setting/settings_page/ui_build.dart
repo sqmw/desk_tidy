@@ -296,7 +296,10 @@ extension _SettingsPageUi on _SettingsPageState {
               initialValue: widget.autoRefresh,
               leading: const Icon(Icons.refresh),
               title: const Text('桌面图标自动更新'),
-              description: const Text('周期性扫描桌面并仅在内容变化时悄然刷新'),
+              description: const Text(
+                '周期性扫描桌面并仅在内容变化时悄然刷新。\n'
+                '不建议开启：可能增加 CPU 负载；窗口隐藏到托盘时不会扫描。',
+              ),
             ),
             SettingsTile.switchTile(
               onToggle: widget.onAutoLaunchChanged,

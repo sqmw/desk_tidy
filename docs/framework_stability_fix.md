@@ -9,6 +9,9 @@
 **原因分析**：
 该异常发生在 `MouseTracker` 正在处理设备更新（如鼠标移动）时，又同步触发了另一次设备更新。在我们的应用中，这是由于在同步的 `onSecondaryTapDown`（右键点击）直接调用了 `showMenu`，导致 `Overlay` 同步插入并可能立即触发焦点变化或新的布局测试，从而干扰了正在进行的鼠标状态追踪循环。
 
+**补充触发场景（2026-02-03）**：
+当鼠标悬停在快捷方式卡片上，切换 Tab（例如从“应用”切到“全部”）会触发大量 `MouseRegion` enter/exit 更新。如果在 `onEnter/onExit` 里同步 `setState` 更新 hover 状态，同样可能打断 `MouseTracker` 的设备更新流程，导致该断言并出现“卡死/红屏”。
+
 ### 2. RenderBox 布局异常 (`Cannot hit test a render box that has never been laid out`)
 **异常现象**：命中测试（Hit Testing）路径中包含尚未完成布局的组件。
 **原因分析**：
@@ -32,6 +35,11 @@ onSecondaryTapDown: (details) {
   });
 }
 ```
+
+### 1.1 MouseRegion hover 状态延迟到帧末更新（PostFrame）
+将快捷方式卡片 hover 的 `setState` 从 `MouseRegion.onEnter/onExit` 中移出，改为把目标状态缓存后在 `addPostFrameCallback` 里统一更新，避免在 `MouseTracker` 的更新过程中重入触发 UI 变更。
+
+同时，快捷方式卡片的右键菜单也使用 `Future.microtask` 异步触发 `showMenu`，保持与各页面一致的稳定性策略。
 
 ### 2. 优化列表 Key 管理 (ValueKey)
 移除了 `AllPage` 列表项中不必要的 `GlobalObjectKey`，统一改用轻量级的 `ValueKey(entity.path)`。

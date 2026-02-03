@@ -25,7 +25,9 @@ class _FolderPageState extends State<FolderPage> {
   List<FileSystemEntity> _entries = [];
   bool _entityMenuActive = false;
   String? _selectedPath;
-  final Map<String, Future<Uint8List?>> _iconFutures = {};
+  static const int _iconFutureCacheCapacity = 512;
+  final LinkedHashMap<String, Future<Uint8List?>> _iconFutures =
+      LinkedHashMap<String, Future<Uint8List?>>();
   int _lastTapTime = 0;
   String _lastTappedPath = '';
   final FocusNode _focusNode = FocusNode();
@@ -48,6 +50,7 @@ class _FolderPageState extends State<FolderPage> {
   @override
   void dispose() {
     _focusNode.dispose();
+    _iconFutures.clear();
     super.dispose();
   }
 

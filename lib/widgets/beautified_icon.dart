@@ -36,17 +36,14 @@ class BeautifiedIcon extends StatelessWidget {
       return SizedBox(
         width: resolvedSize,
         height: resolvedSize,
-        child: _buildIcon(
-          context,
-          size: resolvedSize,
-          color: fallbackColor,
-        ),
+        child: _buildIcon(context, size: resolvedSize, color: fallbackColor),
       );
     }
 
     final iconSize = math.max(1.0, resolvedSize);
-    final resolvedFallbackColor =
-        !hasImage ? (spec.iconColor ?? fallbackColor) : fallbackColor;
+    final resolvedFallbackColor = !hasImage
+        ? (spec.iconColor ?? fallbackColor)
+        : fallbackColor;
     Widget icon = _buildIcon(
       context,
       size: iconSize,
@@ -54,11 +51,7 @@ class BeautifiedIcon extends StatelessWidget {
     );
     icon = _applyIconFilter(icon, spec, hasImage);
 
-    return SizedBox(
-      width: resolvedSize,
-      height: resolvedSize,
-      child: icon,
-    );
+    return SizedBox(width: resolvedSize, height: resolvedSize, child: icon);
   }
 
   Widget _applyIconFilter(
@@ -94,12 +87,16 @@ class BeautifiedIcon extends StatelessWidget {
   }) {
     final data = bytes;
     if (data != null && data.isNotEmpty) {
+      final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
+      final cacheDim = (size * dpr).round().clamp(16, 512);
       return Image.memory(
         data,
         width: size,
         height: size,
         fit: fit,
         alignment: Alignment.center,
+        cacheWidth: cacheDim,
+        cacheHeight: cacheDim,
         filterQuality: FilterQuality.high,
         gaplessPlayback: true,
       );
@@ -107,9 +104,9 @@ class BeautifiedIcon extends StatelessWidget {
     return Icon(
       fallback,
       size: size,
-      color: color ?? Theme.of(context).colorScheme.onSurface.withValues(
-            alpha: 0.72,
-          ),
+      color:
+          color ??
+          Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.72),
     );
   }
 
@@ -121,10 +118,26 @@ class BeautifiedIcon extends StatelessWidget {
     final g = color.green / 255.0;
     final b = color.blue / 255.0;
     return [
-      lumR * r, lumG * r, lumB * r, 0, 0,
-      lumR * g, lumG * g, lumB * g, 0, 0,
-      lumR * b, lumG * b, lumB * b, 0, 0,
-      0, 0, 0, 1, 0,
+      lumR * r,
+      lumG * r,
+      lumB * r,
+      0,
+      0,
+      lumR * g,
+      lumG * g,
+      lumB * g,
+      0,
+      0,
+      lumR * b,
+      lumG * b,
+      lumB * b,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 }

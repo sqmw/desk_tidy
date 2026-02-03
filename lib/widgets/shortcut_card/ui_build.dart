@@ -38,14 +38,18 @@ extension _ShortcutCardUi on _ShortcutCardState {
         }
       },
       child: MouseRegion(
-        onEnter: (_) => _setState(() => _hovered = true),
-        onExit: (_) => _setState(() => _hovered = false),
+        onEnter: (_) => _requestHover(true),
+        onExit: (_) => _requestHover(false),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onSecondaryTapDown: (details) {
             _focusNode.requestFocus();
             if (!_selected) _toggleSelection();
-            _showShortcutMenu(details.globalPosition);
+            final pos = details.globalPosition;
+            Future.microtask(() {
+              if (!mounted) return;
+              _showShortcutMenu(pos);
+            });
           },
           onDoubleTap: () {
             if (shortcut.isSystemItem) {

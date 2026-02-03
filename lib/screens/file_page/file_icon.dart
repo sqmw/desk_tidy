@@ -11,7 +11,12 @@ class _FileIcon extends StatelessWidget {
     required this.beautifyStyle,
     this.size = 28,
   });
-  static final Map<String, Future<Uint8List?>> _iconFutures = {};
+
+  // FilePage may browse a large number of file paths. Keep this bounded to avoid
+  // unbounded memory growth in debug sessions.
+  static const int _iconFutureCacheCapacity = 512;
+  static final LinkedHashMap<String, Future<Uint8List?>> _iconFutures =
+      LinkedHashMap<String, Future<Uint8List?>>();
 
   @override
   Widget build(BuildContext context) {
@@ -60,9 +65,17 @@ class _FileIcon extends StatelessWidget {
 
   Future<Uint8List?> _getIconFuture(String path) {
     final key = path.toLowerCase();
-    return _iconFutures.putIfAbsent(
-      key,
-      () => extractIconAsync(path, size: 96),
-    );
+    final existing = _iconFutures.remove(key);
+    if (existing != null) {
+      _iconFutures[key] = existing; // refresh LRU order
+      return existing;
+    }
+
+    final created = extractIconAsync(path, size: 96);
+    _iconFutures[key] = created;
+    while (_iconFutures.length > _iconFutureCacheCapacity) {
+      _iconFutures.remove(_iconFutures.keys.first);
+    }
+    return created;
   }
 }

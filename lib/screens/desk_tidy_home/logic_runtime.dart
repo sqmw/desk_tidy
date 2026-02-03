@@ -61,6 +61,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    _onMainWindowPresented();
     // Drop always-on-top after we are visible.
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -85,6 +86,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    _onMainWindowPresented();
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
         windowManager.setAlwaysOnTop(false);
@@ -96,6 +98,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onDismissToTray();
     _trayMode = true;
     if (mounted) _setState(() => _panelVisible = false);
+    _setupAutoRefresh();
     await windowManager.setSkipTaskbar(true);
     await Future<void>.delayed(_DeskTidyHomePageState._hotAnimDuration);
     await windowManager.hide();

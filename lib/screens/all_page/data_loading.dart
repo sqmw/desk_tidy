@@ -56,10 +56,18 @@ extension _AllPageDataLoading on _AllPageState {
 
   Future<Uint8List?> _getIconFuture(String path) {
     final key = path.toLowerCase();
-    return _iconFutures.putIfAbsent(
-      key,
-      () => extractIconAsync(path, size: 96),
-    );
+    final existing = _iconFutures.remove(key);
+    if (existing != null) {
+      _iconFutures[key] = existing; // refresh LRU order
+      return existing;
+    }
+
+    final created = extractIconAsync(path, size: 96);
+    _iconFutures[key] = created;
+    while (_iconFutures.length > _AllPageState._iconFutureCacheCapacity) {
+      _iconFutures.remove(_iconFutures.keys.first);
+    }
+    return created;
   }
 
   List<FileItem> _loadAggregateRoots() {

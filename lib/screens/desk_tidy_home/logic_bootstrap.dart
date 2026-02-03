@@ -77,6 +77,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       if (_selectedIndex != 0) {
         _setState(() => _selectedIndex = 0);
       }
+      _onMainWindowPresented();
       // 延迟一小段时间确保原生焦点已完全切换
       Future.delayed(const Duration(milliseconds: 50), () {
         if (mounted) _appSearchFocus.requestFocus();
@@ -112,10 +113,12 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       _showUserFiles = config.showUserFiles;
     });
     _handleThemeChange(_themeModeOption);
+
+    final desktopPath = await getDesktopPath();
+    if (!mounted) return;
+    _setState(() => _desktopPath = desktopPath);
+
     await _loadCategories();
-    await _loadShortcuts();
-    await _syncDesktopIconVisibility();
-    _setupAutoRefresh();
 
     // Launch boxes if enabled
     await BoxLauncher.instance.updateBoxes(
@@ -140,6 +143,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
             await windowManager.focus();
             await _syncDesktopIconVisibility();
             if (mounted) _setState(() => _panelVisible = true);
+            _onMainWindowPresented();
           }
         },
         onHideRequested: () async {
@@ -166,6 +170,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.setSkipTaskbar(false);
       await windowManager.show();
       await windowManager.focus();
+      _onMainWindowPresented();
     }
   }
 

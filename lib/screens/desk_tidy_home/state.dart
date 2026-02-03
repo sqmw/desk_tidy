@@ -16,7 +16,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   Timer? _saveWindowTimer;
   Timer? _dragEndTimer;
   Timer? _autoRefreshTimer;
-  bool _isRefreshing = false;
+  bool _hasLoadedShortcutsOnce = false;
+  bool _autoRefreshProbeInFlight = false;
+  List<String> _autoRefreshDesktopPathsSnapshot = const [];
   int _shortcutLoadToken = 0;
   List<ShortcutItem> _shortcuts = [];
   List<AppCategory> _categories = [];
@@ -183,7 +185,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void onWindowClose() async {
     if (_trayReady) {
-      await windowManager.hide();
+      await _dismissToTray(fromHotCorner: false);
       return;
     }
     await windowManager.setPreventClose(false);
