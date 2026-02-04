@@ -28,12 +28,13 @@ import '../widgets/shortcut_card.dart';
 import '../widgets/category_strip.dart';
 import '../widgets/selectable_shortcut_tile.dart';
 import 'all_page.dart';
-import '../services/window_dock_logic.dart';
 import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
 import '../widgets/operation_progress_bar.dart';
 import '../services/hotkey_service.dart';
 import '../models/system_items.dart';
+import '../services/hot_corner_service.dart';
+import '../services/desktop_visibility_service.dart';
 
 part 'desk_tidy_home/constants.dart';
 part 'desk_tidy_home/state.dart';

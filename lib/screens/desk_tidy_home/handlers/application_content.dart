@@ -254,53 +254,58 @@ extension _DeskTidyHomeApplicationContent on _DeskTidyHomePageState {
                       });
                     }
 
-                    return GridView.builder(
-                      controller: _gridScrollController,
-                      padding: EdgeInsets.fromLTRB(
-                        metrics.horizontalPadding / 2,
-                        0,
-                        metrics.horizontalPadding / 2,
-                        metrics.horizontalPadding / 2,
-                      ),
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 120.0,
-                        crossAxisSpacing: metrics.mainAxisSpacing,
-                        mainAxisSpacing: metrics.mainAxisSpacing,
-                        childAspectRatio: metrics.cardHeight > 0
-                            ? (120.0 / metrics.cardHeight)
-                            : 1.0,
-                      ),
-                      itemCount: shortcuts.length,
-                      itemBuilder: (context, index) {
-                        final shortcut = shortcuts[index];
-                        if (editingCategory) {
-                          return SelectableShortcutTile(
+                    return RepaintBoundary(
+                      child: GridView.builder(
+                        controller: _gridScrollController,
+                        padding: EdgeInsets.fromLTRB(
+                          metrics.horizontalPadding / 2,
+                          0,
+                          metrics.horizontalPadding / 2,
+                          metrics.horizontalPadding / 2,
+                        ),
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 120.0,
+                          crossAxisSpacing: metrics.mainAxisSpacing,
+                          mainAxisSpacing: metrics.mainAxisSpacing,
+                          childAspectRatio: metrics.cardHeight > 0
+                              ? (120.0 / metrics.cardHeight)
+                              : 1.0,
+                        ),
+                        itemCount: shortcuts.length,
+                        itemBuilder: (context, index) {
+                          final shortcut = shortcuts[index];
+                          if (editingCategory) {
+                            return SelectableShortcutTile(
+                              shortcut: shortcut,
+                              iconSize: _iconSize,
+                              scale: scale,
+                              selected: _editingSelection.contains(
+                                shortcut.path,
+                              ),
+                              onTap: () => _toggleInlineSelection(shortcut),
+                              beautifyIcon: _beautifyAppIcons,
+                              beautifyStyle: _beautifyStyle,
+                            );
+                          }
+                          return ShortcutCard(
                             shortcut: shortcut,
                             iconSize: _iconSize,
-                            scale: scale,
-                            selected: _editingSelection.contains(shortcut.path),
-                            onTap: () => _toggleInlineSelection(shortcut),
+                            windowFocusNotifier: _windowFocusNotifier,
+                            isHighlighted: index == _searchSelectedIndex,
+                            onDeleted: () {
+                              _loadShortcuts(showLoading: false);
+                            },
+                            onCategoryMenuRequested:
+                                _showCategoryMenuForShortcut,
                             beautifyIcon: _beautifyAppIcons,
                             beautifyStyle: _beautifyStyle,
+                            onLaunched:
+                                _lastActivationMode == _ActivationMode.hotkey
+                                ? () => _dismissToTray(fromHotCorner: false)
+                                : null,
                           );
-                        }
-                        return ShortcutCard(
-                          shortcut: shortcut,
-                          iconSize: _iconSize,
-                          windowFocusNotifier: _windowFocusNotifier,
-                          isHighlighted: index == _searchSelectedIndex,
-                          onDeleted: () {
-                            _loadShortcuts(showLoading: false);
-                          },
-                          onCategoryMenuRequested: _showCategoryMenuForShortcut,
-                          beautifyIcon: _beautifyAppIcons,
-                          beautifyStyle: _beautifyStyle,
-                          onLaunched:
-                              _lastActivationMode == _ActivationMode.hotkey
-                              ? () => _dismissToTray(fromHotCorner: false)
-                              : null,
-                        );
-                      },
+                        },
+                      ),
                     );
                   },
                 ),

@@ -52,8 +52,6 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _showUserFiles = false;
 
   static const Duration _hotAnimDuration = Duration(milliseconds: 220);
-  Timer? _desktopIconSyncTimer;
-  Timer? _hotCornerTimer;
   bool? _lastDesktopIconsVisible;
   int _windowHandle = 0;
   _ActivationMode? _lastActivationMode;
@@ -68,7 +66,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   int _searchSelectedIndex = -1; // 搜索结果选中索引，-1 表示未选中
   int _gridCrossAxisCount = 1; // 网格布局列数，用于键盘导航
   final ScrollController _gridScrollController = ScrollController(); // 网格滚动控制器
-  double _currentScale = 1.0;
+  final double _currentScale = 1.0;
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -137,15 +135,45 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _dockManager = WindowDockManager(
       windowManager: windowManager,
       getWindowHandle: () => _windowHandle,
-      isCursorInsideWindow: _isCursorInsideWindow,
-      dismissToTray: _dismissToTray,
     );
+
+    // Listen to dock events
+    _dockManager.events.listen((event) {
+      if (!mounted) return;
+      if (event is DockEventDismissRequested) {
+        _dismissToTray(fromHotCorner: event.fromHotCorner);
+      }
+    });
 
     _applyDefaults();
     _loadPreferences();
     _dockManager.start();
-    _startDesktopIconSync();
-    _startHotCornerWatcher();
+    // Services Start
+    DesktopVisibilityService.instance.start(
+      onVisibilityChanged: (visible) {
+        if (!mounted) return;
+        if (_lastDesktopIconsVisible == visible) return;
+        _lastDesktopIconsVisible = visible;
+        _setState(() => _hideDesktopItems = !visible);
+      },
+      shouldSync: () {
+        if (!mounted) return false;
+        if (!_hideDesktopItems) return false;
+        if (_trayMode || !_panelVisible) return false;
+        return true;
+      },
+    );
+    HotCornerService.instance.start(
+      onTrigger: () {
+        if (_trayMode) {
+          _presentFromHotCorner();
+        }
+      },
+      shouldWatch: () {
+        if (!mounted) return false;
+        return _trayMode || _dockManager.isDocked;
+      },
+    );
 
     // Start in tray; keep the window out of taskbar until user opens it.
     windowManager.setSkipTaskbar(true);
@@ -169,8 +197,8 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
   @override
   void dispose() {
-    _hotCornerTimer?.cancel();
-    _desktopIconSyncTimer?.cancel();
+    HotCornerService.instance.stop();
+    DesktopVisibilityService.instance.stop();
     _saveWindowTimer?.cancel();
     _dragEndTimer?.cancel();
     _autoRefreshTimer?.cancel();
@@ -260,122 +288,123 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
           duration: _hotAnimDuration,
           curve: Curves.easeOutCubic,
           opacity: _panelVisible ? 1.0 : 0.0,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Positioned.fill(
-                child: Opacity(
-                  opacity: _backgroundOpacity,
-                  child: backgroundExists
-                      ? Image.file(File(backgroundPath), fit: BoxFit.cover)
-                      : Container(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                        ),
-                ),
-              ),
-              Column(
-                children: [
-                  _buildTitleBar(),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Listener(
-                          onPointerDown: _onNavigationRailPointer,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: railPadH,
-                              vertical: railPadV,
-                            ),
-                            child: GlassContainer(
-                              borderRadius: BorderRadius.circular(18),
-                              opacity: _chromeOpacity,
-                              blurSigma: _chromeBlur,
-                              border: Border.all(
-                                color: theme.dividerColor.withValues(
-                                  alpha: 0.16,
-                                ),
-                              ),
-                              child: NavigationRail(
-                                backgroundColor: Colors.transparent,
-                                minWidth: railMinWidth,
-                                useIndicator: true,
-                                indicatorColor: theme.colorScheme.primary
-                                    .withValues(alpha: _indicatorOpacity),
-                                selectedIconTheme: IconThemeData(
-                                  color: theme.colorScheme.primary,
-                                ),
-                                unselectedIconTheme: IconThemeData(
-                                  color: theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.72,
-                                  ),
-                                ),
-                                selectedLabelTextStyle: theme
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                unselectedLabelTextStyle: theme
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.72),
-                                    ),
-                                selectedIndex: _selectedIndex,
-                                onDestinationSelected:
-                                    _onNavigationRailItemSelected,
-                                labelType: NavigationRailLabelType.none,
-                                destinations: [
-                                  NavigationRailDestination(
-                                    icon: Icon(Icons.apps),
-                                    label: const Text('应用'),
-                                  ),
-                                  NavigationRailDestination(
-                                    icon: Icon(Icons.all_inbox),
-                                    label: const Text('全部'),
-                                  ),
-                                  NavigationRailDestination(
-                                    icon: Icon(Icons.settings),
-                                    label: const Text('设置'),
-                                  ),
-                                ],
-                              ),
-                            ),
+          child: RepaintBoundary(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: _backgroundOpacity,
+                    child: backgroundExists
+                        ? Image.file(File(backgroundPath), fit: BoxFit.cover)
+                        : Container(
+                            color: Theme.of(context).scaffoldBackgroundColor,
                           ),
-                        ),
-                        VerticalDivider(
-                          thickness: 1,
-                          width: 1,
-                          color: theme.dividerColor.withValues(alpha: 0.12),
-                        ),
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              10 * scale,
-                              6 * scale,
-                              10 * scale,
-                              10 * scale,
-                            ),
-                            child: GlassContainer(
-                              borderRadius: BorderRadius.circular(18),
-                              opacity: _contentPanelOpacity,
-                              blurSigma: _contentPanelBlur,
-                              border: Border.all(
-                                color: theme.dividerColor.withValues(
-                                  alpha: 0.16,
-                                ),
-                              ),
-                              child: _buildContent(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ],
-              ),
-            ],
+                ),
+                Column(
+                  children: [
+                    _buildTitleBar(),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Listener(
+                            onPointerDown: _onNavigationRailPointer,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: railPadH,
+                                vertical: railPadV,
+                              ),
+                              child: GlassContainer(
+                                borderRadius: BorderRadius.circular(18),
+                                opacity: _chromeOpacity,
+                                blurSigma: _chromeBlur,
+                                border: Border.all(
+                                  color: theme.dividerColor.withValues(
+                                    alpha: 0.16,
+                                  ),
+                                ),
+                                child: NavigationRail(
+                                  backgroundColor: Colors.transparent,
+                                  minWidth: railMinWidth,
+                                  useIndicator: true,
+                                  indicatorColor: theme.colorScheme.primary
+                                      .withValues(alpha: _indicatorOpacity),
+                                  selectedIconTheme: IconThemeData(
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  unselectedIconTheme: IconThemeData(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.72),
+                                  ),
+                                  selectedLabelTextStyle: theme
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                  unselectedLabelTextStyle: theme
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(
+                                        color: theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.72),
+                                      ),
+                                  selectedIndex: _selectedIndex,
+                                  onDestinationSelected:
+                                      _onNavigationRailItemSelected,
+                                  labelType: NavigationRailLabelType.none,
+                                  destinations: [
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.apps),
+                                      label: const Text('应用'),
+                                    ),
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.all_inbox),
+                                      label: const Text('全部'),
+                                    ),
+                                    NavigationRailDestination(
+                                      icon: Icon(Icons.settings),
+                                      label: const Text('设置'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          VerticalDivider(
+                            thickness: 1,
+                            width: 1,
+                            color: theme.dividerColor.withValues(alpha: 0.12),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                10 * scale,
+                                6 * scale,
+                                10 * scale,
+                                10 * scale,
+                              ),
+                              child: GlassContainer(
+                                borderRadius: BorderRadius.circular(18),
+                                opacity: _contentPanelOpacity,
+                                blurSigma: _contentPanelBlur,
+                                border: Border.all(
+                                  color: theme.dividerColor.withValues(
+                                    alpha: 0.16,
+                                  ),
+                                ),
+                                child: _buildContent(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

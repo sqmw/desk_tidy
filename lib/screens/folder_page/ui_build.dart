@@ -1,6 +1,99 @@
 part of '../folder_page.dart';
 
 extension _FolderPageUi on _FolderPageState {
+  Widget _buildGridContent() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(child: Text(_error!));
+    }
+    if (_entries.isEmpty) {
+      return const Center(child: Text('未找到内容'));
+    }
+    return RepaintBoundary(
+      child: GridView.builder(
+        padding: const EdgeInsets.all(12),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 100,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.8,
+        ),
+        itemCount: _entries.length,
+        itemBuilder: (context, index) {
+          final entity = _entries[index];
+          final name = path.basename(entity.path);
+          final isDir = entity is Directory;
+          final isSelected = entity.path == _selectedPath;
+          return Material(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                : Colors.transparent,
+            child: InkWell(
+              onTapDown: (_) {
+                _setState(() => _selectedPath = entity.path);
+                _focusNode.requestFocus();
+              },
+              onTap: () {
+                final now = DateTime.now().millisecondsSinceEpoch;
+                if (now - _lastTapTime < 300 &&
+                    _lastTappedPath == entity.path) {
+                  if (isDir) {
+                    _openFolder(entity.path);
+                  } else {
+                    openWithDefault(entity.path);
+                  }
+                  _lastTapTime = 0;
+                } else {
+                  _lastTapTime = now;
+                  _lastTappedPath = entity.path;
+                }
+              },
+              onSecondaryTapDown: (details) {
+                _setState(() => _selectedPath = entity.path);
+                _focusNode.requestFocus();
+                final pos = details.globalPosition;
+                Future.microtask(() {
+                  if (!mounted) return;
+                  _showEntityMenu(entity, pos);
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              hoverColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _EntityIcon(
+                    entity: entity,
+                    beautifyIcon: widget.beautifyIcons,
+                    beautifyStyle: widget.beautifyStyle,
+                    getIconFuture: _getIconFuture,
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      name,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(fontSize: 11),
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildBody() {
     return Column(
       children: [
@@ -66,8 +159,9 @@ extension _FolderPageUi on _FolderPageState {
                 }
               }
               final focus = FocusManager.instance.primaryFocus;
-              if (focus?.context?.widget is EditableText)
+              if (focus?.context?.widget is EditableText) {
                 return KeyEventResult.ignored;
+              }
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.logicalKey == LogicalKeyboardKey.numpadDecimal) {
@@ -95,108 +189,7 @@ extension _FolderPageUi on _FolderPageState {
                   _showPageMenu(pos);
                 });
               },
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : (_error != null
-                        ? Center(child: Text(_error!))
-                        : (_entries.isEmpty
-                              ? const Center(child: Text('未找到内容'))
-                              : GridView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithMaxCrossAxisExtent(
-                                        maxCrossAxisExtent: 100,
-                                        mainAxisSpacing: 12,
-                                        crossAxisSpacing: 12,
-                                        childAspectRatio: 0.8,
-                                      ),
-                                  itemCount: _entries.length,
-                                  itemBuilder: (context, index) {
-                                    final entity = _entries[index];
-                                    final name = path.basename(entity.path);
-                                    final isDir = entity is Directory;
-                                    final isSelected =
-                                        entity.path == _selectedPath;
-                                    return Material(
-                                      color: isSelected
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withValues(alpha: 0.1)
-                                          : Colors.transparent,
-                                      child: InkWell(
-                                        onTapDown: (_) {
-                                          _setState(
-                                            () => _selectedPath = entity.path,
-                                          );
-                                          _focusNode.requestFocus();
-                                        },
-                                        onTap: () {
-                                          final now = DateTime.now()
-                                              .millisecondsSinceEpoch;
-                                          if (now - _lastTapTime < 300 &&
-                                              _lastTappedPath == entity.path) {
-                                            if (isDir)
-                                              _openFolder(entity.path);
-                                            else
-                                              openWithDefault(entity.path);
-                                            _lastTapTime = 0;
-                                          } else {
-                                            _lastTapTime = now;
-                                            _lastTappedPath = entity.path;
-                                          }
-                                        },
-                                        onSecondaryTapDown: (details) {
-                                          _setState(
-                                            () => _selectedPath = entity.path,
-                                          );
-                                          _focusNode.requestFocus();
-                                          final pos = details.globalPosition;
-                                          Future.microtask(() {
-                                            if (!mounted) return;
-                                            _showEntityMenu(entity, pos);
-                                          });
-                                        },
-                                        borderRadius: BorderRadius.circular(12),
-                                        hoverColor: Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHighest
-                                            .withValues(alpha: 0.3),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            _EntityIcon(
-                                              entity: entity,
-                                              beautifyIcon:
-                                                  widget.beautifyIcons,
-                                              beautifyStyle:
-                                                  widget.beautifyStyle,
-                                              getIconFuture: _getIconFuture,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                              child: Text(
-                                                name,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(fontSize: 11),
-                                                maxLines: 2,
-                                                textAlign: TextAlign.center,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ))),
+              child: _buildGridContent(),
             ),
           ),
         ),

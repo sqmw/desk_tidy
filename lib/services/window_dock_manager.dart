@@ -9,16 +9,22 @@ import 'window_dock_logic.dart';
 /// 窗口拖动和磁吸管理器
 class WindowDockManager {
   final WindowManager windowManager;
-  final int Function() getWindowHandle;
-  final Future<bool> Function() isCursorInsideWindow;
-  final Future<void> Function({required bool fromHotCorner}) dismissToTray;
+  final int Function()?
+  _getWindowHandleCallback; // Optional fallback or remove if fully decoupled
+  int _windowHandle = 0;
+
+  final StreamController<DockEvent> _eventController =
+      StreamController<DockEvent>.broadcast();
+  Stream<DockEvent> get events => _eventController.stream;
 
   WindowDockManager({
     required this.windowManager,
-    required this.getWindowHandle,
-    required this.isCursorInsideWindow,
-    required this.dismissToTray,
-  });
+    int Function()? getWindowHandle,
+  }) : _getWindowHandleCallback = getWindowHandle;
+
+  void updateWindowHandle(int handle) {
+    _windowHandle = handle;
+  }
 
   // 状态：只保留必要的
   bool _isDocked = false; // 窗口是否在吸附区
@@ -54,6 +60,7 @@ class WindowDockManager {
   void dispose() {
     _autoHideTimer?.cancel();
     _hideDelayTimer?.cancel();
+    _eventController.close();
   }
 
   /// 标记窗口开始拖动
@@ -143,7 +150,7 @@ class WindowDockManager {
     if (_isInTray) return;
     // 托盘触发或快捷键触发时，点击外部直接隐藏
     if (_isTrayTrigger || _isHotkeyTrigger) {
-      await dismissToTray(fromHotCorner: false);
+      _requestDismiss(fromHotCorner: false);
     }
   }
 
@@ -173,7 +180,7 @@ class WindowDockManager {
     }
 
     // 检查鼠标是否在窗口内（可能鼠标又回来了）
-    if (await isCursorInsideWindow()) return;
+    if (await _isCursorInsideWindow()) return;
 
     // 取消之前的隐藏定时器
     _hideDelayTimer?.cancel();
@@ -193,9 +200,9 @@ class WindowDockManager {
         return;
       }
 
-      if (await isCursorInsideWindow()) return;
+      if (await _isCursorInsideWindow()) return;
 
-      await dismissToTray(fromHotCorner: true);
+      _requestDismiss(fromHotCorner: true);
     });
   }
 
@@ -206,7 +213,7 @@ class WindowDockManager {
       // 如果窗口在托盘中，不检测
       if (_isInTray) return;
 
-      // 如果是从托盘触发，由点击外部事件处理，这里不处理
+      // 如果是从托盘触发，由点击外部事件处理，这里不检测
       if (_isTrayTrigger) return;
 
       // 如果正在拖动，不检测
@@ -216,7 +223,7 @@ class WindowDockManager {
       if (!_isDocked) return;
 
       // 检查鼠标是否在窗口内
-      final cursorInside = await isCursorInsideWindow();
+      final cursorInside = await _isCursorInsideWindow();
       if (cursorInside) {
         // 鼠标在窗口内，取消任何待执行的隐藏
         _hideDelayTimer?.cancel();
@@ -253,10 +260,65 @@ class WindowDockManager {
           return;
         }
 
-        if (await isCursorInsideWindow()) return;
+        if (await _isCursorInsideWindow()) return;
 
-        await dismissToTray(fromHotCorner: true);
+        _requestDismiss(fromHotCorner: true);
       });
     });
   }
+
+  void _requestDismiss({required bool fromHotCorner}) {
+    _eventController.add(
+      DockEventDismissRequested(fromHotCorner: fromHotCorner),
+    );
+  }
+
+  Future<bool> _isCursorInsideWindow() async {
+    try {
+      int handle = _windowHandle;
+      if (handle == 0 && _getWindowHandleCallback != null) {
+        handle = _getWindowHandleCallback();
+        _windowHandle = handle;
+      }
+
+      if (handle != 0 && isCursorOverWindowHandle(handle)) {
+        return true;
+      }
+
+      // Fallback: Geometric check
+      final cursor = getCursorScreenPosition();
+      if (cursor == null) return false;
+
+      // If we have a handle, check rect from OS
+      if (handle != 0) {
+        final rect = getWindowRectForHandle(handle);
+        if (rect != null) {
+          // Basic point check
+          return cursor.x >= rect.left &&
+              cursor.x <= rect.right &&
+              cursor.y >= rect.top &&
+              cursor.y <= rect.bottom;
+        }
+      }
+
+      // Fallback to WindowManager's known position (could be stale if moving fast)
+      final pos = await windowManager.getPosition();
+      final size = await windowManager.getSize();
+      final x = cursor.x.toDouble();
+      final y = cursor.y.toDouble();
+      return x >= pos.dx &&
+          y >= pos.dy &&
+          x <= (pos.dx + size.width) &&
+          y <= (pos.dy + size.height);
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+abstract class DockEvent {}
+
+class DockEventDismissRequested extends DockEvent {
+  final bool fromHotCorner;
+  DockEventDismissRequested({required this.fromHotCorner});
 }

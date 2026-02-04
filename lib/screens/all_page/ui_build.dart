@@ -148,9 +148,9 @@ extension _AllPageUi on _AllPageState {
                       visualDensity: VisualDensity.compact,
                       icon: Icon(Icons.sort, size: 20, color: iconColor),
                       onPressed: () {
-                        final overlayBox = Overlay.of(
-                          menuContext,
-                        ).context.findRenderObject() as RenderBox?;
+                        final overlayBox =
+                            Overlay.of(menuContext).context.findRenderObject()
+                                as RenderBox?;
                         final buttonBox =
                             menuContext.findRenderObject() as RenderBox?;
                         if (overlayBox == null || buttonBox == null) return;
@@ -180,10 +180,7 @@ extension _AllPageUi on _AllPageState {
                               ),
                               PopupMenuItem(
                                 value: _SortType.date,
-                                child: _buildSortItem(
-                                  '修改时间',
-                                  _SortType.date,
-                                ),
+                                child: _buildSortItem('修改时间', _SortType.date),
                               ),
                               PopupMenuItem(
                                 value: _SortType.size,
@@ -197,9 +194,7 @@ extension _AllPageUi on _AllPageState {
                           );
                           if (!mounted || type == null) return;
                           if (_sortType == type) {
-                            _setState(
-                              () => _sortAscending = !_sortAscending,
-                            );
+                            _setState(() => _sortAscending = !_sortAscending);
                             return;
                           }
                           _setState(() {
@@ -268,93 +263,100 @@ extension _AllPageUi on _AllPageState {
               Widget buildList() {
                 return _filteredItems.isEmpty
                     ? const Center(child: Text('未找到文件或快捷方式'))
-                    : ListView.builder(
-                        itemCount: _filteredItems.length,
-                        itemBuilder: (context, index) {
-                          final item = _filteredItems[index];
-                          final entity = item.entity;
-                          final isDir = item.isDirectory;
-                          final displayName =
-                              item.name.toLowerCase().endsWith('.lnk')
-                              ? item.name.substring(0, item.name.length - 4)
-                              : item.name;
-                          final isSelected = _selected?.fullPath == entity.path;
-                          return Material(
-                            key: ValueKey(entity.path),
-                            color: isSelected
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withValues(alpha: 0.1)
-                                : Colors.transparent,
-                            child: InkWell(
-                              onFocusChange: (hasFocus) {
-                                if (hasFocus) {
+                    : RepaintBoundary(
+                        child: ListView.builder(
+                          itemCount: _filteredItems.length,
+                          itemBuilder: (context, index) {
+                            final item = _filteredItems[index];
+                            final entity = item.entity;
+                            final isDir = item.isDirectory;
+                            final displayName =
+                                item.name.toLowerCase().endsWith('.lnk')
+                                ? item.name.substring(0, item.name.length - 4)
+                                : item.name;
+                            final isSelected =
+                                _selected?.fullPath == entity.path;
+                            return Material(
+                              key: ValueKey(entity.path),
+                              color: isSelected
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withValues(alpha: 0.1)
+                                  : Colors.transparent,
+                              child: InkWell(
+                                onFocusChange: (hasFocus) {
+                                  if (hasFocus) {
+                                    _selectEntity(entity, displayName);
+                                  }
+                                },
+                                onTapDown: (_) {
                                   _selectEntity(entity, displayName);
-                                }
-                              },
-                              onTapDown: (_) {
-                                _selectEntity(entity, displayName);
-                                _focusNode.requestFocus();
-                              },
-                              onTap: () async {
-                                final now =
-                                    DateTime.now().millisecondsSinceEpoch;
-                                if (now - _lastTapTime < 300 &&
-                                    _lastTappedPath == entity.path) {
-                                  if (isDir)
-                                    _openFolder(entity.path);
-                                  else
-                                    await openWithDefault(entity.path);
-                                  _lastTapTime = 0;
-                                } else {
-                                  _lastTapTime = now;
-                                  _lastTappedPath = entity.path;
-                                }
-                              },
-                              onSecondaryTapDown: (details) {
-                                _selectEntity(entity, displayName);
-                                _focusNode.requestFocus();
-                                final pos = details.globalPosition;
-                                Future.microtask(() {
-                                  if (!mounted) return;
-                                  _showEntityMenu(
-                                    entity,
+                                  _focusNode.requestFocus();
+                                },
+                                onTap: () async {
+                                  final now =
+                                      DateTime.now().millisecondsSinceEpoch;
+                                  if (now - _lastTapTime < 300 &&
+                                      _lastTappedPath == entity.path) {
+                                    if (isDir)
+                                      _openFolder(entity.path);
+                                    else
+                                      await openWithDefault(entity.path);
+                                    _lastTapTime = 0;
+                                  } else {
+                                    _lastTapTime = now;
+                                    _lastTappedPath = entity.path;
+                                  }
+                                },
+                                onSecondaryTapDown: (details) {
+                                  _selectEntity(entity, displayName);
+                                  _focusNode.requestFocus();
+                                  final pos = details.globalPosition;
+                                  Future.microtask(() {
+                                    if (!mounted) return;
+                                    _showEntityMenu(
+                                      entity,
+                                      displayName,
+                                      pos,
+                                      anchorContext: context,
+                                    );
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                hoverColor: Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                                    .withValues(alpha: 0.4),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  leading: _EntityIcon(
+                                    entity: entity,
+                                    getIconFuture: _getIconFuture,
+                                    beautifyIcon: widget.beautifyIcons,
+                                    beautifyStyle: widget.beautifyStyle,
+                                  ),
+                                  title: Text(
                                     displayName,
-                                    pos,
-                                    anchorContext: context,
-                                  );
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              hoverColor: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.4),
-                              child: ListTile(
-                                dense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                leading: _EntityIcon(
-                                  entity: entity,
-                                  getIconFuture: _getIconFuture,
-                                  beautifyIcon: widget.beautifyIcons,
-                                  beautifyStyle: widget.beautifyStyle,
-                                ),
-                                title: Text(
-                                  displayName,
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                subtitle: MiddleEllipsisText(
-                                  text: entity.path,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: MiddleEllipsisText(
+                                    text: entity.path,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       );
               }
 

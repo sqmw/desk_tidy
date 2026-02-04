@@ -36,7 +36,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     _lastActivationMode = _ActivationMode.hotkey;
-    _startHotCornerWatcher();
+    // _startHotCornerWatcher removed (handled by service)
     // 设置600ms的“忽略失去焦点”宽限期，防止唤醒时的焦点抢夺导致误触自动隐藏
     _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
 
@@ -80,7 +80,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     forceSetForegroundWindow(_windowHandle);
     await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
     await _syncDesktopIconVisibility();
-    _startDesktopIconSync();
+    // _startDesktopIconSync removed (handled by service)
 
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -161,7 +161,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
           } else {
             _trayMode = false;
             _lastActivationMode = _ActivationMode.tray;
-            _startHotCornerWatcher();
+            // _startHotCornerWatcher removed
             _dockManager.onPresentFromTray();
             await windowManager.setSkipTaskbar(false);
             await windowManager.show();
@@ -169,7 +169,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
             await windowManager.focus();
             await _syncDesktopIconVisibility();
             if (mounted) _setState(() => _panelVisible = true);
-            _startDesktopIconSync();
+            // _startDesktopIconSync removed
             _onMainWindowPresented();
           }
           _updateHotkeyPolling();
@@ -190,9 +190,9 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.hide();
       _dockManager.onDismissToTray();
       _windowHandle = await windowManager.getId();
+      _windowHandle = await windowManager.getId();
       _updateHotkeyPolling();
-      _startDesktopIconSync();
-      _startHotCornerWatcher();
+      // Service syncs removed
       unawaited(_showTrayStartupHint());
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
@@ -202,9 +202,9 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.show();
       await windowManager.focus();
       _onMainWindowPresented();
+      _onMainWindowPresented();
       _updateHotkeyPolling();
-      _startDesktopIconSync();
-      _startHotCornerWatcher();
+      // Service syncs removed
     }
   }
 
