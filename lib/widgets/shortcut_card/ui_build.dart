@@ -105,32 +105,28 @@ extension _ShortcutCardUi on _ShortcutCardState {
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
-                    child: Tooltip(
-                      message: shortcut.name,
-                      waitDuration: const Duration(milliseconds: 350),
-                      child: Opacity(
-                        opacity: _labelOverlay == null ? 1.0 : 0.0,
-                        child: Text(
-                          key: _labelTextKey,
-                          shortcut.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontSize: _textSize,
-                            height: 1.15,
-                            fontWeight: FontWeight.w600,
-                            color: labelColor,
-                            shadows: [
-                              Shadow(
-                                color: labelShadowColor,
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          softWrap: true,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
+                    child: Opacity(
+                      opacity: _labelOverlay == null ? 1.0 : 0.0,
+                      child: Text(
+                        key: _labelTextKey,
+                        shortcut.name,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: _textSize,
+                          height: 1.15,
+                          fontWeight: FontWeight.w600,
+                          color: labelColor,
+                          shadows: [
+                            Shadow(
+                              color: labelShadowColor,
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
                       ),
                     ),
                   ),

@@ -22,6 +22,7 @@ class SettingsPage extends StatefulWidget {
   final bool showControlPanel;
   final bool showNetwork;
   final bool showUserFiles;
+  final bool iconIsolatesEnabled;
 
   final ValueChanged<double> onTransparencyChanged;
   final ValueChanged<double> onFrostStrengthChanged;
@@ -42,6 +43,7 @@ class SettingsPage extends StatefulWidget {
   final ValueChanged<bool> onShowControlPanelChanged;
   final ValueChanged<bool> onShowNetworkChanged;
   final ValueChanged<bool> onShowUserFilesChanged;
+  final ValueChanged<bool> onIconIsolatesChanged;
 
   const SettingsPage({
     super.key,
@@ -63,6 +65,7 @@ class SettingsPage extends StatefulWidget {
     required this.showControlPanel,
     required this.showNetwork,
     required this.showUserFiles,
+    required this.iconIsolatesEnabled,
     required this.onTransparencyChanged,
     required this.onFrostStrengthChanged,
     required this.onIconSizeChanged,
@@ -82,6 +85,7 @@ class SettingsPage extends StatefulWidget {
     required this.onShowControlPanelChanged,
     required this.onShowNetworkChanged,
     required this.onShowUserFilesChanged,
+    required this.onIconIsolatesChanged,
   });
 
   @override
@@ -92,8 +96,10 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _checkingUpdate = false;
   String? _updateStatus;
   String? _appVersion;
+  bool _showAdvanced = false;
 
   void _setState(VoidCallback fn) => setState(fn);
+  void _toggleAdvanced() => _setState(() => _showAdvanced = !_showAdvanced);
 
   @override
   void initState() {

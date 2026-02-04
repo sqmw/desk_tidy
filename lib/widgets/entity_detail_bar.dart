@@ -200,17 +200,14 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                tooltip: 'Copy name',
                 icon: const Icon(Icons.copy),
                 onPressed: widget.onCopyName,
               ),
               IconButton(
-                tooltip: 'Copy path',
                 icon: const Icon(Icons.link),
                 onPressed: widget.onCopyPath,
               ),
               IconButton(
-                tooltip: 'Copy folder',
                 icon: const Icon(Icons.folder),
                 onPressed: widget.onCopyFolder,
               ),
@@ -338,13 +335,11 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
           const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.check, size: 20),
-            tooltip: '保存',
             onPressed: _saveEditing,
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
             icon: const Icon(Icons.close, size: 20),
-            tooltip: '取消',
             onPressed: _cancelEditing,
             visualDensity: VisualDensity.compact,
           ),
@@ -362,16 +357,12 @@ class _EntityDetailBarState extends State<EntityDetailBar> {
         child: Row(
           children: [
             Expanded(
-              child: Tooltip(
-                message: widget.name,
-                waitDuration: const Duration(milliseconds: 500),
-                child: Text(
-                  widget.name,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              child: Text(
+                widget.name,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

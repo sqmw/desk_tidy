@@ -19,7 +19,7 @@
 - `_hiconToPngBitmap`：通过 `GetIconInfo` 拿到 `hbmColor` + `hbmMask`，用 `GetDIBits` 读出 BGRA；若 alpha 无有效透明信息则用 AND mask 生成 alpha，否则仅清理 mask 透明位；最后反预乘并缩放到目标尺寸（流程参考 CairoShell/ManagedShell 的 AND mask 合成思路）。
 
 ## 缓存与异步
-- **LRU 缓存（64）**：按 IconLocation / 系统索引 / 文件路径 + 尺寸做缓存，失败也记录，重复调用直接命中。
+- **LRU 缓存（256）**：按 IconLocation / 系统索引 / 文件路径 + 尺寸做缓存，失败也记录（包括 null 结果），避免反复提取。
 - **异步+并发控制**：`extractIconAsync` 使用 `Isolate.run`，并发上限 3，避免同时创建过多 DC 阻塞 UI；`_loadShortcuts()` 全量通过该路径。
 
 ## 性能/排查提示

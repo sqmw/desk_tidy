@@ -19,6 +19,7 @@ class DeskTidyConfig {
   final bool showControlPanel;
   final bool showNetwork;
   final bool showUserFiles;
+  final bool iconIsolatesEnabled;
 
   const DeskTidyConfig({
     required this.transparency,
@@ -39,6 +40,7 @@ class DeskTidyConfig {
     required this.showControlPanel,
     required this.showNetwork,
     required this.showUserFiles,
+    required this.iconIsolatesEnabled,
   });
 }
 

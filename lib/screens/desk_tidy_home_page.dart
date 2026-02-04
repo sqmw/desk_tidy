@@ -16,6 +16,7 @@ import '../models/shortcut_item.dart';
 import '../models/app_category.dart';
 import '../models/icon_beautify_style.dart';
 import '../setting/settings_page.dart';
+import '../providers/frost_strength_notifier.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/app_preferences.dart';
 import '../utils/app_search_index.dart';

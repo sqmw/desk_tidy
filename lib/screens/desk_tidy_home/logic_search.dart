@@ -342,7 +342,11 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
     if (event.kind == PointerDeviceKind.mouse &&
         event.buttons == kSecondaryMouseButton &&
         _selectedIndex != 1) {
-      _showHiddenMenu(event.position);
+      final pos = event.position;
+      Future.microtask(() {
+        if (!mounted) return;
+        _showHiddenMenu(pos);
+      });
     }
   }
 

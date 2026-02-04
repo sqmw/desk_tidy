@@ -5,7 +5,7 @@
 - 使用 Flutter `shared_preferences` 存储：默认写入 Windows 用户配置目录（Roaming）下的应用私有文件。
 - 键名与默认值：
   - `ui.transparency`：0.2（背景不透明度 = 1 - transparency）
-  - `ui.frostStrength`：0.82
+  - `ui.frostStrength`：0.82（磨砂强度：全局生效；`0` = 关闭模糊仅保留 tint；`1` = 最强模糊）
   - `ui.iconSize`：32
   - `behavior.showHidden`：false
   - `behavior.hideDesktopItems`：false
@@ -16,6 +16,7 @@
   - `ui.beautifyAppIcons`：应用列表图标美化开关
   - `ui.beautifyDesktopIcons`：桌面/文件列表图标美化开关
   - `ui.beautifyStyle`：图标美化风格（枚举）
+  - `perf.iconIsolates`：图标提取 isolate 开关（默认 true，隐藏在设置页高级选项）
   - 窗口位置大小：`window.x` / `window.y` / `window.w` / `window.h`
 - 背景图持久化：选择图片后，会复制一份到 `%AppData%/desk_tidy/background.*`（使用 `getApplicationSupportDirectory`），避免原图被移动/删除导致丢失。
 

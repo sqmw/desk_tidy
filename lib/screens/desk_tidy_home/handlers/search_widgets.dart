@@ -64,7 +64,6 @@ extension _DeskTidyHomeSearchWidgets on _DeskTidyHomePageState {
                 height: 28 * scale,
               ),
               iconSize: iconSize,
-              tooltip: '清除',
               onPressed: () => _clearSearch(keepFocus: true),
               icon: const Icon(Icons.close),
             ),

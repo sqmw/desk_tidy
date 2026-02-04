@@ -47,7 +47,13 @@ extension _FilePageUi on _FilePageState {
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: (details) => _showPageMenu(details.globalPosition),
+        onSecondaryTapDown: (details) {
+          final pos = details.globalPosition;
+          Future.microtask(() {
+            if (!mounted) return;
+            _showPageMenu(pos);
+          });
+        },
         child: GridView.builder(
           padding: const EdgeInsets.all(12),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -84,7 +90,11 @@ extension _FilePageUi on _FilePageState {
                 onSecondaryTapDown: (details) {
                   _setState(() => _selectedPath = file.path);
                   _focusNode.requestFocus();
-                  _showFileMenu(context, file, details.globalPosition);
+                  final pos = details.globalPosition;
+                  Future.microtask(() {
+                    if (!mounted) return;
+                    _showFileMenu(context, file, pos);
+                  });
                 },
                 borderRadius: BorderRadius.circular(12),
                 hoverColor: Theme.of(
@@ -103,16 +113,13 @@ extension _FilePageUi on _FilePageState {
                       ),
                       const SizedBox(height: 8),
                       Expanded(
-                        child: Tooltip(
-                          message: name,
-                          child: Text(
-                            name,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(height: 1.2, fontSize: 11),
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        child: Text(
+                          name,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(height: 1.2, fontSize: 11),
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

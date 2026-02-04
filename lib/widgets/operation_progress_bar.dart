@@ -139,14 +139,11 @@ class OperationProgressBar extends StatelessWidget {
                   child: Row(
                     children: tasks.map((task) {
                       return Expanded(
-                        child: Tooltip(
-                          message: task.message ?? task.label,
-                          child: Text(
-                            task.label,
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
+                        child: Text(
+                          task.label,
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                       );
                     }).toList(),

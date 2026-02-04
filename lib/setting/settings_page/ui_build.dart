@@ -415,11 +415,14 @@ extension _SettingsPageUi on _SettingsPageState {
                     ),
                     const SizedBox(width: 6),
                   ],
-                  Text(
-                    _appVersion ?? 'v?',
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurface.withValues(
-                        alpha: 0.72,
+                  GestureDetector(
+                    onLongPress: _toggleAdvanced,
+                    child: Text(
+                      _appVersion ?? 'v?',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.72,
+                        ),
                       ),
                     ),
                   ),
@@ -429,6 +432,23 @@ extension _SettingsPageUi on _SettingsPageState {
             ),
           ],
         ),
+
+        if (_showAdvanced)
+          SettingsSection(
+            title: const Text(''),
+            tiles: [
+              SettingsTile.switchTile(
+                onToggle: widget.onIconIsolatesChanged,
+                initialValue: widget.iconIsolatesEnabled,
+                leading: const Icon(Icons.memory),
+                title: const Text('图标提取并发（实验）'),
+                description: const Text(
+                  '开启 isolate 提取图标，滚动更流畅但可能不稳定。\n'
+                  '若设置了 DESK_TIDY_ICON_ISOLATES 将以环境变量为准。',
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }

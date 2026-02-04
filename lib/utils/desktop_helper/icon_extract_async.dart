@@ -11,12 +11,32 @@ Future<Uint8List?> extractIconAsync(String filePath, {int size = 64}) {
 
   final completer = Completer<Uint8List?>();
   _iconInFlight[cacheKey] = completer.future;
-  _iconTaskQueue.add(_IconTask(filePath, desiredSize, cacheKey, completer));
-  _drainIconTasks();
+  final task = _IconTask(filePath, desiredSize, cacheKey, completer);
+  if (_enableIconIsolates) {
+    _iconTaskQueue.add(task);
+    _drainIconTasks();
+  } else {
+    _mainIconTaskQueue.add(task);
+    _scheduleMainIconDrain();
+  }
   return completer.future;
 }
 
+bool get iconIsolatesEnabled => _enableIconIsolates;
+
+void setIconIsolatesEnabled(bool enabled) {
+  _enableIconIsolates = _iconIsolatesEnvOverride ?? enabled;
+  _drainIconTasks();
+}
+
 void _drainIconTasks() {
+  if (!_enableIconIsolates) {
+    while (_iconTaskQueue.isNotEmpty) {
+      _mainIconTaskQueue.add(_iconTaskQueue.removeFirst());
+    }
+    _scheduleMainIconDrain();
+    return;
+  }
   while (_activeIconIsolates < _maxIconIsolates && _iconTaskQueue.isNotEmpty) {
     final task = _iconTaskQueue.removeFirst();
     _activeIconIsolates++;
@@ -81,7 +101,7 @@ _IconCacheResult _readIconCache(String key) {
 }
 
 void _writeIconCache(String key, Uint8List? value) {
-  if (value == null) return;
+  // Cache null results too, to avoid repeated extraction for missing icons.
   // Refresh insertion order for LRU.
   _iconCache.remove(key);
   _iconCache[key] = value;

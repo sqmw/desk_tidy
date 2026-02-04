@@ -44,6 +44,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   bool _beautifyDesktopIcons = false;
   IconBeautifyStyle _beautifyStyle = IconBeautifyStyle.cute;
   bool _enableDesktopBoxes = false;
+  bool _iconIsolatesEnabled = true;
   bool _showRecycleBin = true;
   bool _showThisPC = true;
   bool _showControlPanel = false;
@@ -74,19 +75,19 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   double get _chromeOpacity =>
       (0.12 + 0.28 * _backgroundOpacity).clamp(0.12, 0.42);
 
+  double get _chromeBlur => 24;
+
   double get _contentPanelOpacity =>
       lerpDouble(0.20, 0.60, _frostStrength)!.clamp(0.0, 1.0);
 
-  double get _contentPanelBlur =>
-      lerpDouble(28, 16, _frostStrength)!.clamp(0.0, 40.0);
+  double get _contentPanelBlur => 22;
 
   // Keep this subtle because the whole content area already sits on a frosted
   // panel; too much opacity makes it look "blackened".
   double get _toolbarPanelOpacity =>
       lerpDouble(0.10, 0.22, _frostStrength)!.clamp(0.0, 1.0);
 
-  double get _toolbarPanelBlur =>
-      lerpDouble(14, 8, _frostStrength)!.clamp(0.0, 40.0);
+  double get _toolbarPanelBlur => 11;
 
   double get _indicatorOpacity =>
       (0.10 + 0.12 * _backgroundOpacity).clamp(0.10, 0.22);
@@ -288,7 +289,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                             child: GlassContainer(
                               borderRadius: BorderRadius.circular(18),
                               opacity: _chromeOpacity,
-                              blurSigma: 20,
+                              blurSigma: _chromeBlur,
                               border: Border.all(
                                 color: theme.dividerColor.withValues(
                                   alpha: 0.16,
@@ -327,24 +328,15 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
                                 labelType: NavigationRailLabelType.none,
                                 destinations: [
                                   NavigationRailDestination(
-                                    icon: Tooltip(
-                                      message: '应用',
-                                      child: Icon(Icons.apps),
-                                    ),
+                                    icon: Icon(Icons.apps),
                                     label: const Text('应用'),
                                   ),
                                   NavigationRailDestination(
-                                    icon: Tooltip(
-                                      message: '全部',
-                                      child: Icon(Icons.all_inbox),
-                                    ),
+                                    icon: Icon(Icons.all_inbox),
                                     label: const Text('全部'),
                                   ),
                                   NavigationRailDestination(
-                                    icon: Tooltip(
-                                      message: '设置',
-                                      child: Icon(Icons.settings),
-                                    ),
+                                    icon: Icon(Icons.settings),
                                     label: const Text('设置'),
                                   ),
                                 ],

@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'frost_strength_scope.dart';
+
 class GlassContainer extends StatelessWidget {
   final Widget child;
   final BorderRadius borderRadius;
@@ -25,26 +27,33 @@ class GlassContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = color ??
+    final base =
+        color ??
         (theme.brightness == Brightness.dark ? Colors.black : Colors.white);
     final alpha = opacity.clamp(0.0, 1.0).toDouble();
     final tint = base.withValues(alpha: alpha);
+    final globalStrength = FrostStrengthScope.strengthOf(context);
+    final effectiveBlurSigma =
+        (blurSigma.isFinite ? blurSigma : 0.0) *
+        (globalStrength.isFinite ? globalStrength : 0.0);
 
-    return ClipRRect(
-      borderRadius: borderRadius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: tint,
-            border: border,
-          ),
-          child: Padding(
-            padding: padding,
-            child: child,
-          ),
-        ),
-      ),
+    final content = DecoratedBox(
+      decoration: BoxDecoration(color: tint, border: border),
+      child: Padding(padding: padding, child: child),
     );
+
+    // `BackdropFilter` stays expensive even when sigma is 0 (it can still force
+    // an offscreen pass / backdrop readback). Treat <= 0 as "disable blur".
+    final Widget filtered = effectiveBlurSigma <= 0.0
+        ? content
+        : BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: effectiveBlurSigma,
+              sigmaY: effectiveBlurSigma,
+            ),
+            child: content,
+          );
+
+    return ClipRRect(borderRadius: borderRadius, child: filtered);
   }
 }

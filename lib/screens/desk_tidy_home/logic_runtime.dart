@@ -3,9 +3,15 @@ part of '../desk_tidy_home_page.dart';
 extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
   void _startHotCornerWatcher() {
     _hotCornerTimer?.cancel();
-    _hotCornerTimer = Timer.periodic(const Duration(milliseconds: 520), (
-      _,
-    ) async {
+    _hotCornerTimer = null;
+
+    // Only poll when it can actually trigger a wake-up.
+    if (!_trayMode && !_dockManager.isDocked) return;
+
+    final interval = kDebugMode
+        ? const Duration(milliseconds: 1500)
+        : const Duration(milliseconds: 1200);
+    _hotCornerTimer = Timer.periodic(interval, (_) async {
       if (!mounted) return;
       if (!_trayMode && !_dockManager.isDocked) return;
 
@@ -30,7 +36,9 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
   Future<void> _presentFromHotCorner() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
+    _updateHotkeyPolling();
     _lastActivationMode = _ActivationMode.hotCorner;
+    _startHotCornerWatcher();
 
     // 先准备内容，避免白屏闪烁
     if (mounted) _setState(() => _panelVisible = true);
@@ -61,6 +69,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    _startDesktopIconSync();
     _onMainWindowPresented();
     // Drop always-on-top after we are visible.
     unawaited(
@@ -74,7 +83,9 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
   Future<void> _presentFromTrayPopup() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
+    _updateHotkeyPolling();
     _lastActivationMode = _ActivationMode.tray;
+    _startHotCornerWatcher();
 
     // 先准备内容，避免白屏闪烁
     if (mounted) _setState(() => _panelVisible = true);
@@ -86,6 +97,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
+    _startDesktopIconSync();
     _onMainWindowPresented();
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -97,7 +109,10 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
   Future<void> _dismissToTray({required bool fromHotCorner}) async {
     _dockManager.onDismissToTray();
     _trayMode = true;
+    _updateHotkeyPolling();
     if (mounted) _setState(() => _panelVisible = false);
+    _startDesktopIconSync();
+    _startHotCornerWatcher();
     _setupAutoRefresh();
     await windowManager.setSkipTaskbar(true);
     await Future<void>.delayed(_DeskTidyHomePageState._hotAnimDuration);
@@ -143,10 +158,18 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
 
   void _startDesktopIconSync() {
     _desktopIconSyncTimer?.cancel();
-    _desktopIconSyncTimer = Timer.periodic(const Duration(milliseconds: 900), (
-      _,
-    ) async {
+    _desktopIconSyncTimer = null;
+
+    // Only sync when the feature is enabled and the window is visible.
+    if (!_hideDesktopItems) return;
+    if (_trayMode || !_panelVisible) return;
+
+    final interval = kDebugMode
+        ? const Duration(seconds: 10)
+        : const Duration(seconds: 8);
+    _desktopIconSyncTimer = Timer.periodic(interval, (_) async {
       if (!mounted) return;
+      if (_trayMode || !_panelVisible) return;
       final visible = await isDesktopIconsVisible();
       if (!mounted) return;
       if (_lastDesktopIconsVisible == visible) return;

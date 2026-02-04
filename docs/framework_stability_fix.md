@@ -36,10 +36,27 @@ onSecondaryTapDown: (details) {
 }
 ```
 
+**补充（2026-02-04）**：
+- 将 `NavigationRail` 右键“隐藏文件/文件夹”菜单也改为 microtask 触发（避免在 Pointer 事件栈内同步插入 Overlay）。
+- 将 `PopupMenuButton`（内部同步 `showMenu`）替换为 `IconButton + showMenu + microtask`，避免触发 `MouseTracker` 重入断言。
+- `CategoryStrip` 的右键菜单同样改为 microtask 触发。
+
 ### 1.1 MouseRegion hover 状态延迟到帧末更新（PostFrame）
 将快捷方式卡片 hover 的 `setState` 从 `MouseRegion.onEnter/onExit` 中移出，改为把目标状态缓存后在 `addPostFrameCallback` 里统一更新，避免在 `MouseTracker` 的更新过程中重入触发 UI 变更。
 
 同时，快捷方式卡片的右键菜单也使用 `Future.microtask` 异步触发 `showMenu`，保持与各页面一致的稳定性策略。
+
+### 1.2 移除 Tooltip 相关 Overlay 路径（Windows）
+在 Windows 端曾出现：
+- `Cannot hit test a render box that has never been laid out.`
+- 调用栈包含 `Tooltip → OverlayPortal → _DeferredLayout/_RenderDeferredLayoutBox`
+
+为避免 Tooltip 的 Overlay/DeferredLayout 参与命中测试，当前策略是**不在 UI 中使用**：
+- `Tooltip(...)`
+- `IconButton.tooltip`
+- `PopupMenuButton.tooltip`
+
+如后续需要 tooltip，应优先以“按需显示、异步插入 Overlay、避免 hover 自动触发”的方式重新引入，并先在 Debug 下压测“频繁切换 Tab + 滚动 + 右键菜单”的稳定性。
 
 ### 2. 优化列表 Key 管理 (ValueKey)
 移除了 `AllPage` 列表项中不必要的 `GlobalObjectKey`，统一改用轻量级的 `ValueKey(entity.path)`。

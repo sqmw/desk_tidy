@@ -13,7 +13,22 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       HotkeyConfig.showWindowAlt,
       callback: (_) => _presentFromHotkey(),
     );
-    service.startPolling();
+    _updateHotkeyPolling();
+  }
+
+  void _updateHotkeyPolling() {
+    final service = HotkeyService.instance;
+    // Polling uses GetAsyncKeyState and keeps the CPU awake; only run it when
+    // the window is hidden in tray mode.
+    if (_trayMode) {
+      service.startPolling(
+        interval: kDebugMode
+            ? const Duration(milliseconds: 280)
+            : const Duration(milliseconds: 220),
+      );
+      return;
+    }
+    service.stopPolling();
   }
 
   /// 从热键唤起窗口并聚焦搜索框
@@ -21,6 +36,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     _lastActivationMode = _ActivationMode.hotkey;
+    _startHotCornerWatcher();
     // 设置600ms的“忽略失去焦点”宽限期，防止唤醒时的焦点抢夺导致误触自动隐藏
     _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
 
@@ -58,11 +74,13 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     await windowManager.setOpacity(1.0);
 
     _dockManager.onPresentFromHotkey();
+    _updateHotkeyPolling();
 
     // 使用强制前台窗口方法获取真正的键盘焦点
     forceSetForegroundWindow(_windowHandle);
     await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
     await _syncDesktopIconVisibility();
+    _startDesktopIconSync();
 
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -106,12 +124,19 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       _beautifyDesktopIcons = config.beautifyDesktopIcons;
       _beautifyStyle = config.beautifyStyle;
       _enableDesktopBoxes = config.enableDesktopBoxes;
+      _iconIsolatesEnabled = config.iconIsolatesEnabled;
       _showRecycleBin = config.showRecycleBin;
       _showThisPC = config.showThisPC;
       _showControlPanel = config.showControlPanel;
       _showNetwork = config.showNetwork;
       _showUserFiles = config.showUserFiles;
     });
+    appFrostStrengthNotifier.value = _frostStrength;
+    setIconIsolatesEnabled(_iconIsolatesEnabled);
+    final actualIconIsolates = iconIsolatesEnabled;
+    if (actualIconIsolates != _iconIsolatesEnabled && mounted) {
+      _setState(() => _iconIsolatesEnabled = actualIconIsolates);
+    }
     _handleThemeChange(_themeModeOption);
 
     final desktopPath = await getDesktopPath();
@@ -136,6 +161,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
           } else {
             _trayMode = false;
             _lastActivationMode = _ActivationMode.tray;
+            _startHotCornerWatcher();
             _dockManager.onPresentFromTray();
             await windowManager.setSkipTaskbar(false);
             await windowManager.show();
@@ -143,8 +169,10 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
             await windowManager.focus();
             await _syncDesktopIconVisibility();
             if (mounted) _setState(() => _panelVisible = true);
+            _startDesktopIconSync();
             _onMainWindowPresented();
           }
+          _updateHotkeyPolling();
         },
         onHideRequested: () async {
           await _dismissToTray(fromHotCorner: false);
@@ -162,6 +190,9 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.hide();
       _dockManager.onDismissToTray();
       _windowHandle = await windowManager.getId();
+      _updateHotkeyPolling();
+      _startDesktopIconSync();
+      _startHotCornerWatcher();
       unawaited(_showTrayStartupHint());
     } catch (_) {
       // Tray init failed; keep the app discoverable via taskbar.
@@ -171,6 +202,9 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.show();
       await windowManager.focus();
       _onMainWindowPresented();
+      _updateHotkeyPolling();
+      _startDesktopIconSync();
+      _startHotCornerWatcher();
     }
   }
 

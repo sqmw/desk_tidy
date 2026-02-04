@@ -88,8 +88,13 @@ extension _FolderPageUi on _FolderPageState {
             },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onSecondaryTapDown: (details) =>
-                  _showPageMenu(details.globalPosition),
+              onSecondaryTapDown: (details) {
+                final pos = details.globalPosition;
+                Future.microtask(() {
+                  if (!mounted) return;
+                  _showPageMenu(pos);
+                });
+              },
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : (_error != null
@@ -146,10 +151,11 @@ extension _FolderPageUi on _FolderPageState {
                                             () => _selectedPath = entity.path,
                                           );
                                           _focusNode.requestFocus();
-                                          _showEntityMenu(
-                                            entity,
-                                            details.globalPosition,
-                                          );
+                                          final pos = details.globalPosition;
+                                          Future.microtask(() {
+                                            if (!mounted) return;
+                                            _showEntityMenu(entity, pos);
+                                          });
                                         },
                                         borderRadius: BorderRadius.circular(12),
                                         hoverColor: Theme.of(context)

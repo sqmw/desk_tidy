@@ -119,40 +119,30 @@ extension _DeskTidyHomeApplicationContent on _DeskTidyHomePageState {
                   actions = Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Tooltip(
-                        message: '删除',
-                        child: IconButton(
-                          onPressed: handleDelete,
-                          constraints: btnConstraints,
-                          padding: EdgeInsets.zero,
-                          iconSize: iconSize,
-                          visualDensity: VisualDensity.compact,
-                          color: Theme.of(context).colorScheme.error,
-                          icon: const Icon(Icons.delete_outline),
-                        ),
+                      IconButton(
+                        onPressed: handleDelete,
+                        constraints: btnConstraints,
+                        padding: EdgeInsets.zero,
+                        iconSize: iconSize,
+                        visualDensity: VisualDensity.compact,
+                        color: Theme.of(context).colorScheme.error,
+                        icon: const Icon(Icons.delete_outline),
                       ),
-                      Tooltip(
-                        message: '取消',
-                        child: IconButton(
-                          onPressed: () =>
-                              _cancelInlineCategoryEdit(save: false),
-                          constraints: btnConstraints,
-                          padding: EdgeInsets.zero,
-                          iconSize: iconSize,
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.close),
-                        ),
+                      IconButton(
+                        onPressed: () => _cancelInlineCategoryEdit(save: false),
+                        constraints: btnConstraints,
+                        padding: EdgeInsets.zero,
+                        iconSize: iconSize,
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close),
                       ),
-                      Tooltip(
-                        message: '保存',
-                        child: IconButton(
-                          onPressed: _saveInlineCategoryEdit,
-                          constraints: btnConstraints,
-                          padding: EdgeInsets.zero,
-                          iconSize: iconSize,
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.check),
-                        ),
+                      IconButton(
+                        onPressed: _saveInlineCategoryEdit,
+                        constraints: btnConstraints,
+                        padding: EdgeInsets.zero,
+                        iconSize: iconSize,
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.check),
                       ),
                     ],
                   );

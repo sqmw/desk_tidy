@@ -1,4 +1,5 @@
 {
   "dart.flutterSdkPath": ".fvm/versions/stable",
-  "cmake.sourceDirectory": "F:/language/dart/code/desk_tidy/windows"
+  "cmake.sourceDirectory": "F:/language/dart/code/desk_tidy/windows",
+  "chatgpt.openOnStartup": true
 }

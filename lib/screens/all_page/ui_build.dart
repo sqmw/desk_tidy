@@ -138,46 +138,78 @@ extension _AllPageUi on _AllPageState {
                   color: Theme.of(context).dividerColor.withValues(alpha: 0.2),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                 ),
-                PopupMenuButton<_SortType>(
-                  tooltip: '排序: ${_getSortLabel(_sortType)}',
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Icon(
-                      Icons.sort,
-                      size: 20,
-                      color: Theme.of(
-                        context,
-                      ).iconTheme.color?.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  initialValue: _sortType,
-                  onSelected: (type) {
-                    if (_sortType == type)
-                      _setState(() => _sortAscending = !_sortAscending);
-                    else
-                      _setState(() {
-                        _sortType = type;
-                        _sortAscending = true;
-                      });
+                Builder(
+                  builder: (menuContext) {
+                    final iconColor = Theme.of(
+                      menuContext,
+                    ).iconTheme.color?.withValues(alpha: 0.7);
+                    return IconButton(
+                      padding: const EdgeInsets.all(8),
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.sort, size: 20, color: iconColor),
+                      onPressed: () {
+                        final overlayBox = Overlay.of(
+                          menuContext,
+                        ).context.findRenderObject() as RenderBox?;
+                        final buttonBox =
+                            menuContext.findRenderObject() as RenderBox?;
+                        if (overlayBox == null || buttonBox == null) return;
+                        final topLeft = buttonBox.localToGlobal(
+                          Offset.zero,
+                          ancestor: overlayBox,
+                        );
+                        final menuPosition = RelativeRect.fromRect(
+                          Rect.fromLTWH(
+                            topLeft.dx,
+                            topLeft.dy,
+                            buttonBox.size.width,
+                            buttonBox.size.height,
+                          ),
+                          Offset.zero & overlayBox.size,
+                        );
+
+                        Future.microtask(() async {
+                          if (!mounted) return;
+                          final type = await showMenu<_SortType>(
+                            context: menuContext,
+                            position: menuPosition,
+                            items: [
+                              PopupMenuItem(
+                                value: _SortType.name,
+                                child: _buildSortItem('名称', _SortType.name),
+                              ),
+                              PopupMenuItem(
+                                value: _SortType.date,
+                                child: _buildSortItem(
+                                  '修改时间',
+                                  _SortType.date,
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: _SortType.size,
+                                child: _buildSortItem('大小', _SortType.size),
+                              ),
+                              PopupMenuItem(
+                                value: _SortType.type,
+                                child: _buildSortItem('类型', _SortType.type),
+                              ),
+                            ],
+                          );
+                          if (!mounted || type == null) return;
+                          if (_sortType == type) {
+                            _setState(
+                              () => _sortAscending = !_sortAscending,
+                            );
+                            return;
+                          }
+                          _setState(() {
+                            _sortType = type;
+                            _sortAscending = true;
+                          });
+                        });
+                      },
+                    );
                   },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: _SortType.name,
-                      child: _buildSortItem('名称', _SortType.name),
-                    ),
-                    PopupMenuItem(
-                      value: _SortType.date,
-                      child: _buildSortItem('修改时间', _SortType.date),
-                    ),
-                    PopupMenuItem(
-                      value: _SortType.size,
-                      child: _buildSortItem('大小', _SortType.size),
-                    ),
-                    PopupMenuItem(
-                      value: _SortType.type,
-                      child: _buildSortItem('类型', _SortType.type),
-                    ),
-                  ],
                 ),
                 if (_selected != null)
                   IconButton(
@@ -190,7 +222,6 @@ extension _AllPageUi on _AllPageState {
                               context,
                             ).iconTheme.color?.withValues(alpha: 0.7),
                     ),
-                    tooltip: _showDetails ? '隐藏详情' : '显示详情',
                     onPressed: () =>
                         _setState(() => _showDetails = !_showDetails),
                   ),
@@ -283,12 +314,16 @@ extension _AllPageUi on _AllPageState {
                               onSecondaryTapDown: (details) {
                                 _selectEntity(entity, displayName);
                                 _focusNode.requestFocus();
-                                _showEntityMenu(
-                                  entity,
-                                  displayName,
-                                  details.globalPosition,
-                                  anchorContext: context,
-                                );
+                                final pos = details.globalPosition;
+                                Future.microtask(() {
+                                  if (!mounted) return;
+                                  _showEntityMenu(
+                                    entity,
+                                    displayName,
+                                    pos,
+                                    anchorContext: context,
+                                  );
+                                });
                               },
                               borderRadius: BorderRadius.circular(8),
                               hoverColor: Theme.of(context)
@@ -306,25 +341,15 @@ extension _AllPageUi on _AllPageState {
                                   beautifyIcon: widget.beautifyIcons,
                                   beautifyStyle: widget.beautifyStyle,
                                 ),
-                                title: Tooltip(
-                                  message: displayName,
-                                  child: Text(
-                                    displayName,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                title: Text(
+                                  displayName,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                subtitle: Tooltip(
-                                  message: entity.path,
-                                  child: MiddleEllipsisText(
-                                    text: entity.path,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
+                                subtitle: MiddleEllipsisText(
+                                  text: entity.path,
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ),
                             ),
@@ -391,8 +416,13 @@ extension _AllPageUi on _AllPageState {
                 },
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onSecondaryTapDown: (details) =>
-                      _showPageMenu(details.globalPosition),
+                  onSecondaryTapDown: (details) {
+                    final pos = details.globalPosition;
+                    Future.microtask(() {
+                      if (!mounted) return;
+                      _showPageMenu(pos);
+                    });
+                  },
                   child: isWide
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

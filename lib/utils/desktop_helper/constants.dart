@@ -24,9 +24,23 @@ const int _dropEffectCopy = 1;
 const int _dropEffectMove = 2;
 const String _clipboardDropEffectFormat = 'Preferred DropEffect';
 
+bool? _readBoolEnv(String key) {
+  final raw = Platform.environment[key];
+  if (raw == null) return null;
+  final v = raw.trim().toLowerCase();
+  if (v.isEmpty) return null;
+  if (['1', 'true', 'yes', 'y', 'on'].contains(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].contains(v)) return false;
+  return null;
+}
+
+final bool? _iconIsolatesEnvOverride =
+    _readBoolEnv('DESK_TIDY_ICON_ISOLATES');
+bool _enableIconIsolates = _iconIsolatesEnvOverride ?? true;
+
 // Cache extracted icons by a stable key to avoid repeated FFI work.
 const int _iconCacheVersion = 9;
-const int _iconCacheCapacity = 64;
+const int _iconCacheCapacity = 256;
 final LinkedHashMap<String, Uint8List?> _iconCache =
     LinkedHashMap<String, Uint8List?>();
 final Map<String, Future<Uint8List?>> _iconInFlight = {};

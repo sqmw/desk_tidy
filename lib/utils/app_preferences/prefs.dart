@@ -9,6 +9,7 @@ class AppPreferences {
   static const _kEnableDesktopBoxes = 'behavior.enableDesktopBoxes';
   static const _kAutoRefresh = 'behavior.autoRefresh';
   static const _kAutoLaunch = 'behavior.autoLaunch';
+  static const _kIconIsolates = 'perf.iconIsolates';
   static const _kThemeMode = 'ui.themeMode';
   static const _kBackgroundPath = 'ui.backgroundPath';
   static const _kBeautifyAppIcons = 'ui.beautify.appIcons';
@@ -49,6 +50,7 @@ class AppPreferences {
     final enableDesktopBoxes = prefs.getBool(_kEnableDesktopBoxes) ?? false;
     final autoRefresh = prefs.getBool(_kAutoRefresh) ?? false;
     final autoLaunch = prefs.getBool(_kAutoLaunch) ?? true;
+    final iconIsolates = prefs.getBool(_kIconIsolates) ?? true;
     final themeModeIndex =
         prefs.getInt(_kThemeMode) ?? ThemeModeOption.dark.index;
     final themeMode = ThemeModeOption
@@ -88,6 +90,7 @@ class AppPreferences {
       showControlPanel: showControlPanel,
       showNetwork: showNetwork,
       showUserFiles: showUserFiles,
+      iconIsolatesEnabled: iconIsolates,
     );
   }
 
@@ -129,6 +132,11 @@ class AppPreferences {
   static Future<void> saveAutoLaunch(bool v) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kAutoLaunch, v);
+  }
+
+  static Future<void> saveIconIsolatesEnabled(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kIconIsolates, v);
   }
 
   static Future<void> saveThemeMode(ThemeModeOption v) async {

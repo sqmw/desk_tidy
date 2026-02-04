@@ -12,7 +12,7 @@ extension _DeskTidyHomeUiBuilders on _DeskTidyHomePageState {
         onPanStart: (_) => windowManager.startDragging(),
         child: GlassContainer(
           opacity: _chromeOpacity,
-          blurSigma: 20,
+          blurSigma: _chromeBlur,
           borderRadius: BorderRadius.zero,
           border: Border(
             bottom: BorderSide(
@@ -96,6 +96,7 @@ extension _DeskTidyHomeUiBuilders on _DeskTidyHomePageState {
           showControlPanel: _showControlPanel,
           showNetwork: _showNetwork,
           showUserFiles: _showUserFiles,
+          iconIsolatesEnabled: _iconIsolatesEnabled,
           themeModeOption: _themeModeOption,
           backgroundPath: _backgroundImagePath,
           beautifyAppIcons: _beautifyAppIcons,
@@ -107,6 +108,7 @@ extension _DeskTidyHomeUiBuilders on _DeskTidyHomePageState {
           },
           onFrostStrengthChanged: (v) {
             _setState(() => _frostStrength = v);
+            appFrostStrengthNotifier.value = v;
             AppPreferences.saveFrostStrength(v);
           },
           onIconSizeChanged: (v) {
@@ -145,6 +147,11 @@ extension _DeskTidyHomeUiBuilders on _DeskTidyHomePageState {
               enabled: v,
               desktopPath: _desktopPath,
             );
+          },
+          onIconIsolatesChanged: (v) {
+            setIconIsolatesEnabled(v);
+            _setState(() => _iconIsolatesEnabled = iconIsolatesEnabled);
+            AppPreferences.saveIconIsolatesEnabled(v);
           },
           onShowRecycleBinChanged: (v) {
             _setState(() => _showRecycleBin = v);

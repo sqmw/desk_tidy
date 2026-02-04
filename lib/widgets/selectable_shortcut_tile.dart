@@ -81,22 +81,18 @@ class SelectableShortcutTile extends StatelessWidget {
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
-                    child: Tooltip(
-                      message: shortcut.name,
-                      waitDuration: const Duration(milliseconds: 350),
-                      child: Text(
-                        shortcut.name,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: _textSize,
-                          height: 1.15,
-                          fontWeight: FontWeight.w600,
-                          color: labelColor,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        softWrap: false,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
+                    child: Text(
+                      shortcut.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: _textSize,
+                        height: 1.15,
+                        fontWeight: FontWeight.w600,
+                        color: labelColor,
                       ),
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
                     ),
                   ),
                 ],

@@ -99,15 +99,19 @@ class _CategoryStripState extends State<CategoryStrip> {
                       padding: EdgeInsets.only(right: spacing),
                       child: GestureDetector(
                         onSecondaryTapDown: _hasMenu
-                            ? (details) async {
+                            ? (details) {
                                 if (!selected) {
                                   widget.onCategorySelected(cat.id);
                                 }
-                                await _showCategoryTabMenu(
-                                  context,
-                                  category: cat,
-                                  position: details.globalPosition,
-                                );
+                                final pos = details.globalPosition;
+                                Future.microtask(() async {
+                                  if (!mounted) return;
+                                  await _showCategoryTabMenu(
+                                    context,
+                                    category: cat,
+                                    position: pos,
+                                  );
+                                });
                               }
                             : null,
                         child: ReorderableDragStartListener(
@@ -238,15 +242,11 @@ class _CategoryStripState extends State<CategoryStrip> {
             horizontal: 12 * widget.scale,
             vertical: 6 * widget.scale,
           ),
-          child: Tooltip(
-            message: '$name ($count)',
-            waitDuration: const Duration(milliseconds: 350),
-            child: _buildChipLabel(
-              context,
-              name: name,
-              count: count,
-              style: labelStyle,
-            ),
+          child: _buildChipLabel(
+            context,
+            name: name,
+            count: count,
+            style: labelStyle,
           ),
         ),
       ),

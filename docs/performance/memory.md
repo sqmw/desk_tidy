@@ -33,6 +33,31 @@ Flutter Desktop 在 Debug 模式下包含：
 处理：对 `Image.memory` 增加 `cacheWidth/cacheHeight`，按实际显示尺寸（×DPR）解码，减少解码后占用。
 - 代码：`lib/widgets/beautified_icon.dart`
 
+### 3) BackdropFilter / Blur（磨砂）导致 win_private_mb 上探
+现象：`ImageCache` 并不大，但 Windows 任务管理器 / 采样日志里 `win_private_mb` 会随着切 Tab、滚动等操作持续上升。
+
+原因：`BackdropFilter(ImageFilter.blur)` 通常会触发引擎/Skia 的离屏渲染与中间纹理（以及 GPU/驱动侧缓存）。这些分配很多时候不会立刻归还给 OS，因此 **命中缓存会更流畅，但不等于“内存会回落”**。
+
+处理建议：
+- 尽量缩小磨砂区域（优先只磨砂顶部工具条/标题栏）
+- 在列表滚动等高频场景减少/禁用磨砂，只保留 tint
+- **当磨砂强度为 `0%` 时，必须真正移除 `BackdropFilter`**（仅 sigma=0 仍可能触发离屏/采样）
+  - 代码：`lib/widgets/glass.dart`
+
+### 4) 周期内存日志（RSS + ImageCache）
+为了确认“是否持续上涨且不回落”，提供了周期采样日志：
+- Debug 默认开启；Release 需设置 `DESK_TIDY_PERF_LOG=1`
+- 日志字段：`rss_mb` / `max_rss_mb` / `image_cache_bytes_mb` 等
+- 记录位置：`%AppData%/desk_tidy/logs/desk_tidy.log`
+  - 代码：`lib/utils/perf_monitor.dart`
+
+### 5) 图标提取 isolate（性能/稳定性取舍）
+在 Windows 上，部分 COM/GDI 接口在后台线程/无消息循环环境可能不稳定。当前策略：
+- 默认开启 isolate（更流畅）
+- 如出现“卡住后进程退出”，可在设置页高级选项中关闭
+- 环境变量 `DESK_TIDY_ICON_ISOLATES` 可强制覆盖
+  - 代码：`lib/utils/desktop_helper/icon_extract_async.dart`
+
 ## 如何确认是否泄漏（推荐流程）
 1. 用 Profile 模式观察（更接近真实）
    - `flutter run -d windows --profile`
