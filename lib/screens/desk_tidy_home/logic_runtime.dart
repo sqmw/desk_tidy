@@ -9,7 +9,7 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _lastActivationMode = _ActivationMode.hotCorner;
 
     // 先准备内容，避免白屏闪烁
-    if (mounted) _setState(() => _panelVisible = true);
+    await _prepareUiForShow();
 
     // 加载热区专属窗口布局并应用
     final layout = await AppPreferences.loadHotCornerWindowLayout();
@@ -26,18 +26,13 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
-
-    // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
-    final currentSize = await windowManager.getSize();
-    await windowManager.setSize(
-      Size(currentSize.width + 1, currentSize.height),
-    );
-    await windowManager.setSize(currentSize);
+    _scheduleRedrawNudges();
 
     _dockManager.onPresentFromHotCorner();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
     _onMainWindowPresented();
+    _pokeUi();
     // Drop always-on-top after we are visible.
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -54,16 +49,18 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _lastActivationMode = _ActivationMode.tray;
 
     // 先准备内容，避免白屏闪烁
-    if (mounted) _setState(() => _panelVisible = true);
+    await _prepareUiForShow();
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore(); // 先恢复窗口状态
     await windowManager.show(); // 再显示窗口
+    _scheduleRedrawNudges();
     _dockManager.onPresentFromTray();
     await windowManager.focus();
     await _syncDesktopIconVisibility();
     _onMainWindowPresented();
+    _pokeUi();
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
         windowManager.setAlwaysOnTop(false);
@@ -75,10 +72,19 @@ extension _DeskTidyHomeRuntime on _DeskTidyHomePageState {
     _dockManager.onDismissToTray();
     _trayMode = true;
     _updateHotkeyPolling();
+    final hideToken = ++_visibilityToken;
     if (mounted) _setState(() => _panelVisible = false);
     _setupAutoRefresh();
     await windowManager.setSkipTaskbar(true);
     await Future<void>.delayed(_DeskTidyHomePageState._hotAnimDuration);
+    if (!mounted) return;
+    if (_visibilityToken != hideToken || !_trayMode) {
+      if (mounted && !_panelVisible) {
+        _setState(() => _panelVisible = true);
+        _pokeUi();
+      }
+      return;
+    }
     await windowManager.hide();
   }
 

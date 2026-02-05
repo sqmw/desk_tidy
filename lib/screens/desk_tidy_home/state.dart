@@ -59,10 +59,12 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   int _selectedIndex = 0;
   final TextEditingController _appSearchController = TextEditingController();
   final FocusNode _appSearchFocus = FocusNode();
+  final FocusNode _globalKeyFocus = FocusNode();
   String _appSearchQuery = '';
   bool _hotkeyPresentInFlight = false;
   bool _hotkeyRefocusRequested = false;
   bool _selectAllSearchOnFocus = false;
+  int _visibilityToken = 0;
   String? _categoryBeforeSearch;
   bool _searchHasFocus = false;
   Map<String, AppSearchIndex> _searchIndexByPath = {};
@@ -223,6 +225,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _windowFocusNotifier.dispose();
     _appSearchController.dispose();
     _appSearchFocus.dispose();
+    _globalKeyFocus.dispose();
     super.dispose();
   }
 
@@ -277,6 +280,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   void onWindowFocus() {
     _windowFocusNotifier.value = true;
     _updateHotkeyPolling();
+    _ensurePanelVisible();
+    unawaited(_ensureWindowOpaque());
+    _pokeUi();
   }
 
   @override
@@ -299,132 +305,137 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
         backgroundPath.isNotEmpty &&
         File(backgroundPath).existsSync();
 
-    final content = Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AnimatedSlide(
-        duration: _hotAnimDuration,
-        curve: Curves.easeOutCubic,
-        offset: _panelVisible ? Offset.zero : const Offset(0, -0.03),
-        child: AnimatedOpacity(
+    final content = Focus(
+      autofocus: true,
+      focusNode: _globalKeyFocus,
+      onKeyEvent: _handleGlobalKeyEvent,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AnimatedSlide(
           duration: _hotAnimDuration,
           curve: Curves.easeOutCubic,
-          opacity: _panelVisible ? 1.0 : 0.0,
-          child: RepaintBoundary(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned.fill(
-                  child: Opacity(
-                    opacity: _backgroundOpacity,
-                    child: backgroundExists
-                        ? Image.file(File(backgroundPath), fit: BoxFit.cover)
-                        : Container(
-                            color: Theme.of(context).scaffoldBackgroundColor,
-                          ),
-                  ),
-                ),
-                Column(
-                  children: [
-                    _buildTitleBar(),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Listener(
-                            onPointerDown: _onNavigationRailPointer,
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: railPadH,
-                                vertical: railPadV,
-                              ),
-                              child: GlassContainer(
-                                borderRadius: BorderRadius.circular(18),
-                                opacity: _chromeOpacity,
-                                blurSigma: _chromeBlur,
-                                border: Border.all(
-                                  color: theme.dividerColor.withValues(
-                                    alpha: 0.16,
-                                  ),
-                                ),
-                                child: NavigationRail(
-                                  backgroundColor: Colors.transparent,
-                                  minWidth: railMinWidth,
-                                  useIndicator: true,
-                                  indicatorColor: theme.colorScheme.primary
-                                      .withValues(alpha: _indicatorOpacity),
-                                  selectedIconTheme: IconThemeData(
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                  unselectedIconTheme: IconThemeData(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.72),
-                                  ),
-                                  selectedLabelTextStyle: theme
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                  unselectedLabelTextStyle: theme
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(
-                                        color: theme.colorScheme.onSurface
-                                            .withValues(alpha: 0.72),
-                                      ),
-                                  selectedIndex: _selectedIndex,
-                                  onDestinationSelected:
-                                      _onNavigationRailItemSelected,
-                                  labelType: NavigationRailLabelType.none,
-                                  destinations: [
-                                    NavigationRailDestination(
-                                      icon: Icon(Icons.apps),
-                                      label: const Text('应用'),
-                                    ),
-                                    NavigationRailDestination(
-                                      icon: Icon(Icons.all_inbox),
-                                      label: const Text('全部'),
-                                    ),
-                                    NavigationRailDestination(
-                                      icon: Icon(Icons.settings),
-                                      label: const Text('设置'),
-                                    ),
-                                  ],
-                                ),
-                              ),
+          offset: _panelVisible ? Offset.zero : const Offset(0, -0.03),
+          child: AnimatedOpacity(
+            duration: _hotAnimDuration,
+            curve: Curves.easeOutCubic,
+            opacity: _panelVisible ? 1.0 : 0.0,
+            child: RepaintBoundary(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: _backgroundOpacity,
+                      child: backgroundExists
+                          ? Image.file(File(backgroundPath), fit: BoxFit.cover)
+                          : Container(
+                              color: Theme.of(context).scaffoldBackgroundColor,
                             ),
-                          ),
-                          VerticalDivider(
-                            thickness: 1,
-                            width: 1,
-                            color: theme.dividerColor.withValues(alpha: 0.12),
-                          ),
-                          Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                10 * scale,
-                                6 * scale,
-                                10 * scale,
-                                10 * scale,
-                              ),
-                              child: GlassContainer(
-                                borderRadius: BorderRadius.circular(18),
-                                opacity: _contentPanelOpacity,
-                                blurSigma: _contentPanelBlur,
-                                border: Border.all(
-                                  color: theme.dividerColor.withValues(
-                                    alpha: 0.16,
-                                  ),
-                                ),
-                                child: _buildContent(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  Column(
+                    children: [
+                      _buildTitleBar(),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Listener(
+                              onPointerDown: _onNavigationRailPointer,
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: railPadH,
+                                  vertical: railPadV,
+                                ),
+                                child: GlassContainer(
+                                  borderRadius: BorderRadius.circular(18),
+                                  opacity: _chromeOpacity,
+                                  blurSigma: _chromeBlur,
+                                  border: Border.all(
+                                    color: theme.dividerColor.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                  ),
+                                  child: NavigationRail(
+                                    backgroundColor: Colors.transparent,
+                                    minWidth: railMinWidth,
+                                    useIndicator: true,
+                                    indicatorColor: theme.colorScheme.primary
+                                        .withValues(alpha: _indicatorOpacity),
+                                    selectedIconTheme: IconThemeData(
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    unselectedIconTheme: IconThemeData(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.72),
+                                    ),
+                                    selectedLabelTextStyle: theme
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                    unselectedLabelTextStyle: theme
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: theme.colorScheme.onSurface
+                                              .withValues(alpha: 0.72),
+                                        ),
+                                    selectedIndex: _selectedIndex,
+                                    onDestinationSelected:
+                                        _onNavigationRailItemSelected,
+                                    labelType: NavigationRailLabelType.none,
+                                    destinations: [
+                                      NavigationRailDestination(
+                                        icon: Icon(Icons.apps),
+                                        label: const Text('应用'),
+                                      ),
+                                      NavigationRailDestination(
+                                        icon: Icon(Icons.all_inbox),
+                                        label: const Text('全部'),
+                                      ),
+                                      NavigationRailDestination(
+                                        icon: Icon(Icons.settings),
+                                        label: const Text('设置'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            VerticalDivider(
+                              thickness: 1,
+                              width: 1,
+                              color: theme.dividerColor.withValues(alpha: 0.12),
+                            ),
+                            Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  10 * scale,
+                                  6 * scale,
+                                  10 * scale,
+                                  10 * scale,
+                                ),
+                                child: GlassContainer(
+                                  borderRadius: BorderRadius.circular(18),
+                                  opacity: _contentPanelOpacity,
+                                  blurSigma: _contentPanelBlur,
+                                  border: Border.all(
+                                    color: theme.dividerColor.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                  ),
+                                  child: _buildContent(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

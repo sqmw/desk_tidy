@@ -33,30 +33,104 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     service.stopPolling();
   }
 
+  void _pokeUi() {
+    if (!mounted) return;
+    _setState(() {});
+    SchedulerBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _awaitUiFrame({
+    Duration timeout = const Duration(milliseconds: 120),
+  }) async {
+    final binding = WidgetsBinding.instance;
+    final frameFuture = binding.endOfFrame;
+    binding.scheduleFrame();
+    try {
+      await frameFuture.timeout(timeout);
+    } catch (_) {}
+  }
+
+  Future<void> _prepareUiForShow({bool forceAppTab = false}) async {
+    _visibilityToken++;
+    if (mounted) {
+      _setState(() {
+        _panelVisible = true;
+        if (forceAppTab) _selectedIndex = 0;
+      });
+    }
+    await _awaitUiFrame();
+  }
+
+  Future<void> _nudgeWindowSizeForRedraw({required int token}) async {
+    if (!mounted) return;
+    if (_trayMode || !_panelVisible) return;
+    if (_visibilityToken != token) return;
+    try {
+      final currentSize = await windowManager.getSize();
+      await windowManager.setSize(
+        Size(currentSize.width + 1, currentSize.height),
+      );
+      await windowManager.setSize(currentSize);
+    } catch (_) {}
+    _pokeUi();
+  }
+
+  void _scheduleRedrawNudges() {
+    final token = _visibilityToken;
+    unawaited(_nudgeWindowSizeForRedraw(token: token));
+    unawaited(
+      Future.delayed(
+        const Duration(milliseconds: 160),
+        () => _nudgeWindowSizeForRedraw(token: token),
+      ),
+    );
+    unawaited(
+      Future.delayed(
+        const Duration(milliseconds: 420),
+        () => _nudgeWindowSizeForRedraw(token: token),
+      ),
+    );
+  }
+
+  Future<void> _ensureWindowOpaque() async {
+    try {
+      await windowManager.setOpacity(1.0);
+    } catch (_) {}
+    unawaited(
+      Future.delayed(const Duration(milliseconds: 120), () async {
+        try {
+          await windowManager.setOpacity(1.0);
+        } catch (_) {}
+      }),
+    );
+  }
+
+  void _ensurePanelVisible() {
+    if (!mounted) return;
+    if (_trayMode) return;
+    if (!_panelVisible) {
+      _setState(() => _panelVisible = true);
+    }
+  }
+
   Future<void> _bringWindowToFrontFromHotkey() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     _lastActivationMode = _ActivationMode.hotkey;
     _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
-
-    if (mounted) {
-      // Switch to App tab before showing the window to avoid a visible
-      // "tab jump" (e.g. from Settings -> Apps) after the window is already up.
-      if (!_panelVisible || _selectedIndex != 0) {
-        _setState(() {
-          _panelVisible = true;
-          _selectedIndex = 0;
-        });
-      }
-    }
+    await _prepareUiForShow(forceAppTab: true);
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore();
     await windowManager.show();
+    _scheduleRedrawNudges();
 
     _dockManager.onPresentFromHotkey();
     _updateHotkeyPolling();
+    await _ensureWindowOpaque();
+    _ensurePanelVisible();
+    _pokeUi();
 
     forceSetForegroundWindow(_windowHandle);
     await windowManager.focus();
@@ -97,14 +171,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
 
       // 先准备内容，避免白屏闪烁
-      if (mounted) {
-        // Prepare content and switch to App tab before showing the window.
-        // This makes hotkey wake-up feel immediate and avoids a delayed tab swap.
-        _setState(() {
-          _panelVisible = true;
-          _selectedIndex = 0;
-        });
-      }
+      await _prepareUiForShow(forceAppTab: true);
 
       // 加载快捷键专属窗口布局并应用
       final layout = await AppPreferences.loadHotkeyWindowLayout();
@@ -117,24 +184,15 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
         Offset(bounds.x.toDouble(), bounds.y.toDouble()),
       );
 
-      // [Anti-Flash] 先设置透明度为0，防止白屏闪烁
-      await windowManager.setOpacity(0.0);
-
       await windowManager.setAlwaysOnTop(true);
       await windowManager.setSkipTaskbar(true);
       await windowManager.restore(); // 先恢复窗口状态
       await windowManager.show(); // 再显示窗口
 
-      // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
-      final currentSize = await windowManager.getSize();
-      await windowManager.setSize(
-        Size(currentSize.width + 1, currentSize.height),
-      );
-      await windowManager.setSize(currentSize);
+      _scheduleRedrawNudges();
 
-      // 等待一帧渲染
-      await Future.delayed(const Duration(milliseconds: 50));
-      await windowManager.setOpacity(1.0);
+      await _ensureWindowOpaque();
+      _ensurePanelVisible();
 
       _dockManager.onPresentFromHotkey();
       _updateHotkeyPolling();
@@ -144,6 +202,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
       await _syncDesktopIconVisibility();
       // _startDesktopIconSync removed (handled by service)
+      _pokeUi();
 
       unawaited(
         Future.delayed(const Duration(milliseconds: 800), () {
@@ -162,6 +221,9 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
         });
       });
     } finally {
+      unawaited(_ensureWindowOpaque());
+      _ensurePanelVisible();
+      _pokeUi();
       _hotkeyPresentInFlight = false;
       if (_hotkeyRefocusRequested) {
         _hotkeyRefocusRequested = false;
@@ -233,11 +295,14 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
             await windowManager.setSkipTaskbar(false);
             await windowManager.show();
             await windowManager.restore();
+            _scheduleRedrawNudges();
             await windowManager.focus();
             await _syncDesktopIconVisibility();
             if (mounted) _setState(() => _panelVisible = true);
             // _startDesktopIconSync removed
             _onMainWindowPresented();
+            unawaited(_ensureWindowOpaque());
+            _pokeUi();
           }
           _updateHotkeyPolling();
         },

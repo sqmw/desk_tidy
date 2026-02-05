@@ -12,6 +12,7 @@ class HotCornerService {
 
   Timer? _timer;
   bool _isPolling = false;
+  bool _armed = false;
 
   /// Starts watching for hot corner activation.
   ///
@@ -20,19 +21,21 @@ class HotCornerService {
   void start({required VoidCallback onTrigger, bool Function()? shouldWatch}) {
     _timer?.cancel();
 
-    // Initial check
-    if (shouldWatch != null && !shouldWatch()) return;
-
+    // Hot-corner needs to feel instant; long intervals make it look like
+    // "need to shake twice". Keep this lightweight (cursor pos + ctrl state).
     final interval = kDebugMode
-        ? const Duration(milliseconds: 1500)
-        : const Duration(milliseconds: 1200);
+        ? const Duration(milliseconds: 80)
+        : const Duration(milliseconds: 80);
 
     _isPolling = true;
     _timer = Timer.periodic(interval, (_) async {
       if (!_isPolling) return;
 
       // Check condition again
-      if (shouldWatch != null && !shouldWatch()) return;
+      if (shouldWatch != null && !shouldWatch()) {
+        _armed = false;
+        return;
+      }
 
       final cursorPos = getCursorScreenPosition();
       if (cursorPos == null) return;
@@ -49,7 +52,17 @@ class HotCornerService {
       // Must hold CTRL
       final ctrlDown = isCtrlPressed();
 
-      if (inHotCorner && ctrlDown) {
+      final active = inHotCorner && ctrlDown;
+      if (!active) {
+        _armed = false;
+        return;
+      }
+
+      // Edge-trigger to avoid repeated activation while holding Ctrl in the zone.
+      if (_armed) return;
+      _armed = true;
+
+      if (active) {
         onTrigger();
       }
     });
@@ -57,6 +70,7 @@ class HotCornerService {
 
   void stop() {
     _isPolling = false;
+    _armed = false;
     _timer?.cancel();
     _timer = null;
   }

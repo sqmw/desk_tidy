@@ -150,6 +150,47 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
     return KeyEventResult.handled;
   }
 
+  bool _isTextInputFocused() {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null) return false;
+    return primary.context?.widget is EditableText;
+  }
+
+  KeyEventResult _handleGlobalKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    if (_isTextInputFocused() || _appSearchFocus.hasFocus) {
+      return KeyEventResult.ignored;
+    }
+
+    final ch = event.character;
+    if (ch == null || ch.isEmpty) return KeyEventResult.ignored;
+    if (ch == '\n' || ch == '\r' || ch == '\t') {
+      return KeyEventResult.ignored;
+    }
+
+    if (_selectedIndex != 0) {
+      _setState(() => _selectedIndex = 0);
+    }
+
+    final current = _appSearchController.text;
+    final next = '$current$ch';
+    _appSearchController.text = next;
+    _appSearchController.selection = TextSelection.collapsed(
+      offset: next.length,
+    );
+    _updateSearchQuery(next);
+    _focusSearchField(selectAllIfHasText: false);
+
+    return KeyEventResult.handled;
+  }
+
   // ...
 
   // 提取 LayoutMetrics 类或方法来统一计算
