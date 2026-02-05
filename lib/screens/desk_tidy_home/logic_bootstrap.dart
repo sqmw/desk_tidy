@@ -23,8 +23,8 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     if (_trayMode) {
       service.startPolling(
         interval: kDebugMode
-            ? const Duration(milliseconds: 280)
-            : const Duration(milliseconds: 220),
+            ? const Duration(milliseconds: 80)
+            : const Duration(milliseconds: 80),
       );
       return;
     }

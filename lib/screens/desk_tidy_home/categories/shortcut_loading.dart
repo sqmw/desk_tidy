@@ -41,9 +41,10 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
         print('Error finding system tools: $e');
       }
 
-      if (desktopShortcutPathsOverride != null) {
-        shortcutsPaths.addAll(desktopShortcutPathsOverride);
-      }
+      final resolvedEntries = <Map<String, String>>[
+        for (final p in shortcutsPaths)
+          <String, String>{'src': 'tools', 'path': p, 'target': p},
+      ];
 
       // Offload heavy directory scanning to Isolate
       try {
@@ -53,33 +54,24 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
             desktopPaths: desktopShortcutPathsOverride == null
                 ? desktopScanPaths
                 : const [],
+            desktopShortcutPaths: desktopShortcutPathsOverride ?? const [],
             startMenuPaths: startMenuScanPaths,
             showHidden: _showHidden,
           ),
         );
         if (!mounted || loadToken != _shortcutLoadToken) return;
-        shortcutsPaths.addAll(foundInIsolate);
+        resolvedEntries.addAll(foundInIsolate);
         print('Isolate scan completed. Found ${foundInIsolate.length} items.');
 
         final snapshotSource =
-            desktopShortcutPathsOverride ??
-            foundInIsolate.where((p) {
-              final lower = p.toLowerCase();
-              for (final root in desktopScanPaths) {
-                if (root.isEmpty) continue;
-                final normalizedRoot = path.normalize(root).toLowerCase();
-                final rootWithSep = normalizedRoot.endsWith(path.separator)
-                    ? normalizedRoot
-                    : '$normalizedRoot${path.separator}';
-                if (lower == normalizedRoot || lower.startsWith(rootWithSep)) {
-                  return true;
-                }
-              }
-              return false;
-            });
+            resolvedEntries
+                .where((e) => e['src'] == 'desktop')
+                .map((e) => (e['path'] ?? '').toLowerCase())
+                .where((p) => p.isNotEmpty)
+                .toList()
+              ..sort();
 
-        _autoRefreshDesktopPathsSnapshot =
-            snapshotSource.map((e) => e.toLowerCase()).toList()..sort();
+        _autoRefreshDesktopPathsSnapshot = snapshotSource;
         _hasLoadedShortcutsOnce = true;
       } catch (e) {
         print('Isolate scan failed: $e');
@@ -92,7 +84,12 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
       }
 
       // 快速路径 diff：路径相同则无需解析图标和刷新 UI
-      final incomingPaths = [...shortcutsPaths]..sort();
+      final incomingPaths =
+          resolvedEntries
+              .map((e) => e['path'] ?? '')
+              .where((p) => p.isNotEmpty)
+              .toList()
+            ..sort();
       final currentPaths = _shortcuts.map((e) => e.path).toList()..sort();
       final pathsUnchanged = _pathsEqual(currentPaths, incomingPaths);
 
@@ -115,23 +112,13 @@ extension _DeskTidyHomeShortcutLoading on _DeskTidyHomePageState {
       final shortcutItems = <ShortcutItem>[];
       final seenTargetPaths = <String>{};
 
-      for (final shortcutPath in shortcutsPaths) {
-        final name = shortcutPath.split('\\').last.replaceAll('.lnk', '');
-
-        String targetPath = shortcutPath;
-        bool isFolderShortcut = false;
-        if (shortcutPath.toLowerCase().endsWith('.lnk')) {
-          final target = getShortcutTarget(shortcutPath);
-          if (target != null) {
-            targetPath = target;
-            isFolderShortcut = Directory(targetPath).existsSync();
-          }
-        }
-
-        // Don't treat folder shortcuts as "apps".
-        if (isFolderShortcut) {
-          continue;
-        }
+      for (final entry in resolvedEntries) {
+        final shortcutPath = entry['path'];
+        if (shortcutPath == null || shortcutPath.isEmpty) continue;
+        final name = path.basenameWithoutExtension(shortcutPath);
+        final targetPath = entry['target']?.trim().isNotEmpty == true
+            ? entry['target']!
+            : shortcutPath;
 
         // De-duplication
         final normTarget = targetPath.toLowerCase().trim();

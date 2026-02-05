@@ -40,10 +40,11 @@ extension _DeskTidyHomeRefreshLogic on _DeskTidyHomePageState {
       if (desktopPath.isEmpty) return;
 
       final desktopScanPaths = desktopLocations(desktopPath);
-      final foundDesktop = await compute(
+      final foundDesktopEntries = await compute(
         _scanPathsInIsolate,
         _ScanRequest(
           desktopPaths: desktopScanPaths,
+          desktopShortcutPaths: const [],
           startMenuPaths: const [],
           showHidden: _showHidden,
         ),
@@ -53,14 +54,18 @@ extension _DeskTidyHomeRefreshLogic on _DeskTidyHomePageState {
       if (_selectedIndex != 0) return;
       if (!ignoreAutoRefreshEnabled && !_autoRefresh) return;
 
-      final snapshot = foundDesktop.map((e) => e.toLowerCase()).toList()
+      final foundDesktopPaths = foundDesktopEntries
+          .map((e) => e['path'] ?? '')
+          .where((p) => p.isNotEmpty)
+          .toList();
+      final snapshot = foundDesktopPaths.map((e) => e.toLowerCase()).toList()
         ..sort();
       if (_pathsEqual(_autoRefreshDesktopPathsSnapshot, snapshot)) return;
 
       _autoRefreshDesktopPathsSnapshot = snapshot;
       await _loadShortcuts(
         showLoading: false,
-        desktopShortcutPathsOverride: foundDesktop,
+        desktopShortcutPathsOverride: foundDesktopPaths,
       );
     } catch (_) {
       // Ignore auto refresh probe failures.
