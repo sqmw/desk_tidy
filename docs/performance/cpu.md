@@ -14,11 +14,12 @@ Desk Tidy 在 Windows 上有若干“探测型”功能（热键、热区、桌�
 
 策略：
 - 窗口隐藏到托盘（`_trayMode=true`）时：启用轮询
-- 窗口显示（`_trayMode=false`）时：停止轮询
+- 窗口显示但未聚焦（例如被其他窗口遮挡）时：启用轮询（用于“再次按热键置顶”）
+- 窗口显示且聚焦时：停止轮询
 
 轮询间隔：
-- Release：`220ms`
-- Debug：`280ms`
+- Release：`80ms`
+- Debug：`80ms`
 
 实现位置：`lib/screens/desk_tidy_home/logic_bootstrap.dart`
 
@@ -50,4 +51,3 @@ Desk Tidy 在 Windows 上有若干“探测型”功能（热键、热区、桌�
 1. 启动应用后隐藏到托盘，观察任务管理器 CPU（应趋近 0，偶有短暂波动属正常）
 2. 通过热键/热区唤醒窗口，保持窗口显示，观察 CPU（应显著低于之前版本）
 3. 在设置里开启/关闭“隐藏桌面图标(Windows)”，观察桌面图标状态与设置同步是否正常
-

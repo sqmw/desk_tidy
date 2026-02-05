@@ -60,6 +60,9 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   final TextEditingController _appSearchController = TextEditingController();
   final FocusNode _appSearchFocus = FocusNode();
   String _appSearchQuery = '';
+  bool _hotkeyPresentInFlight = false;
+  bool _hotkeyRefocusRequested = false;
+  bool _selectAllSearchOnFocus = false;
   String? _categoryBeforeSearch;
   bool _searchHasFocus = false;
   Map<String, AppSearchIndex> _searchIndexByPath = {};
@@ -189,7 +192,19 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
     _initHotkey();
     _appSearchFocus.addListener(() {
       if (!mounted) return;
-      setState(() => _searchHasFocus = _appSearchFocus.hasFocus);
+      final hasFocus = _appSearchFocus.hasFocus;
+      setState(() => _searchHasFocus = hasFocus);
+
+      if (hasFocus && _selectAllSearchOnFocus) {
+        _selectAllSearchOnFocus = false;
+        final text = _appSearchController.text;
+        if (text.isNotEmpty) {
+          _appSearchController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: text.length,
+          );
+        }
+      }
     });
   }
 
@@ -246,9 +261,14 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
 
     // 如果当前在设置页面（Index 2），不自动隐藏
     // 允许用户在设置页面进行各种操作（如选择文件、复制文本）而不受自动隐藏干扰
-    if (_selectedIndex == 2) return;
+    if (_selectedIndex == 2) {
+      _windowFocusNotifier.value = false;
+      _updateHotkeyPolling();
+      return;
+    }
 
     _windowFocusNotifier.value = false;
+    _updateHotkeyPolling();
     // 窗口失去焦点时，可能是点击了外部，检查是否需要隐藏
     unawaited(_dockManager.onMouseClickOutside());
   }
@@ -256,6 +276,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   @override
   void onWindowFocus() {
     _windowFocusNotifier.value = true;
+    _updateHotkeyPolling();
   }
 
   @override

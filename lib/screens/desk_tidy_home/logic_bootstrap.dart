@@ -19,8 +19,10 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
   void _updateHotkeyPolling() {
     final service = HotkeyService.instance;
     // Polling uses GetAsyncKeyState and keeps the CPU awake; only run it when
-    // the window is hidden in tray mode.
-    if (_trayMode) {
+    // the window is hidden in tray mode, or when the window is not focused
+    // (e.g. visible but behind other apps).
+    final shouldPoll = _trayMode || !_windowFocusNotifier.value;
+    if (shouldPoll) {
       service.startPolling(
         interval: kDebugMode
             ? const Duration(milliseconds: 80)
@@ -31,76 +33,141 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     service.stopPolling();
   }
 
-  /// 从热键唤起窗口并聚焦搜索框
-  Future<void> _presentFromHotkey() async {
+  Future<void> _bringWindowToFrontFromHotkey() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
     _lastActivationMode = _ActivationMode.hotkey;
-    // _startHotCornerWatcher removed (handled by service)
-    // 设置600ms的“忽略失去焦点”宽限期，防止唤醒时的焦点抢夺导致误触自动隐藏
     _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
 
-    // 先准备内容，避免白屏闪烁
-    if (mounted) _setState(() => _panelVisible = true);
-
-    // 加载快捷键专属窗口布局并应用
-    final layout = await AppPreferences.loadHotkeyWindowLayout();
-    final screen = getPrimaryScreenSize();
-    final bounds = layout.toBounds(screen.x, screen.y);
-    await windowManager.setSize(
-      Size(bounds.width.toDouble(), bounds.height.toDouble()),
-    );
-    await windowManager.setPosition(
-      Offset(bounds.x.toDouble(), bounds.y.toDouble()),
-    );
-
-    // [Anti-Flash] 先设置透明度为0，防止白屏闪烁
-    await windowManager.setOpacity(0.0);
+    if (mounted) {
+      // Switch to App tab before showing the window to avoid a visible
+      // "tab jump" (e.g. from Settings -> Apps) after the window is already up.
+      if (!_panelVisible || _selectedIndex != 0) {
+        _setState(() {
+          _panelVisible = true;
+          _selectedIndex = 0;
+        });
+      }
+    }
 
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
-    await windowManager.restore(); // 先恢复窗口状态
-    await windowManager.show(); // 再显示窗口
-
-    // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
-    final currentSize = await windowManager.getSize();
-    await windowManager.setSize(
-      Size(currentSize.width + 1, currentSize.height),
-    );
-    await windowManager.setSize(currentSize);
-
-    // 等待一帧渲染
-    await Future.delayed(const Duration(milliseconds: 50));
-    await windowManager.setOpacity(1.0);
+    await windowManager.restore();
+    await windowManager.show();
 
     _dockManager.onPresentFromHotkey();
     _updateHotkeyPolling();
 
-    // 使用强制前台窗口方法获取真正的键盘焦点
     forceSetForegroundWindow(_windowHandle);
-    await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
-    await _syncDesktopIconVisibility();
-    // _startDesktopIconSync removed (handled by service)
+    await windowManager.focus();
+
+    if (mounted) {
+      _onMainWindowPresented();
+      _focusSearchField(selectAllIfHasText: true);
+    }
 
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
         windowManager.setAlwaysOnTop(false);
       }),
     );
+  }
 
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // 切换到应用页面并聚焦搜索框
-      if (_selectedIndex != 0) {
-        _setState(() => _selectedIndex = 0);
+  /// 从热键唤起窗口并聚焦搜索框
+  Future<void> _presentFromHotkey() async {
+    if (_hotkeyPresentInFlight) {
+      _hotkeyRefocusRequested = true;
+      return;
+    }
+    _hotkeyPresentInFlight = true;
+
+    try {
+      // If the window is already visible, a second hotkey press is typically
+      // intended to bring it to the top (not to redo layout/opacity work).
+      if (!_trayMode && _panelVisible) {
+        await _bringWindowToFrontFromHotkey();
+        return;
       }
-      _onMainWindowPresented();
-      // 延迟一小段时间确保原生焦点已完全切换
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) _appSearchFocus.requestFocus();
+
+      _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
+      _trayMode = false;
+      _lastActivationMode = _ActivationMode.hotkey;
+      // _startHotCornerWatcher removed (handled by service)
+      // 设置600ms的“忽略失去焦点”宽限期，防止唤醒时的焦点抢夺导致误触自动隐藏
+      _ignoreBlurUntil = DateTime.now().add(const Duration(milliseconds: 600));
+
+      // 先准备内容，避免白屏闪烁
+      if (mounted) {
+        // Prepare content and switch to App tab before showing the window.
+        // This makes hotkey wake-up feel immediate and avoids a delayed tab swap.
+        _setState(() {
+          _panelVisible = true;
+          _selectedIndex = 0;
+        });
+      }
+
+      // 加载快捷键专属窗口布局并应用
+      final layout = await AppPreferences.loadHotkeyWindowLayout();
+      final screen = getPrimaryScreenSize();
+      final bounds = layout.toBounds(screen.x, screen.y);
+      await windowManager.setSize(
+        Size(bounds.width.toDouble(), bounds.height.toDouble()),
+      );
+      await windowManager.setPosition(
+        Offset(bounds.x.toDouble(), bounds.y.toDouble()),
+      );
+
+      // [Anti-Flash] 先设置透明度为0，防止白屏闪烁
+      await windowManager.setOpacity(0.0);
+
+      await windowManager.setAlwaysOnTop(true);
+      await windowManager.setSkipTaskbar(true);
+      await windowManager.restore(); // 先恢复窗口状态
+      await windowManager.show(); // 再显示窗口
+
+      // [Fix] Force a tiny resize to trigger WM_SIZE and sync child HWND in Release mode
+      final currentSize = await windowManager.getSize();
+      await windowManager.setSize(
+        Size(currentSize.width + 1, currentSize.height),
+      );
+      await windowManager.setSize(currentSize);
+
+      // 等待一帧渲染
+      await Future.delayed(const Duration(milliseconds: 50));
+      await windowManager.setOpacity(1.0);
+
+      _dockManager.onPresentFromHotkey();
+      _updateHotkeyPolling();
+
+      // 使用强制前台窗口方法获取真正的键盘焦点
+      forceSetForegroundWindow(_windowHandle);
+      await windowManager.focus(); // 也调用 Flutter 的 focus 作为补充
+      await _syncDesktopIconVisibility();
+      // _startDesktopIconSync removed (handled by service)
+
+      unawaited(
+        Future.delayed(const Duration(milliseconds: 800), () {
+          windowManager.setAlwaysOnTop(false);
+        }),
+      );
+
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _onMainWindowPresented();
+        // 延迟一小段时间确保原生焦点已完全切换
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (!mounted) return;
+          _focusSearchField(selectAllIfHasText: true);
+        });
       });
-    });
+    } finally {
+      _hotkeyPresentInFlight = false;
+      if (_hotkeyRefocusRequested) {
+        _hotkeyRefocusRequested = false;
+        unawaited(_bringWindowToFrontFromHotkey());
+      }
+    }
   }
 
   void _applyDefaults() {

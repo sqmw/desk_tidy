@@ -300,4 +300,23 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
     if (keepFocus) _appSearchFocus.requestFocus();
   }
 
+  void _focusSearchField({bool selectAllIfHasText = false}) {
+    if (!mounted) return;
+
+    if (selectAllIfHasText) {
+      final text = _appSearchController.text;
+      if (text.isNotEmpty) {
+        if (_appSearchFocus.hasFocus) {
+          _appSearchController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: text.length,
+          );
+        } else {
+          _selectAllSearchOnFocus = true;
+        }
+      }
+    }
+
+    _appSearchFocus.requestFocus();
+  }
 }
