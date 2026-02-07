@@ -133,7 +133,7 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
       }
       nextIndex = targetIndex;
     } else if (event.logicalKey == LogicalKeyboardKey.enter) {
-      _openSelectedSearchResult();
+      unawaited(_openSelectedSearchResult());
       return KeyEventResult.handled;
     } else if (event.logicalKey == LogicalKeyboardKey.escape) {
       // ESC 键：隐藏窗口
@@ -256,7 +256,7 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
   }
 
   /// 打开当前选中的搜索结果
-  void _openSelectedSearchResult() {
+  Future<void> _openSelectedSearchResult() async {
     final shortcuts = _filteredShortcuts;
     if (shortcuts.isEmpty) return;
 
@@ -265,16 +265,7 @@ extension _DeskTidyHomeSearchLogic on _DeskTidyHomePageState {
     if (index >= shortcuts.length) return;
 
     final shortcut = shortcuts[index];
-    final resolvedPath = shortcut.targetPath.isNotEmpty
-        ? shortcut.targetPath
-        : shortcut.path;
-
-    openWithDefault(resolvedPath);
-
-    // 如果是快捷键模式，打开后隐藏窗口
-    if (_lastActivationMode == _ActivationMode.hotkey) {
-      _dismissToTray(fromHotCorner: false);
-    }
+    await _openShortcutFromHome(shortcut);
   }
 
   bool _isCategoryAvailable(String id) {

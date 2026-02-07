@@ -89,10 +89,15 @@ extension _ShortcutCardMenu on _ShortcutCardState {
 
     switch (result) {
       case 'open':
+        final openRequested = widget.onOpenRequested;
+        if (openRequested != null) {
+          await openRequested(shortcut);
+          break;
+        }
         if (shortcut.isSystemItem) {
           SystemItemInfo.open(shortcut.systemItemType!);
         } else {
-          openWithDefault(resolvedPath);
+          await openWithDefault(resolvedPath);
         }
         widget.onLaunched?.call();
         break;

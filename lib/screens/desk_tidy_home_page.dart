@@ -55,4 +55,5 @@ part 'desk_tidy_home/ui_builders.dart';
 part 'desk_tidy_home/handlers/system_and_theme.dart';
 part 'desk_tidy_home/handlers/search_widgets.dart';
 part 'desk_tidy_home/handlers/application_content.dart';
+part 'desk_tidy_home/handlers/shortcut_launch.dart';
 part 'desk_tidy_home/scan_isolate.dart';

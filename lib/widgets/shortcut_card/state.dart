@@ -10,6 +10,7 @@ class ShortcutCard extends StatefulWidget {
   final bool beautifyIcon;
   final IconBeautifyStyle beautifyStyle;
   final VoidCallback? onLaunched;
+  final Future<void> Function(ShortcutItem shortcut)? onOpenRequested;
   final bool isHighlighted; // 键盘导航高亮
 
   const ShortcutCard({
@@ -22,6 +23,7 @@ class ShortcutCard extends StatefulWidget {
     this.beautifyIcon = false,
     this.beautifyStyle = IconBeautifyStyle.cute,
     this.onLaunched,
+    this.onOpenRequested,
     this.isHighlighted = false,
   });
 

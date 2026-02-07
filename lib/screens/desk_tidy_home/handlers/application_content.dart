@@ -292,6 +292,7 @@ extension _DeskTidyHomeApplicationContent on _DeskTidyHomePageState {
                             iconSize: _iconSize,
                             windowFocusNotifier: _windowFocusNotifier,
                             isHighlighted: index == _searchSelectedIndex,
+                            onOpenRequested: _openShortcutFromHome,
                             onDeleted: () {
                               _loadShortcuts(showLoading: false);
                             },
@@ -299,10 +300,6 @@ extension _DeskTidyHomeApplicationContent on _DeskTidyHomePageState {
                                 _showCategoryMenuForShortcut,
                             beautifyIcon: _beautifyAppIcons,
                             beautifyStyle: _beautifyStyle,
-                            onLaunched:
-                                _lastActivationMode == _ActivationMode.hotkey
-                                ? () => _dismissToTray(fromHotCorner: false)
-                                : null,
                           );
                         },
                       ),

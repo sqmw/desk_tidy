@@ -52,12 +52,18 @@ extension _ShortcutCardUi on _ShortcutCardState {
             });
           },
           onDoubleTap: () {
+            final openRequested = widget.onOpenRequested;
+            if (openRequested != null) {
+              unawaited(openRequested(shortcut));
+              return;
+            }
             if (shortcut.isSystemItem) {
               SystemItemInfo.open(shortcut.systemItemType!);
-            } else if (shortcut.targetPath.isNotEmpty) {
-              openWithDefault(shortcut.targetPath);
             } else {
-              openWithDefault(shortcut.path);
+              final resolvedPath = shortcut.targetPath.isNotEmpty
+                  ? shortcut.targetPath
+                  : shortcut.path;
+              openWithDefault(resolvedPath);
             }
             widget.onLaunched?.call();
           },

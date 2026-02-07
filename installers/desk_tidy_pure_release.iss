@@ -6,7 +6,7 @@
 ; 3. Shared source deduplication for smaller installer size.
 
 #define MyAppName "Desk Tidy"
-#define MyAppVersion "1.2.8"
+#define MyAppVersion "1.2.10"
 #define MyAppPublisher "ksun22515@gmail.com"
 #define MyAppURL "mailto:ksun22515@gmail.com"
 #define MyAppExeName "desk_tidy.exe"

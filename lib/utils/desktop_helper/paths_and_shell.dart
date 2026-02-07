@@ -120,7 +120,7 @@ bool isHiddenOrSystem(String fullPath) {
 bool moveToRecycleBin(String fullPath) {
   try {
     final op = calloc<SHFILEOPSTRUCT>();
-    final from = ('${fullPath}\u0000\u0000').toNativeUtf16();
+    final from = ('$fullPath\u0000\u0000').toNativeUtf16();
 
     op.ref
       ..wFunc = FO_DELETE
@@ -144,6 +144,38 @@ bool isDirectory(String fullPath) {
 /// Open a file or folder with the system default handler.
 Future<bool> openWithDefault(String fullPath) async {
   try {
+    if (!Platform.isWindows) {
+      final shell = pr.Shell(runInShell: true, verbose: false);
+      await shell.run('cmd /c start "" "${fullPath.replaceAll('"', '\\"')}"');
+      return true;
+    }
+
+    final ext = path.extension(fullPath).toLowerCase();
+    final opPtr = 'open'.toNativeUtf16();
+    final filePtr = fullPath.toNativeUtf16();
+    final dir = ext == '.exe' ? path.dirname(fullPath) : '';
+    Pointer<Utf16> dirPtr = nullptr;
+    if (dir.isNotEmpty) {
+      dirPtr = dir.toNativeUtf16();
+    }
+    final result = ShellExecute(
+      0,
+      opPtr,
+      filePtr,
+      nullptr,
+      dirPtr,
+      SW_SHOWNORMAL,
+    );
+    calloc.free(opPtr);
+    calloc.free(filePtr);
+    if (dirPtr != nullptr) {
+      calloc.free(dirPtr);
+    }
+
+    // ShellExecute success code is > 32.
+    if (result > 32) return true;
+
+    // Fallback to cmd start when shell execute fails.
     final shell = pr.Shell(runInShell: true, verbose: false);
     await shell.run('cmd /c start "" "${fullPath.replaceAll('"', '\\"')}"');
     return true;
