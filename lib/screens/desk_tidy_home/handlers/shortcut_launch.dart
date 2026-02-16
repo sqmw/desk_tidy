@@ -48,12 +48,78 @@ extension _DeskTidyHomeShortcutLaunch on _DeskTidyHomePageState {
     return shouldDelete ?? false;
   }
 
-  Future<void> _openShortcutFromHome(ShortcutItem shortcut) async {
-    if (shortcut.isSystemItem) {
-      SystemItemInfo.open(shortcut.systemItemType!);
-      if (_lastActivationMode == _ActivationMode.hotkey) {
-        _dismissToTray(fromHotCorner: false);
+  Future<LaunchFeedbackSession> _launchShortcutWithFeedback(
+    ShortcutItem shortcut, {
+    required bool showTaskbarIndicator,
+  }) {
+    return LaunchFeedbackService.instance.launchWithPerceptibleFeedback(
+      launchPath: _launchPathForShortcut(shortcut),
+      targetPath: shortcut.targetPath,
+      showTaskbarIndicator: showTaskbarIndicator,
+    );
+  }
+
+  void _setShortcutLaunching(String shortcutPath, bool launching) {
+    if (!mounted) return;
+    final currentlyLaunching = _launchingShortcutPaths.contains(shortcutPath);
+    if (currentlyLaunching == launching) return;
+
+    _setState(() {
+      if (launching) {
+        _launchingShortcutPaths.add(shortcutPath);
+      } else {
+        _launchingShortcutPaths.remove(shortcutPath);
       }
+    });
+  }
+
+  void _trackShortcutLaunchReady({
+    required ShortcutItem shortcut,
+    required Future<void> ready,
+  }) {
+    final pathKey = shortcut.path;
+    unawaited(
+      ready.whenComplete(() {
+        _setShortcutLaunching(pathKey, false);
+      }),
+    );
+  }
+
+  void _notifyLaunchFailedInTray(ShortcutItem shortcut) {
+    final shown = showTrayBalloon(
+      windowHandle: _windowHandle,
+      title: 'Desk Tidy',
+      message: '启动失败：${shortcut.name}',
+    );
+    if (!shown) {
+      OperationManager.instance.quickTask('启动失败，请重试', success: false);
+    }
+  }
+
+  Future<void> _launchShortcutFromHotkeyInBackground(
+    ShortcutItem shortcut,
+  ) async {
+    _setShortcutLaunching(shortcut.path, true);
+    final session = await _launchShortcutWithFeedback(
+      shortcut,
+      showTaskbarIndicator: true,
+    );
+    if (!session.launched) {
+      _setShortcutLaunching(shortcut.path, false);
+      _notifyLaunchFailedInTray(shortcut);
+      return;
+    }
+    _trackShortcutLaunchReady(shortcut: shortcut, ready: session.ready);
+  }
+
+  Future<void> _openShortcutFromHome(ShortcutItem shortcut) async {
+    final fromHotkey = _lastActivationMode == _ActivationMode.hotkey;
+
+    if (shortcut.isSystemItem) {
+      if (fromHotkey) {
+        unawaited(_dismissToTray(fromHotCorner: false));
+      }
+      SystemItemInfo.open(shortcut.systemItemType!);
       return;
     }
 
@@ -71,13 +137,26 @@ extension _DeskTidyHomeShortcutLaunch on _DeskTidyHomePageState {
       return;
     }
 
-    final launched = await openWithDefault(_launchPathForShortcut(shortcut));
-    if (!launched) {
+    if (fromHotkey) {
+      // Render one frame of launch feedback, then dismiss without blocking.
+      unawaited(_launchShortcutFromHotkeyInBackground(shortcut));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_dismissToTray(fromHotCorner: false));
+      });
+      return;
+    }
+
+    _setShortcutLaunching(shortcut.path, true);
+    final session = await _launchShortcutWithFeedback(
+      shortcut,
+      showTaskbarIndicator: false,
+    );
+    if (!session.launched) {
+      _setShortcutLaunching(shortcut.path, false);
       OperationManager.instance.quickTask('启动失败，请重试', success: false);
       return;
     }
-    if (_lastActivationMode == _ActivationMode.hotkey) {
-      _dismissToTray(fromHotCorner: false);
-    }
+    _trackShortcutLaunchReady(shortcut: shortcut, ready: session.ready);
   }
 }

@@ -18,14 +18,14 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
 
   void _updateHotkeyPolling() {
     final service = HotkeyService.instance;
-    // Polling uses GetAsyncKeyState and keeps the CPU awake; only run it when
-    // the window is hidden in tray mode, or when the window is not focused
-    // (e.g. visible but behind other apps).
-    final shouldPoll = _trayMode || !_windowFocusNotifier.value;
+    // Keep polling while the panel is visible so a second hotkey press can
+    // re-top and force a redraw when the window appears "stuck".
+    final shouldPoll =
+        _trayMode || !_windowFocusNotifier.value || _panelVisible;
     if (shouldPoll) {
       service.startPolling(
-        interval: kDebugMode
-            ? const Duration(milliseconds: 80)
+        interval: _panelVisible && _windowFocusNotifier.value
+            ? const Duration(milliseconds: 120)
             : const Duration(milliseconds: 80),
       );
       return;
@@ -75,6 +75,12 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     _pokeUi();
   }
 
+  Future<void> _forceRefreshWindowSurfaceForHotkey() async {
+    final token = _visibilityToken;
+    await _nudgeWindowSizeForRedraw(token: token);
+    _scheduleRedrawNudges();
+  }
+
   void _scheduleRedrawNudges() {
     final token = _visibilityToken;
     unawaited(_nudgeWindowSizeForRedraw(token: token));
@@ -113,6 +119,18 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     }
   }
 
+  void _focusSearchForHotkeyActivation() {
+    if (!mounted) return;
+    _onMainWindowPresented();
+    _focusSearchField(selectAllIfHasText: true);
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        if (!mounted) return;
+        _focusSearchField(selectAllIfHasText: true);
+      }),
+    );
+  }
+
   Future<void> _bringWindowToFrontFromHotkey() async {
     _windowHandle = findMainFlutterWindowHandle() ?? _windowHandle;
     _trayMode = false;
@@ -124,7 +142,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     await windowManager.setSkipTaskbar(true);
     await windowManager.restore();
     await windowManager.show();
-    _scheduleRedrawNudges();
+    await _forceRefreshWindowSurfaceForHotkey();
 
     _dockManager.onPresentFromHotkey();
     _updateHotkeyPolling();
@@ -135,10 +153,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
     forceSetForegroundWindow(_windowHandle);
     await windowManager.focus();
 
-    if (mounted) {
-      _onMainWindowPresented();
-      _focusSearchField(selectAllIfHasText: true);
-    }
+    _focusSearchForHotkeyActivation();
 
     unawaited(
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -189,7 +204,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
       await windowManager.restore(); // 先恢复窗口状态
       await windowManager.show(); // 再显示窗口
 
-      _scheduleRedrawNudges();
+      await _forceRefreshWindowSurfaceForHotkey();
 
       await _ensureWindowOpaque();
       _ensurePanelVisible();
@@ -210,16 +225,7 @@ extension _DeskTidyHomeBootstrap on _DeskTidyHomePageState {
         }),
       );
 
-      if (!mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _onMainWindowPresented();
-        // 延迟一小段时间确保原生焦点已完全切换
-        Future.delayed(const Duration(milliseconds: 50), () {
-          if (!mounted) return;
-          _focusSearchField(selectAllIfHasText: true);
-        });
-      });
+      _focusSearchForHotkeyActivation();
     } finally {
       unawaited(_ensureWindowOpaque());
       _ensurePanelVisible();

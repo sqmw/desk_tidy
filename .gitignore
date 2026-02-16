@@ -35,6 +35,9 @@ migrate_working_dir/
 pubspec.lock
 code_lib/
 
+# Installer artifacts
+/installers/build/
+
 # Symbolication related
 app.*.symbols
 

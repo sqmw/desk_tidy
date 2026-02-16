@@ -31,6 +31,7 @@ import '../widgets/selectable_shortcut_tile.dart';
 import 'all_page.dart';
 import '../services/window_dock_manager.dart';
 import '../services/box_launcher.dart';
+import '../services/launch_feedback_service.dart';
 import '../widgets/operation_progress_bar.dart';
 import '../services/hotkey_service.dart';
 import '../models/system_items.dart';

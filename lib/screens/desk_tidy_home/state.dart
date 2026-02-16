@@ -21,6 +21,7 @@ class _DeskTidyHomePageState extends State<DeskTidyHomePage>
   List<String> _autoRefreshDesktopPathsSnapshot = const [];
   int _shortcutLoadToken = 0;
   List<ShortcutItem> _shortcuts = [];
+  final Set<String> _launchingShortcutPaths = <String>{};
   List<AppCategory> _categories = [];
   String? _activeCategoryId;
   bool _isEditingCategory = false;

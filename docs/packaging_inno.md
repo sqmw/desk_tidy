@@ -52,3 +52,15 @@ iscc installers\desk_tidy.iss /dMyAppVersion=$ver
 ### 注意事项
 - 编译前需确保主程序和子程序都已经完成 `release` 构建。
 - 子程序必须在安装目录下有自己的依赖副本（即使是重复的），因为 Windows 的加载机制要求 DLL 与 EXE 同级。
+
+### 产物命名与 Git 跟踪策略（2026-02-16）
+- `installers/desk_tidy_pure_release.iss` 已改为按版本号输出安装包：
+  - `OutputBaseFilename=desk_tidy_pure_release_setup_v{#MyAppVersion}`
+- 例如 `MyAppVersion=1.2.10` 时，输出文件名为：
+  - `desk_tidy_pure_release_setup_v1.2.10.exe`
+- `MyAppVersion` 支持命令行覆盖（如 `/DMyAppVersion=1.2.11`），便于发布时不改脚本直接变更版本号。
+- 仓库根目录 `.gitignore` 已新增：`/installers/build/`，防止安装包产物进入版本库。
+- 若历史上已被跟踪过安装包，需要一次性执行：
+  ```powershell
+  git rm -r --cached installers/build
+  ```

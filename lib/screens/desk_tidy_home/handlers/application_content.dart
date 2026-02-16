@@ -291,6 +291,9 @@ extension _DeskTidyHomeApplicationContent on _DeskTidyHomePageState {
                             shortcut: shortcut,
                             iconSize: _iconSize,
                             windowFocusNotifier: _windowFocusNotifier,
+                            isLaunching: _launchingShortcutPaths.contains(
+                              shortcut.path,
+                            ),
                             isHighlighted: index == _searchSelectedIndex,
                             onOpenRequested: _openShortcutFromHome,
                             onDeleted: () {

@@ -6,11 +6,14 @@
 ; 3. Shared source deduplication for smaller installer size.
 
 #define MyAppName "Desk Tidy"
-#define MyAppVersion "1.2.10"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.2.10"
+#endif
 #define MyAppPublisher "ksun22515@gmail.com"
 #define MyAppURL "mailto:ksun22515@gmail.com"
 #define MyAppExeName "desk_tidy.exe"
 #define MyAppId "{{D35K-T1DY-R3L3-A53-RE3R-F1XED}}"
+#define MyOutputBaseFilename "desk_tidy_pure_release_setup_v" + MyAppVersion
 
 #ifndef MyReleaseBuildDir
   #define MyReleaseBuildDir "f:\language\dart\code\desk_tidy\build\windows\x64\runner\Release"
@@ -37,7 +40,7 @@ VersionInfoCopyright=Copyright (C) 2024 {#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=build\installer
-OutputBaseFilename=desk_tidy_pure_release_setup
+OutputBaseFilename={#MyOutputBaseFilename}
 SetupIconFile=f:\language\dart\code\desk_tidy\windows\runner\resources\app_icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

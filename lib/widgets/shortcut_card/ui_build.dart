@@ -97,17 +97,11 @@ extension _ShortcutCardUi on _ShortcutCardState {
                   SizedBox(
                     width: iconContainerSize,
                     height: iconContainerSize,
-                    child: widget.beautifyIcon
-                        ? _buildIcon(context, visualIconSize.toDouble())
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              iconContainerSize * 0.22,
-                            ),
-                            child: _buildIcon(
-                              context,
-                              visualIconSize.toDouble(),
-                            ),
-                          ),
+                    child: _buildIconWithLaunchOverlay(
+                      context,
+                      iconContainerSize: iconContainerSize,
+                      visualIconSize: visualIconSize.toDouble(),
+                    ),
                   ),
                   SizedBox(height: padding * 0.6),
                   Flexible(
@@ -142,6 +136,65 @@ extension _ShortcutCardUi on _ShortcutCardState {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIconWithLaunchOverlay(
+    BuildContext context, {
+    required double iconContainerSize,
+    required double visualIconSize,
+  }) {
+    final theme = Theme.of(context);
+    final baseIcon = widget.beautifyIcon
+        ? _buildIcon(context, visualIconSize)
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(iconContainerSize * 0.22),
+            child: _buildIcon(context, visualIconSize),
+          );
+
+    if (!widget.isLaunching) return baseIcon;
+
+    final badgeSize = (iconContainerSize * 0.40).clamp(14.0, 24.0);
+    final spinnerSize = badgeSize * 0.60;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: Opacity(opacity: 0.88, child: baseIcon)),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            width: badgeSize,
+            height: badgeSize,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface.withValues(alpha: 0.94),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.28),
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: SizedBox(
+                width: spinnerSize,
+                height: spinnerSize,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.0,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

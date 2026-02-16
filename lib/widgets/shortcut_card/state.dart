@@ -12,6 +12,7 @@ class ShortcutCard extends StatefulWidget {
   final VoidCallback? onLaunched;
   final Future<void> Function(ShortcutItem shortcut)? onOpenRequested;
   final bool isHighlighted; // 键盘导航高亮
+  final bool isLaunching;
 
   const ShortcutCard({
     super.key,
@@ -25,6 +26,7 @@ class ShortcutCard extends StatefulWidget {
     this.onLaunched,
     this.onOpenRequested,
     this.isHighlighted = false,
+    this.isLaunching = false,
   });
 
   @override
