@@ -25,11 +25,25 @@ class LaunchFeedbackService {
     required String targetPath,
     bool showTaskbarIndicator = false,
   }) async {
+    final executablePath = _resolveExecutablePath(
+      launchPath: launchPath,
+      targetPath: targetPath,
+    );
+    final preLaunchWindowCount = executablePath == null
+        ? 0
+        : _windowLocator.countTopLevelWindowsByExecutable(executablePath);
+
     final indicator = showTaskbarIndicator
         ? TaskbarLaunchIndicator.show(
             iconSourcePath: _resolveIndicatorIconPath(
               launchPath: launchPath,
               targetPath: targetPath,
+              executablePath: executablePath,
+            ),
+            appDisplayName: _resolveIndicatorDisplayName(
+              launchPath: launchPath,
+              targetPath: targetPath,
+              executablePath: executablePath,
             ),
           )
         : null;
@@ -44,10 +58,6 @@ class LaunchFeedbackService {
       );
     }
 
-    final executablePath = _resolveExecutablePath(
-      launchPath: launchPath,
-      targetPath: targetPath,
-    );
     if (executablePath == null) {
       return LaunchFeedbackSession(
         launched: true,
@@ -60,9 +70,13 @@ class LaunchFeedbackService {
 
     return LaunchFeedbackSession(
       launched: true,
-      ready: _waitUntilTargetWindowReady(executablePath).whenComplete(() {
-        indicator?.close();
-      }),
+      ready:
+          _waitUntilTargetWindowReady(
+            executablePath,
+            preLaunchWindowCount: preLaunchWindowCount,
+          ).whenComplete(() {
+            indicator?.close();
+          }),
     );
   }
 
@@ -86,11 +100,8 @@ class LaunchFeedbackService {
   String _resolveIndicatorIconPath({
     required String launchPath,
     required String targetPath,
+    String? executablePath,
   }) {
-    final executablePath = _resolveExecutablePath(
-      launchPath: launchPath,
-      targetPath: targetPath,
-    );
     if (executablePath != null) {
       return executablePath;
     }
@@ -104,6 +115,31 @@ class LaunchFeedbackService {
       return normalized;
     }
     return launchPath;
+  }
+
+  String _resolveIndicatorDisplayName({
+    required String launchPath,
+    required String targetPath,
+    String? executablePath,
+  }) {
+    final exePath =
+        executablePath ??
+        _resolveExecutablePath(launchPath: launchPath, targetPath: targetPath);
+    if (exePath != null) {
+      return _normalizeDisplayName(path.basenameWithoutExtension(exePath));
+    }
+
+    final shortcutTarget = _resolveShortcutTargetPath(launchPath);
+    final candidates = <String>[targetPath, shortcutTarget ?? '', launchPath];
+    for (final candidate in candidates) {
+      final normalized = _normalizeExistingFilePath(candidate);
+      if (normalized == null) continue;
+      final name = path.basenameWithoutExtension(normalized);
+      if (name.trim().isNotEmpty) {
+        return _normalizeDisplayName(name);
+      }
+    }
+    return '应用';
   }
 
   String? _resolveShortcutTargetPath(String launchPath) {
@@ -129,19 +165,48 @@ class LaunchFeedbackService {
     return shortcutExts.contains(path.extension(filePath).toLowerCase());
   }
 
-  Future<void> _waitUntilTargetWindowReady(String executablePath) async {
+  String _normalizeDisplayName(String rawName) {
+    var value = rawName.trim();
+    const suffixes = [' - 快捷方式', ' - shortcut'];
+    for (final suffix in suffixes) {
+      if (value.toLowerCase().endsWith(suffix.toLowerCase())) {
+        value = value.substring(0, value.length - suffix.length).trimRight();
+      }
+    }
+    return value.isEmpty ? '应用' : value;
+  }
+
+  Future<void> _waitUntilTargetWindowReady(
+    String executablePath, {
+    required int preLaunchWindowCount,
+  }) async {
     final minIndicatorTime = Future<void>.delayed(
       const Duration(milliseconds: 450),
     );
 
     final detectWindow = () async {
       if (!Platform.isWindows) return;
+      final startedAt = DateTime.now();
       final deadline = DateTime.now().add(const Duration(seconds: 20));
+      final hadExistingInstance = preLaunchWindowCount > 0;
       while (DateTime.now().isBefore(deadline)) {
-        final hwnd = _windowLocator.findTopLevelWindowByExecutable(
-          executablePath,
-        );
-        if (hwnd != 0) return;
+        final currentWindowCount = _windowLocator
+            .countTopLevelWindowsByExecutable(executablePath);
+        if (currentWindowCount > preLaunchWindowCount) {
+          return;
+        }
+
+        if (hadExistingInstance &&
+            _windowLocator.isForegroundWindowFromExecutable(executablePath)) {
+          return;
+        }
+
+        if (hadExistingInstance &&
+            currentWindowCount > 0 &&
+            DateTime.now().difference(startedAt).inMilliseconds >= 1200) {
+          return;
+        }
+
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
     }();

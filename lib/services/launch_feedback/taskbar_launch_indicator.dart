@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
-import 'taskbar_overlay_spinner_icon_factory.dart';
 import 'taskbar_progress_controller.dart';
 import 'taskbar_window_icon_animation_factory.dart';
 
@@ -60,19 +59,21 @@ class TaskbarLaunchIndicator {
   final int _iconHandle;
   final bool _iconOwned;
   final TaskbarProgressController? _taskbarProgress;
-  Timer? _overlaySpinTimer;
-  Timer? _windowIconAnimationTimer;
-  List<int> _overlaySpinIcons = const [];
-  List<int> _windowAnimatedIcons = const [];
-  int _overlaySpinFrame = 0;
-  int _windowIconFrame = 0;
+  Timer? _windowIconSpinTimer;
+  List<int> _windowIconSpinHandles = const [];
+  int _windowIconSpinFrame = 0;
   bool _closed = false;
 
-  static TaskbarLaunchIndicator? show({required String iconSourcePath}) {
+  static TaskbarLaunchIndicator? show({
+    required String iconSourcePath,
+    required String appDisplayName,
+  }) {
     if (!Platform.isWindows) return null;
 
+    final displayName = appDisplayName.trim().isEmpty ? '应用' : appDisplayName;
+    final windowTitle = '正在启动 $displayName';
     final classNamePtr = 'STATIC'.toNativeUtf16();
-    final titlePtr = ''.toNativeUtf16();
+    final titlePtr = windowTitle.toNativeUtf16();
     try {
       final hwnd = CreateWindowEx(
         _indicatorWindowExStyle,
@@ -81,8 +82,8 @@ class TaskbarLaunchIndicator {
         _indicatorWindowStyle,
         -32000,
         -32000,
-        1,
-        1,
+        320,
+        120,
         0,
         0,
         GetModuleHandle(nullptr),
@@ -115,91 +116,56 @@ class TaskbarLaunchIndicator {
     if (_closed) return;
     _flashTaskbar(flags: _flashwTray | _flashwTimerNoFg, count: 0);
     _taskbarProgress?.startIndeterminate(_hwnd);
-    _startWindowIconAnimation();
-    _startOverlaySpinner();
+    _startWindowIconSpinner();
   }
 
   void close() {
     if (_closed) return;
     _closed = true;
-    _overlaySpinTimer?.cancel();
-    _overlaySpinTimer = null;
-    _windowIconAnimationTimer?.cancel();
-    _windowIconAnimationTimer = null;
+    _windowIconSpinTimer?.cancel();
+    _windowIconSpinTimer = null;
 
-    _taskbarProgress?.clearOverlayIcon(_hwnd);
     _taskbarProgress?.stop(_hwnd);
     _taskbarProgress?.dispose();
 
-    for (final hIcon in _overlaySpinIcons) {
-      if (hIcon != 0) {
-        DestroyIcon(hIcon);
-      }
-    }
-    _overlaySpinIcons = const [];
-    for (final hIcon in _windowAnimatedIcons) {
-      if (hIcon != 0) {
-        DestroyIcon(hIcon);
-      }
-    }
-    _windowAnimatedIcons = const [];
-
     _flashTaskbar(flags: _flashwStop, count: 0);
     DestroyWindow(_hwnd);
+    for (final hIcon in _windowIconSpinHandles) {
+      if (hIcon != 0) {
+        DestroyIcon(hIcon);
+      }
+    }
+    _windowIconSpinHandles = const [];
     if (_iconOwned && _iconHandle != 0) {
       DestroyIcon(_iconHandle);
     }
   }
 
-  void _startOverlaySpinner() {
-    if (_taskbarProgress == null) return;
-    _overlaySpinIcons = TaskbarOverlaySpinnerIconFactory.createIconHandles();
-    if (_overlaySpinIcons.isEmpty) return;
+  void _startWindowIconSpinner() {
+    _windowIconSpinHandles =
+        TaskbarWindowIconAnimationFactory.createIconHandles(
+          iconSourcePath: _iconSourcePath,
+        );
+    if (_windowIconSpinHandles.isEmpty) return;
 
-    _overlaySpinFrame = 0;
-    _applyOverlayFrame();
-    _overlaySpinTimer?.cancel();
-    _overlaySpinTimer = Timer.periodic(const Duration(milliseconds: 110), (_) {
-      if (_closed || _overlaySpinIcons.isEmpty) return;
-      _overlaySpinFrame = (_overlaySpinFrame + 1) % _overlaySpinIcons.length;
-      _applyOverlayFrame();
+    _windowIconSpinFrame = 0;
+    _applyWindowIconSpinFrame();
+    _windowIconSpinTimer?.cancel();
+    _windowIconSpinTimer = Timer.periodic(const Duration(milliseconds: 85), (
+      _,
+    ) {
+      if (_closed || _windowIconSpinHandles.isEmpty) return;
+      _windowIconSpinFrame =
+          (_windowIconSpinFrame + 1) % _windowIconSpinHandles.length;
+      _applyWindowIconSpinFrame();
     });
   }
 
-  void _startWindowIconAnimation() {
-    _windowAnimatedIcons =
-        TaskbarWindowIconAnimationFactory.createAnimatedWindowIconHandles(
-          iconSourcePath: _iconSourcePath,
-        );
-    if (_windowAnimatedIcons.isEmpty) return;
-
-    _windowIconFrame = 0;
-    _applyWindowIconFrame();
-    _windowIconAnimationTimer?.cancel();
-    _windowIconAnimationTimer = Timer.periodic(
-      const Duration(milliseconds: 95),
-      (_) {
-        if (_closed || _windowAnimatedIcons.isEmpty) return;
-        _windowIconFrame = (_windowIconFrame + 1) % _windowAnimatedIcons.length;
-        _applyWindowIconFrame();
-      },
-    );
-  }
-
-  void _applyWindowIconFrame() {
-    if (_windowAnimatedIcons.isEmpty) return;
-    final hIcon = _windowAnimatedIcons[_windowIconFrame];
-    SendMessage(_hwnd, WM_SETICON, ICON_BIG, hIcon);
-    SendMessage(_hwnd, WM_SETICON, ICON_SMALL, hIcon);
-  }
-
-  void _applyOverlayFrame() {
-    if (_overlaySpinIcons.isEmpty) return;
-    _taskbarProgress?.setOverlayIcon(
-      _hwnd,
-      _overlaySpinIcons[_overlaySpinFrame],
-      '启动中',
-    );
+  void _applyWindowIconSpinFrame() {
+    if (_windowIconSpinHandles.isEmpty) return;
+    final frameIcon = _windowIconSpinHandles[_windowIconSpinFrame];
+    SendMessage(_hwnd, WM_SETICON, ICON_BIG, frameIcon);
+    SendMessage(_hwnd, WM_SETICON, ICON_SMALL, frameIcon);
   }
 
   void _flashTaskbar({required int flags, required int count}) {

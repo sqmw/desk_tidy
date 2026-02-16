@@ -54,8 +54,14 @@
      - `ITaskbarList3.SetProgressState(TBPF_INDETERMINATE)` 不确定进度动画（任务栏持续动态反馈）
 - 任务栏指示器触发时机调整为“先显示反馈，再执行 `openWithDefault`”，避免被 `ShellExecute` 阻塞导致用户看不到启动中的反馈。
 - 任务栏指示器图标源改为“应用本体优先”：优先取 `targetPath/.exe`，若 `launchPath` 为 `.lnk` 则额外解析其真实目标并优先使用，避免出现快捷方式箭头样式导致前后图标不一致。
-- 任务栏 overlay 图标改为高对比度旋转帧（深色圆底 + 高亮尾迹），并拆分为独立工厂文件，便于后续继续调视觉参数。
-- 任务栏占位图标新增“本体轻弹跳”帧动画（12 帧循环），用于强化“正在启动中”的可感知性；overlay 转圈作为补充提示继续保留。
+- 任务栏反馈视觉改为“单图标叠加加载圆圈”动画：在应用图标右下角直接绘制高对比、放大且带脉冲的旋转圆圈，并以更高帧率逐帧替换任务栏图标，避免系统角标在部分环境下不显示且转圈不明显的问题。
+- 任务栏指示窗口标题改为 `正在启动 <应用名>`，修复任务栏悬浮预览的空标题问题。
+- 启动完成判定改为“窗口基线 + 增量/激活”：
+  - 启动前记录目标应用可见顶层窗口数量
+  - 启动后若窗口数增加则判定新实例就绪（多实例场景）
+  - 若已有窗口且前台窗口切换为目标应用则判定激活完成（单实例场景）
+- 窗口归属判定从“严格 exe 相等”扩展为“应用族匹配”（会去除 `launcher/updater/helper/service` 等后缀），适配启动器进程唤醒主进程窗口的应用。
+- 对“已有实例”场景增加短时收敛兜底：若目标应用窗口持续存在但未检测到窗口增量/前台切换，约 1.2 秒后自动结束转圈，避免长时间悬挂。
 - 若能解析到目标 `.exe`，服务会等待该程序主窗口出现（最长约 20 秒）后再清除 loading；否则保留至少 450ms 的最小反馈时长，避免闪烁。
 - 热键场景会同时启用任务栏指示器；普通场景仅保留卡片 loading 转圈。
 
@@ -66,7 +72,6 @@
 ### 本次涉及文件
 - `lib/services/launch_feedback_service.dart`
 - `lib/services/launch_feedback/taskbar_launch_indicator.dart`
-- `lib/services/launch_feedback/taskbar_overlay_spinner_icon_factory.dart`
 - `lib/services/launch_feedback/taskbar_progress_controller.dart`
 - `lib/services/launch_feedback/taskbar_window_icon_animation_factory.dart`
 - `lib/services/launch_feedback/window_locator.dart`
