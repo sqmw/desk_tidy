@@ -31,23 +31,30 @@ class LaunchFeedbackService {
       launchPath: launchPath,
       targetPath: targetPath,
     );
+    final indicatorIconPath = _resolveIndicatorIconPath(
+      launchPath: launchPath,
+      targetPath: targetPath,
+      executablePath: executablePath,
+    );
     final preLaunchWindowCount = executablePath == null
         ? 0
         : _windowLocator.countTopLevelWindowsByExecutable(executablePath);
 
     final indicator = showTaskbarIndicator
         ? TaskbarLaunchIndicator.show(
-            iconSourcePath: _resolveIndicatorIconPath(
-              launchPath: launchPath,
-              targetPath: targetPath,
-              executablePath: executablePath,
-            ),
+            iconSourcePath: indicatorIconPath,
             appDisplayName: _resolveIndicatorDisplayName(
               launchPath: launchPath,
               targetPath: targetPath,
               executablePath: executablePath,
             ),
-            preferredIconBytes: preferredIconBytes,
+            preferredIconBytes: _resolvePreferredIndicatorIconBytes(
+              launchPath: launchPath,
+              targetPath: targetPath,
+              executablePath: executablePath,
+              indicatorIconPath: indicatorIconPath,
+              fallbackPreferredIconBytes: preferredIconBytes,
+            ),
           )
         : null;
     indicator?.startAttentionPulse();
@@ -143,6 +150,35 @@ class LaunchFeedbackService {
       }
     }
     return '应用';
+  }
+
+  Uint8List? _resolvePreferredIndicatorIconBytes({
+    required String launchPath,
+    required String targetPath,
+    required String indicatorIconPath,
+    required Uint8List? fallbackPreferredIconBytes,
+    String? executablePath,
+  }) {
+    final shortcutTarget = _resolveShortcutTargetPath(launchPath);
+    final candidates = <String>[
+      executablePath ?? '',
+      targetPath,
+      shortcutTarget ?? '',
+      indicatorIconPath,
+    ];
+
+    for (final candidate in candidates) {
+      final normalized = _normalizeExistingFilePath(candidate);
+      if (normalized == null) continue;
+      if (_isShortcutContainerPath(normalized)) continue;
+
+      final bytes = extractIcon(normalized, size: 256);
+      if (bytes != null && bytes.isNotEmpty) {
+        return bytes;
+      }
+    }
+
+    return fallbackPreferredIconBytes;
   }
 
   String? _resolveShortcutTargetPath(String launchPath) {
