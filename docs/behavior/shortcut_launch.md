@@ -49,12 +49,15 @@
 - 新增服务：`lib/services/launch_feedback_service.dart`
 - 启动反馈为“双通道”：
   1. **卡片图标 loading 转圈**：启动开始后将当前快捷方式标记为 `launching`，在图标右下角显示圆形进度指示器。
-  2. **任务栏无弹窗指示器（热键场景）**：创建最小化且不激活的任务栏指示图标（不显示可见弹窗），并同时启用：
+  2. **任务栏无弹窗指示器（热键 + 普通启动）**：创建最小化且不激活的任务栏指示图标（不显示可见弹窗），并同时启用：
      - `FlashWindowEx` 闪烁提示
      - `ITaskbarList3.SetProgressState(TBPF_INDETERMINATE)` 不确定进度动画（任务栏持续动态反馈）
 - 任务栏指示器触发时机调整为“先显示反馈，再执行 `openWithDefault`”，避免被 `ShellExecute` 阻塞导致用户看不到启动中的反馈。
 - 任务栏指示器图标源改为“应用本体优先”：优先取 `targetPath/.exe`，若 `launchPath` 为 `.lnk` 则额外解析其真实目标并优先使用，避免出现快捷方式箭头样式导致前后图标不一致。
 - 任务栏反馈视觉改为“单图标叠加加载圆圈”动画：在应用图标右下角直接绘制高对比、放大且带脉冲的旋转圆圈，并以更高帧率逐帧替换任务栏图标，避免系统角标在部分环境下不显示且转圈不明显的问题。
+- 任务栏动画底图优先使用卡片已缓存的 `shortcut.iconData`，仅在缺失时才回退到目标路径提图，修复 release 场景下路径解析差异导致的“显示 DT 图标/无转圈”问题。
+- 新增窗口级 `AppUserModel` 写入：为任务栏占位窗口设置独立 `PKEY_AppUserModel_ID`（并保留 `RelaunchDisplayName`），避免安装包运行时被系统分组回 DT 主图标。
+- 为保持任务栏动态图标可见，移除 `RelaunchIconResource` 固定图标写入，避免系统锁定静态图标导致转圈动画丢失（debug/release 一致生效）。
 - 任务栏指示窗口标题改为 `正在启动 <应用名>`，修复任务栏悬浮预览的空标题问题。
 - 启动完成判定改为“窗口基线 + 增量/激活”：
   - 启动前记录目标应用可见顶层窗口数量
@@ -63,7 +66,7 @@
 - 窗口归属判定从“严格 exe 相等”扩展为“应用族匹配”（会去除 `launcher/updater/helper/service` 等后缀），适配启动器进程唤醒主进程窗口的应用。
 - 对“已有实例”场景增加短时收敛兜底：若目标应用窗口持续存在但未检测到窗口增量/前台切换，约 1.2 秒后自动结束转圈，避免长时间悬挂。
 - 若能解析到目标 `.exe`，服务会等待该程序主窗口出现（最长约 20 秒）后再清除 loading；否则保留至少 450ms 的最小反馈时长，避免闪烁。
-- 热键场景会同时启用任务栏指示器；普通场景仅保留卡片 loading 转圈。
+- 热键场景和普通启动场景都会启用任务栏指示器，统一启动反馈一致性。
 
 ### 失败反馈（热键模式）
 - 因窗口会先隐藏，失败提示改为优先托盘气泡（`showTrayBalloon`）。
@@ -73,6 +76,7 @@
 - `lib/services/launch_feedback_service.dart`
 - `lib/services/launch_feedback/taskbar_launch_indicator.dart`
 - `lib/services/launch_feedback/taskbar_progress_controller.dart`
+- `lib/services/launch_feedback/taskbar_window_identity.dart`
 - `lib/services/launch_feedback/taskbar_window_icon_animation_factory.dart`
 - `lib/services/launch_feedback/window_locator.dart`
 - `lib/screens/desk_tidy_home/handlers/shortcut_launch.dart`

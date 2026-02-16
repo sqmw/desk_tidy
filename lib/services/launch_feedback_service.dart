@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as path;
 
@@ -23,6 +24,7 @@ class LaunchFeedbackService {
   Future<LaunchFeedbackSession> launchWithPerceptibleFeedback({
     required String launchPath,
     required String targetPath,
+    Uint8List? preferredIconBytes,
     bool showTaskbarIndicator = false,
   }) async {
     final executablePath = _resolveExecutablePath(
@@ -45,6 +47,7 @@ class LaunchFeedbackService {
               targetPath: targetPath,
               executablePath: executablePath,
             ),
+            preferredIconBytes: preferredIconBytes,
           )
         : null;
     indicator?.startAttentionPulse();

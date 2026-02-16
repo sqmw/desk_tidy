@@ -55,6 +55,7 @@ extension _DeskTidyHomeShortcutLaunch on _DeskTidyHomePageState {
     return LaunchFeedbackService.instance.launchWithPerceptibleFeedback(
       launchPath: _launchPathForShortcut(shortcut),
       targetPath: shortcut.targetPath,
+      preferredIconBytes: shortcut.iconData,
       showTaskbarIndicator: showTaskbarIndicator,
     );
   }
@@ -150,7 +151,7 @@ extension _DeskTidyHomeShortcutLaunch on _DeskTidyHomePageState {
     _setShortcutLaunching(shortcut.path, true);
     final session = await _launchShortcutWithFeedback(
       shortcut,
-      showTaskbarIndicator: false,
+      showTaskbarIndicator: true,
     );
     if (!session.launched) {
       _setShortcutLaunching(shortcut.path, false);

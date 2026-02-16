@@ -7,7 +7,7 @@
 
 #define MyAppName "Desk Tidy"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.10"
+  #define MyAppVersion "1.2.11"
 #endif
 #define MyAppPublisher "ksun22515@gmail.com"
 #define MyAppURL "mailto:ksun22515@gmail.com"

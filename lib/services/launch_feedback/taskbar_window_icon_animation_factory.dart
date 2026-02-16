@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:image/image.dart' as img;
@@ -10,13 +11,14 @@ import '../../utils/desktop_helper.dart';
 class TaskbarWindowIconAnimationFactory {
   TaskbarWindowIconAnimationFactory._();
 
-  static List<int> createIconHandles({required String iconSourcePath}) {
-    final iconBytes = extractIcon(iconSourcePath, size: 256);
-    if (iconBytes == null || iconBytes.isEmpty) {
-      return const [];
-    }
-
-    final appIcon = img.decodeImage(iconBytes);
+  static List<int> createIconHandles({
+    required String iconSourcePath,
+    Uint8List? preferredIconBytes,
+  }) {
+    final appIcon = _decodePreferredIcon(
+      preferredIconBytes,
+      fallbackPath: iconSourcePath,
+    );
     if (appIcon == null) {
       return const [];
     }
@@ -58,6 +60,20 @@ class TaskbarWindowIconAnimationFactory {
     }
 
     return handles;
+  }
+
+  static img.Image? _decodePreferredIcon(
+    Uint8List? preferredIconBytes, {
+    required String fallbackPath,
+  }) {
+    if (preferredIconBytes != null && preferredIconBytes.isNotEmpty) {
+      final decoded = img.decodeImage(preferredIconBytes);
+      if (decoded != null) return decoded;
+    }
+
+    final fallbackBytes = extractIcon(fallbackPath, size: 256);
+    if (fallbackBytes == null || fallbackBytes.isEmpty) return null;
+    return img.decodeImage(fallbackBytes);
   }
 
   static img.Image _composeFrame(img.Image appIcon, int frame, int frameCount) {

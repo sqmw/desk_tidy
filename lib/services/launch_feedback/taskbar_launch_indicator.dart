@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
 import 'taskbar_progress_controller.dart';
+import 'taskbar_window_identity.dart';
 import 'taskbar_window_icon_animation_factory.dart';
 
 const int _flashwStop = 0x00000000;
@@ -49,6 +51,7 @@ class TaskbarLaunchIndicator {
   TaskbarLaunchIndicator._(
     this._hwnd,
     this._iconSourcePath,
+    this._preferredIconBytes,
     this._iconHandle,
     this._iconOwned,
     this._taskbarProgress,
@@ -56,6 +59,7 @@ class TaskbarLaunchIndicator {
 
   final int _hwnd;
   final String _iconSourcePath;
+  final Uint8List? _preferredIconBytes;
   final int _iconHandle;
   final bool _iconOwned;
   final TaskbarProgressController? _taskbarProgress;
@@ -67,6 +71,7 @@ class TaskbarLaunchIndicator {
   static TaskbarLaunchIndicator? show({
     required String iconSourcePath,
     required String appDisplayName,
+    Uint8List? preferredIconBytes,
   }) {
     if (!Platform.isWindows) return null;
 
@@ -97,11 +102,18 @@ class TaskbarLaunchIndicator {
         SendMessage(hwnd, WM_SETICON, ICON_SMALL, icon.handle);
       }
 
+      TaskbarWindowIdentity.applyToIndicatorWindow(
+        hwnd: hwnd,
+        appDisplayName: displayName,
+        iconSourcePath: iconSourcePath,
+      );
+
       ShowWindow(hwnd, SW_SHOWMINNOACTIVE);
       UpdateWindow(hwnd);
       return TaskbarLaunchIndicator._(
         hwnd,
         iconSourcePath,
+        preferredIconBytes,
         icon.handle,
         icon.owned,
         TaskbarProgressController.create(),
@@ -145,6 +157,7 @@ class TaskbarLaunchIndicator {
     _windowIconSpinHandles =
         TaskbarWindowIconAnimationFactory.createIconHandles(
           iconSourcePath: _iconSourcePath,
+          preferredIconBytes: _preferredIconBytes,
         );
     if (_windowIconSpinHandles.isEmpty) return;
 

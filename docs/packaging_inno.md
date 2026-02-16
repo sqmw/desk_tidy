@@ -59,6 +59,7 @@ iscc installers\desk_tidy.iss /dMyAppVersion=$ver
 - 例如 `MyAppVersion=1.2.10` 时，输出文件名为：
   - `desk_tidy_pure_release_setup_v1.2.10.exe`
 - `MyAppVersion` 支持命令行覆盖（如 `/DMyAppVersion=1.2.11`），便于发布时不改脚本直接变更版本号。
+- 当前脚本默认版本已更新为 `1.2.11`（可继续用命令行参数覆盖）。
 - 仓库根目录 `.gitignore` 已新增：`/installers/build/`，防止安装包产物进入版本库。
 - 若历史上已被跟踪过安装包，需要一次性执行：
   ```powershell
